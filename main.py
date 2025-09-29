@@ -89,11 +89,13 @@ def main():
     
     logger.set_ui(ui_manager, performance_monitor)
     
+    # ★★★ 変更点: CoreEngineにperformance_monitorを渡す ★★★
     core_engine = CoreEngine(
         ui_manager=ui_manager,
         capture_manager=capture_manager,
         config_manager=config_manager,
-        logger=logger
+        logger=logger,
+        performance_monitor=performance_monitor
     )
     
     ui_manager.core_engine = core_engine

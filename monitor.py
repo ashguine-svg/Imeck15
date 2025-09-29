@@ -45,14 +45,12 @@ class PerformanceMonitor(QDialog):
         top_layout.setContentsMargins(0, 0, 0, 0)
 
         self.monitor_button = QPushButton("監視開始/停止")
-        # ★★★ 変更点: ツールチップを追加 ★★★
         self.monitor_button.setToolTip("右クリックで監視停止、右ダブルクリックで監視開始")
         top_layout.addWidget(self.monitor_button)
 
         self.rec_area_button = QPushButton("認識範囲設定")
         top_layout.addWidget(self.rec_area_button)
 
-        # ★★★ 変更点: バックアップクリックのカウントダウン用ラベルを追加 ★★★
         self.backup_countdown_label = QLabel("")
         self.backup_countdown_label.setStyleSheet("font-size: 12px; color: #888888;")
         top_layout.addWidget(self.backup_countdown_label)
@@ -91,7 +89,6 @@ class PerformanceMonitor(QDialog):
                          f"クリック: {clicks}  稼働: {hours:02d}:{minutes:02d}:{seconds:02d}")
             self.perf_label.setText(perf_text)
 
-            # ★★★ 変更点: バックアップクリックのカウントダウンを更新 ★★★
             if self.ui_manager and self.ui_manager.core_engine:
                 countdown = self.ui_manager.core_engine.get_backup_click_countdown()
                 if countdown > 0:

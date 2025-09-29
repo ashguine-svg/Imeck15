@@ -10,13 +10,12 @@ import random
 import os
 from PySide6.QtCore import QObject, Signal, QThread, QPoint, QRect, Qt, QTimer
 from PySide6.QtGui import QMouseEvent, QPainter, QPen, QColor, QBrush, QPainterPath, QKeyEvent
-from PySide6.QtWidgets import QDialog, QWidget, QLabel, QVBoxLayout, QMessageBox, QApplication, QInputDialog
+from PySide6.QtWidgets import QDialog, QWidget, QLabel, QVBoxLayout, QMessageBox, QApplication, QInputDialog, QFileDialog
 from pathlib import Path
 import pynput
 from concurrent.futures import ThreadPoolExecutor
 from threading import Timer
 
-# ★★★ 変更点: OS依存ライブラリのインポートを分岐 ★★★
 import shutil
 import subprocess
 if sys.platform == 'win32':
@@ -25,7 +24,6 @@ if sys.platform == 'win32':
     import win32con
     import win32api
 else:
-    # Linux/macOS用のダミー。pygetwindowは一部機能で使えるが今回は使用しない
     gw = None
     win32gui = None
 
@@ -33,7 +31,6 @@ else:
 from capture import CaptureManager, DXCAM_AVAILABLE
 from config import ConfigManager
 
-# ★★★ 変更点: 入力ブロック機能をWindows専用に ★★★
 INPUT_BLOCK_AVAILABLE = False
 if sys.platform == 'win32':
     try:
@@ -55,7 +52,6 @@ else:
 
 
 def block_input(block: bool):
-    """ユーザーからのマウス・キーボード入力をブロックまたは解除する"""
     if INPUT_BLOCK_AVAILABLE:
         try:
             block_input_func(block)
@@ -177,9 +173,10 @@ class CoreEngine(QObject):
     windowScaleCalculated = Signal(float)
     askToSaveWindowBaseSizeSignal = Signal(str)
 
-    def __init__(self, ui_manager, capture_manager, config_manager, logger):
+    def __init__(self, ui_manager, capture_manager, config_manager, logger, performance_monitor):
         super().__init__()
         self.ui_manager, self.capture_manager, self.config_manager, self.logger = ui_manager, capture_manager, config_manager, logger
+        self.performance_monitor = performance_monitor
         self.logger.log(OPENCL_STATUS_MESSAGE)
         self.is_monitoring = False
         self._monitor_thread = None
@@ -580,13 +577,18 @@ class CoreEngine(QObject):
         block_input(True)
         try:
             settings, rect = match_info['settings'], match_info['rect']
+            scale = match_info.get('scale', 1.0)
+
             offset_x, offset_y = (self.recognition_area[0], self.recognition_area[1]) if self.recognition_area else (0, 0)
             click_x, click_y = 0, 0
 
             if settings.get('range_click') and settings.get('click_rect'):
                 click_rect = settings['click_rect']
-                x1, y1 = offset_x + rect[0] + click_rect[0], offset_y + rect[1] + click_rect[1]
-                x2, y2 = offset_x + rect[0] + click_rect[2], offset_y + rect[1] + click_rect[3]
+                x1 = offset_x + rect[0] + (click_rect[0] * scale)
+                y1 = offset_y + rect[1] + (click_rect[1] * scale)
+                x2 = offset_x + rect[0] + (click_rect[2] * scale)
+                y2 = offset_y + rect[1] + (click_rect[3] * scale)
+
                 if settings.get('random_click', True):
                     int_x1, int_x2 = int(min(x1, x2)), int(max(x1, x2))
                     int_y1, int_y2 = int(min(y1, y2)), int(max(y1, y2))
@@ -595,8 +597,10 @@ class CoreEngine(QObject):
                 else: click_x, click_y = (x1 + x2) / 2, (y1 + y2) / 2
             elif settings.get('point_click') and settings.get('click_position'):
                 click_pos = settings['click_position']
-                click_x, click_y = offset_x + rect[0] + click_pos[0], offset_y + rect[1] + click_pos[1]
-            else: click_x, click_y = offset_x + (rect[0] + rect[2]) / 2, offset_y + (rect[1] + rect[3]) / 2
+                click_x = offset_x + rect[0] + (click_pos[0] * scale)
+                click_y = offset_y + rect[1] + (click_pos[1] * scale)
+            else:
+                click_x, click_y = offset_x + (rect[0] + rect[2]) / 2, offset_y + (rect[1] + rect[3]) / 2
             
             pyautogui.click(click_x, click_y)
             self._click_count += 1
@@ -623,7 +627,12 @@ class CoreEngine(QObject):
             self.updateLog.emit("バックアップクリック失敗: 最後に成功したクリック位置がありません。")
         
     def set_recognition_area(self, method: str):
-        self.selectionProcessStarted.emit(); self.ui_manager.hide()
+        self.selectionProcessStarted.emit()
+        self.ui_manager.hide()
+        # ★★★ 変更点: パフォーマンスモニタも非表示にする ★★★
+        if self.performance_monitor:
+            self.performance_monitor.hide()
+
         if method == "rectangle":
             self.current_window_scale = None
             self.windowScaleCalculated.emit(0.0)
@@ -631,7 +640,6 @@ class CoreEngine(QObject):
         elif method == "window":
             self.window_selection_listener = WindowSelectionListener(self._handle_window_click_for_selection); self.window_selection_listener.start()
             
-    # ★★★ 変更点: ウィンドウ選択処理をOS別に完全分岐 ★★★
     def _handle_window_click_for_selection(self, x, y):
         if sys.platform == 'win32':
             self._handle_window_click_for_selection_windows(x, y)
@@ -643,7 +651,6 @@ class CoreEngine(QObject):
             hwnd = win32gui.WindowFromPoint((x, y))
             if not hwnd: return
             
-            # WindowsではDXCamのターゲット設定も行う
             if DXCAM_AVAILABLE:
                 self.capture_manager.set_capture_target(hwnd)
 
@@ -654,7 +661,7 @@ class CoreEngine(QObject):
             
             if self._is_capturing_for_registration:
                 self._areaSelectedForProcessing.emit(rect)
-                self._showUiSignal.emit(); self.selectionProcessFinished.emit()
+                self.selectionProcessFinished.emit()
                 return
 
             title = win32gui.GetWindowText(hwnd)
@@ -685,17 +692,14 @@ class CoreEngine(QObject):
             return
         
         try:
-            # マウス下のウィンドウIDを取得
             proc = subprocess.run(['xdotool', 'getmouselocation'], capture_output=True, text=True)
             window_id = [line.split(':')[1] for line in proc.stdout.strip().split() if 'window' in line][0]
 
-            # ウィンドウ情報を取得
             proc = subprocess.run(['xwininfo', '-id', window_id], capture_output=True, text=True)
             info = proc.stdout
             
-            # xwininfoの出力から情報をパース
             left, top, width, height = 0, 0, 0, 0
-            title = f"Window (ID: {window_id})" # デフォルトタイトル
+            title = f"Window (ID: {window_id})"
             for line in info.split('\n'):
                 line = line.strip()
                 if line.startswith('Absolute upper-left X:'): left = int(line.split(':')[1].strip())
@@ -710,7 +714,7 @@ class CoreEngine(QObject):
             
             if self._is_capturing_for_registration:
                 self._areaSelectedForProcessing.emit(rect)
-                self._showUiSignal.emit(); self.selectionProcessFinished.emit()
+                self.selectionProcessFinished.emit()
                 return
 
             self._pending_window_info = {
@@ -766,8 +770,8 @@ class CoreEngine(QObject):
 
     def handle_area_selection(self, coords):
         if self._is_capturing_for_registration:
-            self._is_capturing_for_registration = False # 先にフラグをリセット
-            QTimer.singleShot(100, lambda: self._save_captured_image(coords))
+            self._is_capturing_for_registration = False
+            self._save_captured_image(coords)
         else:
             self.recognition_area = coords
             self.logger.log(f"認識範囲を設定: {coords}")
@@ -778,25 +782,70 @@ class CoreEngine(QObject):
         if hasattr(self, 'selection_overlay'):
             self.selection_overlay = None
         
+    def _get_filename_from_user(self):
+        """OSに応じて最適な方法でユーザーからファイル名を取得する。"""
+        if sys.platform == 'win32':
+            # WindowsではQInputDialogを使用
+            file_name, ok = QInputDialog.getText(self.ui_manager, "ファイル名を入力", "保存するファイル名を入力してください:")
+            return file_name, ok
+        else:
+            # LinuxではZenityを使用
+            if not shutil.which('zenity'):
+                QMessageBox.warning(self.ui_manager, "エラー", "名前入力機能には 'zenity' が必要です。\n'sudo apt install zenity' でインストールしてください。")
+                return None, False
+            
+            try:
+                command = [
+                    'zenity', '--entry',
+                    '--title=ファイル名を入力',
+                    '--text=保存するファイル名を入力してください（拡張子不要）:'
+                ]
+                result = subprocess.run(command, capture_output=True, text=True, check=False) # check=Falseにする
+                
+                if result.returncode == 0: # OKが押された
+                    return result.stdout.strip(), True
+                else: # キャンセルまたはウィンドウが閉じられた
+                    return None, False
+            except Exception as e:
+                self.logger.log(f"Zenityの呼び出し中にエラー: {e}")
+                QMessageBox.critical(self.ui_manager, "エラー", f"Zenityの呼び出しに失敗しました:\n{e}")
+                return None, False
+
     def _save_captured_image(self, region_coords):
         try:
             captured_image = self.capture_manager.capture_frame(region=region_coords)
+            
+            self._show_ui_safe()
+            if self.performance_monitor and not self.performance_monitor.isVisible():
+                self.performance_monitor.show()
+
             if captured_image is None: 
                 QMessageBox.warning(self.ui_manager, "エラー", "画像のキャプチャに失敗しました。")
                 return
-                
-            file_name, ok = QInputDialog.getText(self.ui_manager, "ファイル名を入力", "保存するファイル名を入力してください:")
+            
+            file_name, ok = self._get_filename_from_user()
+            
             if ok and file_name:
                 self.ui_manager.set_tree_enabled(False)
-                default_settings = self.config_manager.load_item_setting(Path())
-                default_settings['image_path'] = ''
                 save_path = self.config_manager.base_dir / f"{file_name}.png"
+                
+                if save_path.exists():
+                    reply = QMessageBox.question(self.ui_manager, "上書き確認", f"ファイル '{save_path.name}' は既に存在します。\n上書きしますか？",
+                                                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+                    if reply == QMessageBox.StandardButton.No:
+                        self.ui_manager.set_tree_enabled(True)
+                        return
+
                 try:
                     _, buffer = cv2.imencode('.png', captured_image)
                     buffer.tofile(str(save_path))
+
+                    default_settings = self.config_manager.load_item_setting(Path())
                     default_settings['image_path'] = str(save_path)
                     self.config_manager.save_item_setting(save_path, default_settings)
+                    
                     self.config_manager.add_item(save_path)
+                    
                     self.logger.log(f"画像を保存しました: {save_path}")
                     self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
                 except Exception as e:
@@ -804,13 +853,13 @@ class CoreEngine(QObject):
                     self.ui_manager.set_tree_enabled(True)
         finally:
             self.selectionProcessFinished.emit()
-            self.ui_manager.show()
+            if not self.ui_manager.isVisible():
+                self._show_ui_safe()
                 
     def clear_recognition_area(self):
         self.recognition_area = None
         self.current_window_scale = None
         self.windowScaleCalculated.emit(0.0)
-        # ★★★ 変更点: Windowsの場合のみDXCamターゲットをリセット ★★★
         if sys.platform == 'win32' and DXCAM_AVAILABLE:
             self.capture_manager.set_capture_target(None)
         self.logger.log("認識範囲をクリアしました。"); 
