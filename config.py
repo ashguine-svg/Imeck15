@@ -25,8 +25,9 @@ class ConfigManager:
             },
             "capture_method": "mss",
             "frame_skip_rate": 2,
-            # ★★★ 変更点: グローバルなグレースケール設定を追加 ★★★
-            "grayscale_matching": False
+            "grayscale_matching": False,
+            # ★★★ 変更点: OpenCL設定のデフォルト値を追加 ★★★
+            "use_opencl": True
         }
         if not self.app_config_path.exists():
             return default_config
@@ -79,7 +80,6 @@ class ConfigManager:
         if item_path.is_dir():
             default_setting = {'is_excluded': False}
         else:
-            # ★★★ 変更点: 'matching_mode'をデフォルト設定から削除 ★★★
             default_setting = {
                 'image_path': str(item_path), 'click_position': None, 'click_rect': None, 'roi_rect': None,
                 'roi_enabled': False, 'point_click': True, 'range_click': False,
@@ -91,7 +91,6 @@ class ConfigManager:
         try:
             with open(setting_path, 'r', encoding='utf-8') as f:
                 setting = json.load(f)
-                # 古い設定ファイルから不要なキーを削除
                 setting.pop('template_scale_enabled', None)
                 setting.pop('template_scale_factor', None)
                 setting.pop('matching_mode', None)

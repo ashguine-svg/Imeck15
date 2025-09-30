@@ -42,7 +42,7 @@ if sys.platform == 'win32':
         print("[INFO] User input blocking is available (requires admin rights).")
     except (ImportError, AttributeError, OSError):
         def block_input_func(block):
-            pass 
+            pass
         INPUT_BLOCK_AVAILABLE = False
         print("[WARN] User input blocking is not available on this system.")
 else:
@@ -58,16 +58,16 @@ def block_input(block: bool):
         except Exception as e:
             print(f"[ERROR] Failed to change input block state: {e}")
 
+OPENCL_AVAILABLE = False
 OPENCL_STATUS_MESSAGE = ""
 try:
     if cv2.ocl.haveOpenCL():
-        cv2.ocl.setUseOpenCL(True)
-        OPENCL_STATUS_MESSAGE = "[INFO] OpenCL (GPU support) is available and enabled."
+        OPENCL_AVAILABLE = True
+        OPENCL_STATUS_MESSAGE = "[INFO] OpenCL (GPU support) is available."
     else:
         OPENCL_STATUS_MESSAGE = "[INFO] OpenCL is not available."
 except Exception as e:
     OPENCL_STATUS_MESSAGE = f"[WARN] Could not configure OpenCL: {e}"
-print(OPENCL_STATUS_MESSAGE)
 
 
 class SelectionOverlay(QWidget):
@@ -93,7 +93,7 @@ class SelectionOverlay(QWidget):
         if event.button() == Qt.LeftButton and self.start_pos is not None:
             x1, y1 = min(self.start_pos.x(), event.pos().x()), min(self.start_pos.y(), event.pos().y())
             x2, y2 = max(self.start_pos.x(), event.pos().x()), max(self.start_pos.y(), event.pos().y())
-            if x2 - x1 > 0 and y2 - y1 > 0: self.selectionComplete.emit((x1, y1, x2, y2))
+            if x2 - x1 > 0 and y2 - y1 > 0: self.selectionComplete.emit((x1, y1, x2 + 1, y2 + 1))
             self.close(); self.deleteLater()
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -110,7 +110,7 @@ class SelectionOverlay(QWidget):
         painter.fillPath(final_path, QBrush(QColor(0, 0, 0, 100)))
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() in (Qt.Key_Return, Qt.Key_Enter) and self.initial_rect:
-            coords = (self.initial_rect.left(), self.initial_rect.top(), self.initial_rect.right(), self.initial_rect.bottom())
+            coords = (self.initial_rect.left(), self.initial_rect.top(), self.initial_rect.right() + 1, self.initial_rect.bottom() + 1)
             self.selectionComplete.emit(coords)
             self.close(); self.deleteLater()
         elif event.key() == Qt.Key_Escape: self.close(); self.deleteLater()
@@ -210,11 +210,21 @@ class CoreEngine(QObject):
         self._last_normal_match_time = 0
         self.on_app_config_changed()
 
+    def set_opencl_enabled(self, enabled: bool):
+        if OPENCL_AVAILABLE:
+            try:
+                cv2.ocl.setUseOpenCL(enabled)
+                status = "有効" if cv2.ocl.useOpenCL() else "無効"
+                self.logger.log(f"OpenCLを{status}に設定しました。")
+            except Exception as e:
+                self.logger.log(f"OpenCLの設定変更中にエラーが発生しました: {e}")
+    
     def on_app_config_changed(self):
         self.app_config = self.ui_manager.app_config
         self.capture_manager.set_capture_method(self.app_config.get('capture_method', 'dxcam'))
         self.frame_skip_rate = self.app_config.get('frame_skip_rate', 2)
-        self.logger.log(f"アプリ設定変更: キャプチャ={self.capture_manager.current_method}, スキップ={self.frame_skip_rate}")
+        self.set_opencl_enabled(self.app_config.get('use_opencl', True))
+        self.logger.log(f"アプリ設定変更: キャプチャ={self.capture_manager.current_method}, スキップ={self.frame_skip_rate}, OpenCL={cv2.ocl.useOpenCL() if OPENCL_AVAILABLE else 'N/A'}")
 
     def _show_ui_safe(self):
         if self.ui_manager:
@@ -629,7 +639,6 @@ class CoreEngine(QObject):
     def set_recognition_area(self, method: str):
         self.selectionProcessStarted.emit()
         self.ui_manager.hide()
-        # ★★★ 変更点: パフォーマンスモニタも非表示にする ★★★
         if self.performance_monitor:
             self.performance_monitor.hide()
 
@@ -651,8 +660,9 @@ class CoreEngine(QObject):
             hwnd = win32gui.WindowFromPoint((x, y))
             if not hwnd: return
             
-            if DXCAM_AVAILABLE:
-                self.capture_manager.set_capture_target(hwnd)
+            # DXCamが利用可能な場合、ウィンドウハンドルをキャプチャマネージャーに設定
+            if 'dxcam' in sys.modules:
+                self.capture_manager.dxcam_sct.target_hwnd = hwnd
 
             client_rect_win = win32gui.GetClientRect(hwnd)
             left, top = win32gui.ClientToScreen(hwnd, (0, 0))
@@ -680,38 +690,63 @@ class CoreEngine(QObject):
                 self.logger.log("警告: ウィンドウタイトルが取得できませんでした。")
                 self.process_base_size_prompt_response(False)
         except Exception as e:
-            self.logger.log(f"ウィンドウ領域の取得に失敗: {e}"); 
+            self.logger.log(f"ウィンドウ領域の取得に失敗: {e}");
             self._showUiSignal.emit(); self.selectionProcessFinished.emit()
     
     def _handle_window_click_for_selection_linux(self, x, y):
-        if not shutil.which('xdotool') or not shutil.which('xwininfo'):
-            self.logger.log("エラー: 'xdotool'または'xwininfo'が見つかりません。")
+        needed_tools = ['xdotool', 'xwininfo']
+        missing_tools = [tool for tool in needed_tools if not shutil.which(tool)]
+        if missing_tools:
+            self.logger.log(f"エラー: {', '.join(missing_tools)} が見つかりません。")
             self.logger.log("ウィンドウ選択機能を使用するには、これらをインストールしてください。")
             self.logger.log("(例: sudo apt install xdotool x11-utils)")
             self._showUiSignal.emit(); self.selectionProcessFinished.emit()
             return
         
         try:
-            proc = subprocess.run(['xdotool', 'getmouselocation'], capture_output=True, text=True)
-            window_id = [line.split(':')[1] for line in proc.stdout.strip().split() if 'window' in line][0]
+            # 1. マウス下のウィンドウIDを取得
+            proc_id = subprocess.run(['xdotool', 'getmouselocation'], capture_output=True, text=True, check=True)
+            window_id = [line.split(':')[1] for line in proc_id.stdout.strip().split() if 'window' in line][0]
 
-            proc = subprocess.run(['xwininfo', '-id', window_id], capture_output=True, text=True)
-            info = proc.stdout
+            # 2. ウィンドウのジオメトリを詳細に取得 (xwininfo)
+            proc_info = subprocess.run(['xwininfo', '-id', window_id], capture_output=True, text=True, check=True)
+            info = proc_info.stdout
             
-            left, top, width, height = 0, 0, 0, 0
+            # 3. xwininfoの出力から必要な情報をすべてパースする
+            abs_x, abs_y, rel_x, rel_y, width, height = 0, 0, 0, 0, 0, 0
             title = f"Window (ID: {window_id})"
             for line in info.split('\n'):
                 line = line.strip()
-                if line.startswith('Absolute upper-left X:'): left = int(line.split(':')[1].strip())
-                elif line.startswith('Absolute upper-left Y:'): top = int(line.split(':')[1].strip())
+                if line.startswith('Absolute upper-left X:'): abs_x = int(line.split(':')[1].strip())
+                elif line.startswith('Absolute upper-left Y:'): abs_y = int(line.split(':')[1].strip())
+                elif line.startswith('Relative upper-left X:'): rel_x = int(line.split(':')[1].strip())
+                elif line.startswith('Relative upper-left Y:'): rel_y = int(line.split(':')[1].strip())
                 elif line.startswith('Width:'): width = int(line.split(':')[1].strip())
                 elif line.startswith('Height:'): height = int(line.split(':')[1].strip())
                 elif 'xwininfo: Window id:' in line and '"' in line:
                     title = line.split('"')[1]
+
+            # ★★★ 変更点: ここからクライアント領域の計算ロジックを修正 ★★★
+            # 4. クライアント領域を計算する
+            #   - 仮説: 一部のデスクトップ環境では、`Absolute X/Y` と `Width/Height` が
+            #     直接クライアント領域を示している。
+            #   - そのため、`Relative X/Y` (枠のオフセット) は加算しない。
             
-            right, bottom = left + width, top + height
-            rect = (left, top, right, bottom)
+            client_left = abs_x
+            client_top = abs_y
+            client_width = width
+            client_height = height
             
+            client_right = client_left + client_width
+            client_bottom = client_top + client_height
+
+            rect = (client_left, client_top, client_right, client_bottom)
+            
+            self.logger.log(f"ウィンドウ '{title}' を検出。")
+            self.logger.log(f"  - 取得したジオメトリ (xwininfo): X={abs_x}, Y={abs_y}, W={client_width}, H={client_height}")
+            self.logger.log(f"  - 計算後のクライアント領域: {rect}")
+            # ★★★ 変更点: ここまで ★★★
+
             if self._is_capturing_for_registration:
                 self._areaSelectedForProcessing.emit(rect)
                 self.selectionProcessFinished.emit()
@@ -719,7 +754,7 @@ class CoreEngine(QObject):
 
             self._pending_window_info = {
                 "title": title,
-                "dims": {'width': width, 'height': height},
+                "dims": {'width': client_width, 'height': client_height},
                 "rect": rect
             }
             
@@ -860,9 +895,10 @@ class CoreEngine(QObject):
         self.recognition_area = None
         self.current_window_scale = None
         self.windowScaleCalculated.emit(0.0)
-        if sys.platform == 'win32' and DXCAM_AVAILABLE:
-            self.capture_manager.set_capture_target(None)
-        self.logger.log("認識範囲をクリアしました。"); 
+        # DXCamが利用可能な場合、ターゲットウィンドウをリセット
+        if 'dxcam' in sys.modules:
+            self.capture_manager.dxcam_sct.target_hwnd = None
+        self.logger.log("認識範囲をクリアしました。");
         self.updateRecAreaPreview.emit(None)
         
     def _update_rec_area_preview(self):

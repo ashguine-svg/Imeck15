@@ -21,10 +21,13 @@ class PerformanceMonitor(QDialog):
         self.ui_manager = ui_manager
         self.setWindowTitle("パフォーマンスモニター")
         
-        self.setWindowFlags(self.windowFlags() | Qt.WindowMinimizeButtonHint)
+        # ★★★ 変更点: Qt.Windowフラグを追加して、ウィンドウを完全に独立させる ★★★
+        flags = Qt.Window | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint
+        self.setWindowFlags(flags)
         
         self.resize(1024, 200)
-        self.setMinimumSize(600, 150)
+        # ★★★ 変更点: ご依頼の通り、最小の高さを100に設定 ★★★
+        self.setMinimumSize(600, 100)
         
         self.process = psutil.Process()
         self.process.cpu_percent(interval=None)

@@ -85,7 +85,8 @@ def main():
         logger=logger
     )
     
-    performance_monitor = PerformanceMonitor(ui_manager)
+    # ★★★ 変更点: 親ウィンドウをNoneに設定し、独立したウィンドウにする ★★★
+    performance_monitor = PerformanceMonitor(ui_manager, parent=None)
     
     logger.set_ui(ui_manager, performance_monitor)
     

@@ -17,6 +17,13 @@ import numpy as np
 from pathlib import Path
 from capture import DXCAM_AVAILABLE
 
+# ★★★ 変更点: OpenCLが利用可能かチェックするためにcv2をインポート ★★★
+try:
+    OPENCL_AVAILABLE = cv2.ocl.haveOpenCL()
+except:
+    OPENCL_AVAILABLE = False
+
+
 class ScaledPixmapLabel(QLabel):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -151,7 +158,10 @@ class UIManager(QMainWindow):
         self.app_settings_widgets = {}
         self.auto_scale_widgets = {}
 
-        self.setWindowTitle("Imeck15"); self.setFixedSize(800, 600)
+        self.setWindowTitle("Imeck15")
+        self.resize(800, 600)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
+
         self.save_timer = QTimer(self); self.save_timer.setSingleShot(True); self.save_timer.setInterval(1000)
         self.is_processing_tree_change = False
         
@@ -230,39 +240,47 @@ class UIManager(QMainWindow):
         auto_scale_group.setFlat(True)
         self.preview_tabs.addTab(auto_scale_group, "自動スケール")
 
+        # ★★★ 変更点: アプリ設定タブのレイアウトを全面的に修正 ★★★
         app_settings_group = QGroupBox(); app_settings_layout = QGridLayout(app_settings_group)
-        self.app_settings_widgets['grayscale_matching'] = QCheckBox("グレースケール検索 (高速)")
-        app_settings_layout.addWidget(self.app_settings_widgets['grayscale_matching'], 0, 0, 1, 2)
         
+        # --- グレースケール ---
+        self.app_settings_widgets['grayscale_matching'] = QCheckBox("グレースケール検索 (高速)")
+        app_settings_layout.addWidget(self.app_settings_widgets['grayscale_matching'], 0, 0)
+        gs_desc_label = QLabel("<b>メリット:</b> 処理が高速になり、僅かな色の違いを無視できます。<br>"
+                               "<b>デメリット:</b> 同じ形で色が違うだけの画像は区別できません。")
+        gs_desc_label.setWordWrap(True); gs_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
+        app_settings_layout.addWidget(gs_desc_label, 0, 1)
+
+        # --- DXCam ---
         self.app_settings_widgets['capture_method'] = QCheckBox("DXCamを使用")
         self.app_settings_widgets['capture_method'].setEnabled(DXCAM_AVAILABLE)
-        app_settings_layout.addWidget(self.app_settings_widgets['capture_method'], 2, 0)
-        
+        app_settings_layout.addWidget(self.app_settings_widgets['capture_method'], 1, 0)
+        dxcam_desc_label = QLabel("<b>メリット:</b> ゲーム等の描画に強く、CPU負荷が低い高速なキャプチャ方式です。<br>"
+                                  "<b>デメリット:</b> 一部のアプリやPC環境では動作しない場合があります。")
+        dxcam_desc_label.setWordWrap(True); dxcam_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
+        app_settings_layout.addWidget(dxcam_desc_label, 1, 1)
+
+        # --- フレームスキップ ---
         fs_layout = QHBoxLayout()
         fs_layout.addWidget(QLabel("フレームスキップ:"))
         self.app_settings_widgets['frame_skip_rate'] = QSpinBox(); self.app_settings_widgets['frame_skip_rate'].setRange(1, 10)
         fs_layout.addWidget(self.app_settings_widgets['frame_skip_rate'])
-        app_settings_layout.addLayout(fs_layout, 2, 1)
-        
-        gs_desc_label = QLabel("<b>メリット:</b> 処理が高速になり、僅かな色の違いを無視できます。<br>"
-                               "<b>デメリット:</b> 同じ形で色が違うだけの画像は区別できません。")
-        gs_desc_label.setWordWrap(True)
-        gs_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
-        app_settings_layout.addWidget(gs_desc_label, 1, 0, 1, 2)
-
-        dxcam_desc_label = QLabel("<b>メリット:</b> ゲーム等の描画に強く、CPU負荷が低い高速なキャプチャ方式です。<br>"
-                                  "<b>デメリット:</b> 一部のアプリやPC環境では動作しない場合があります。")
-        dxcam_desc_label.setWordWrap(True)
-        dxcam_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
-        app_settings_layout.addWidget(dxcam_desc_label, 3, 0, 1, 2)
-        
+        app_settings_layout.addLayout(fs_layout, 2, 0)
         fs_desc_label = QLabel("<b>メリット:</b> 値を大きくするとCPU負荷が下がります。<br>"
                                "<b>デメリット:</b> 画面の急な変化に対する反応が遅くなります。")
-        fs_desc_label.setWordWrap(True)
-        fs_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
-        app_settings_layout.addWidget(fs_desc_label, 4, 0, 1, 2)
+        fs_desc_label.setWordWrap(True); fs_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
+        app_settings_layout.addWidget(fs_desc_label, 2, 1)
 
-        app_settings_layout.setColumnStretch(2, 1)
+        # ★★★ 変更点: OpenCLスイッチと説明を追加 ★★★
+        self.app_settings_widgets['use_opencl'] = QCheckBox("OpenCL (GPU支援) を使用")
+        self.app_settings_widgets['use_opencl'].setEnabled(OPENCL_AVAILABLE)
+        app_settings_layout.addWidget(self.app_settings_widgets['use_opencl'], 3, 0)
+        opencl_desc_label = QLabel("<b>メリット:</b> GPUを利用して画像処理を高速化します。特に高解像度の画面や大きな画像の認識時にCPU負荷を下げ、パフォーマンスを向上させます。<br>"
+                                     "<b>デメリット:</b> 処理によっては僅かなオーバーヘッドが発生します。また、GPUドライバとの相性問題が発生する場合があります。")
+        opencl_desc_label.setWordWrap(True); opencl_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
+        app_settings_layout.addWidget(opencl_desc_label, 3, 1)
+
+        app_settings_layout.setColumnStretch(1, 1) # 説明欄が幅を広げるように設定
         app_settings_group.setFlat(True)
         self.preview_tabs.addTab(app_settings_group, "アプリ設定")
         
@@ -302,6 +320,8 @@ class UIManager(QMainWindow):
         self.app_settings_widgets['capture_method'].setChecked(self.app_config.get('capture_method', 'dxcam') == 'dxcam')
         self.app_settings_widgets['frame_skip_rate'].setValue(self.app_config.get('frame_skip_rate', 2))
         self.app_settings_widgets['grayscale_matching'].setChecked(self.app_config.get('grayscale_matching', False))
+        # ★★★ 変更点: OpenCL設定をUIに読み込む ★★★
+        self.app_settings_widgets['use_opencl'].setChecked(self.app_config.get('use_opencl', True))
         self.update_auto_scale_info()
 
     def get_auto_scale_settings(self) -> dict:
@@ -329,6 +349,8 @@ class UIManager(QMainWindow):
         self.app_config['capture_method'] = 'dxcam' if self.app_settings_widgets['capture_method'].isChecked() else 'mss'
         self.app_config['frame_skip_rate'] = self.app_settings_widgets['frame_skip_rate'].value()
         self.app_config['grayscale_matching'] = self.app_settings_widgets['grayscale_matching'].isChecked()
+        # ★★★ 変更点: OpenCL設定の変更をconfigに反映 ★★★
+        self.app_config['use_opencl'] = self.app_settings_widgets['use_opencl'].isChecked()
         self.config_manager.save_app_config(self.app_config)
         self.update_auto_scale_info()
         self.appConfigChanged.emit()
