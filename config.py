@@ -26,7 +26,6 @@ class ConfigManager:
             "capture_method": "mss",
             "frame_skip_rate": 2,
             "grayscale_matching": False,
-            # ★★★ 変更点: OpenCL設定のデフォルト値を追加 ★★★
             "use_opencl": True
         }
         if not self.app_config_path.exists():
@@ -80,11 +79,12 @@ class ConfigManager:
         if item_path.is_dir():
             default_setting = {'is_excluded': False}
         else:
+            # ★★★ 変更点: デバウンス設定のデフォルト値を追加 ★★★
             default_setting = {
                 'image_path': str(item_path), 'click_position': None, 'click_rect': None, 'roi_rect': None,
                 'roi_enabled': False, 'point_click': True, 'range_click': False,
                 'random_click': False, 'interval_time': 1.5, 'backup_click': False,
-                'backup_time': 300.0, 'threshold': 0.8
+                'backup_time': 300.0, 'threshold': 0.8, 'debounce_time': 0.0
             }
         if not setting_path.exists():
             return default_setting

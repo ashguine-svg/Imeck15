@@ -17,7 +17,6 @@ import numpy as np
 from pathlib import Path
 from capture import DXCAM_AVAILABLE
 
-# ★★★ 変更点: OpenCLが利用可能かチェックするためにcv2をインポート ★★★
 try:
     OPENCL_AVAILABLE = cv2.ocl.haveOpenCL()
 except:
@@ -159,7 +158,8 @@ class UIManager(QMainWindow):
         self.auto_scale_widgets = {}
 
         self.setWindowTitle("Imeck15")
-        self.resize(800, 600)
+        # ★★★ 変更点: ウィンドウの高さを少し広げる ★★★
+        self.resize(800, 640)
         self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
 
         self.save_timer = QTimer(self); self.save_timer.setSingleShot(True); self.save_timer.setInterval(1000)
@@ -240,18 +240,13 @@ class UIManager(QMainWindow):
         auto_scale_group.setFlat(True)
         self.preview_tabs.addTab(auto_scale_group, "自動スケール")
 
-        # ★★★ 変更点: アプリ設定タブのレイアウトを全面的に修正 ★★★
         app_settings_group = QGroupBox(); app_settings_layout = QGridLayout(app_settings_group)
-        
-        # --- グレースケール ---
         self.app_settings_widgets['grayscale_matching'] = QCheckBox("グレースケール検索 (高速)")
         app_settings_layout.addWidget(self.app_settings_widgets['grayscale_matching'], 0, 0)
         gs_desc_label = QLabel("<b>メリット:</b> 処理が高速になり、僅かな色の違いを無視できます。<br>"
                                "<b>デメリット:</b> 同じ形で色が違うだけの画像は区別できません。")
         gs_desc_label.setWordWrap(True); gs_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
         app_settings_layout.addWidget(gs_desc_label, 0, 1)
-
-        # --- DXCam ---
         self.app_settings_widgets['capture_method'] = QCheckBox("DXCamを使用")
         self.app_settings_widgets['capture_method'].setEnabled(DXCAM_AVAILABLE)
         app_settings_layout.addWidget(self.app_settings_widgets['capture_method'], 1, 0)
@@ -259,8 +254,6 @@ class UIManager(QMainWindow):
                                   "<b>デメリット:</b> 一部のアプリやPC環境では動作しない場合があります。")
         dxcam_desc_label.setWordWrap(True); dxcam_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
         app_settings_layout.addWidget(dxcam_desc_label, 1, 1)
-
-        # --- フレームスキップ ---
         fs_layout = QHBoxLayout()
         fs_layout.addWidget(QLabel("フレームスキップ:"))
         self.app_settings_widgets['frame_skip_rate'] = QSpinBox(); self.app_settings_widgets['frame_skip_rate'].setRange(1, 10)
@@ -270,8 +263,6 @@ class UIManager(QMainWindow):
                                "<b>デメリット:</b> 画面の急な変化に対する反応が遅くなります。")
         fs_desc_label.setWordWrap(True); fs_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
         app_settings_layout.addWidget(fs_desc_label, 2, 1)
-
-        # ★★★ 変更点: OpenCLスイッチと説明を追加 ★★★
         self.app_settings_widgets['use_opencl'] = QCheckBox("OpenCL (GPU支援) を使用")
         self.app_settings_widgets['use_opencl'].setEnabled(OPENCL_AVAILABLE)
         app_settings_layout.addWidget(self.app_settings_widgets['use_opencl'], 3, 0)
@@ -279,13 +270,13 @@ class UIManager(QMainWindow):
                                      "<b>デメリット:</b> 処理によっては僅かなオーバーヘッドが発生します。また、GPUドライバとの相性問題が発生する場合があります。")
         opencl_desc_label.setWordWrap(True); opencl_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
         app_settings_layout.addWidget(opencl_desc_label, 3, 1)
-
-        app_settings_layout.setColumnStretch(1, 1) # 説明欄が幅を広げるように設定
+        app_settings_layout.setColumnStretch(1, 1)
         app_settings_group.setFlat(True)
         self.preview_tabs.addTab(app_settings_group, "アプリ設定")
         
         right_layout.addWidget(self.preview_tabs, 2)
 
+        # ★★★ 変更点: デバウンス設定を追加し、レイアウトを調整 ★★★
         item_settings_group = QGroupBox("画像ごとの設定"); item_settings_layout = QGridLayout(item_settings_group)
         item_settings_layout.addWidget(QLabel("認識精度:"), 0, 0)
         self.item_settings_widgets['threshold'] = QDoubleSpinBox(); self.item_settings_widgets['threshold'].setRange(0.5, 1.0); self.item_settings_widgets['threshold'].setSingleStep(0.01); self.item_settings_widgets['threshold'].setValue(0.8)
@@ -297,16 +288,29 @@ class UIManager(QMainWindow):
             "これにより、画面全体を探索するよりも高速にマッチングが行え、処理負荷を軽減できます。"
         )
         item_settings_layout.addWidget(self.item_settings_widgets['roi_enabled'], 0, 2)
+        
         item_settings_layout.addWidget(QLabel("バックアップクリック:"), 1, 0)
         backup_layout = QHBoxLayout(); self.item_settings_widgets['backup_click'] = QCheckBox("有効"); backup_layout.addWidget(self.item_settings_widgets['backup_click'])
         self.item_settings_widgets['backup_time'] = QDoubleSpinBox(); self.item_settings_widgets['backup_time'].setRange(1.0, 600.0); self.item_settings_widgets['backup_time'].setSingleStep(1.0); self.item_settings_widgets['backup_time'].setValue(300.0)
         backup_layout.addWidget(self.item_settings_widgets['backup_time']); item_settings_layout.addLayout(backup_layout, 1, 1, 1, 2)
+        
         item_settings_layout.addWidget(QLabel("インターバル(秒):"), 2, 0)
         self.item_settings_widgets['interval_time'] = QDoubleSpinBox(); self.item_settings_widgets['interval_time'].setRange(0.1, 10.0); self.item_settings_widgets['interval_time'].setSingleStep(0.1); self.item_settings_widgets['interval_time'].setValue(1.5)
         item_settings_layout.addWidget(self.item_settings_widgets['interval_time'], 2, 1)
+
+        # ★★★ 新規追加: デバウンス設定欄 ★★★
+        item_settings_layout.addWidget(QLabel("デバウンス(秒):"), 3, 0)
+        self.item_settings_widgets['debounce_time'] = QDoubleSpinBox(); self.item_settings_widgets['debounce_time'].setRange(0.0, 10.0); self.item_settings_widgets['debounce_time'].setSingleStep(0.1); self.item_settings_widgets['debounce_time'].setValue(0.0)
+        self.item_settings_widgets['debounce_time'].setToolTip(
+            "連続で同じ画像がマッチした際、2回目のクリックタイミングを「インターバル＋デバウンス時間」に延長します。\n"
+            "これにより、インターバルがより長い他の画像が先にクリックされる機会を作ることができます。"
+        )
+        item_settings_layout.addWidget(self.item_settings_widgets['debounce_time'], 3, 1)
+        
+        # ★★★ 変更点: クリック設定のレイアウトを調整 ★★★
         click_type_layout = QHBoxLayout(); self.item_settings_widgets['point_click'] = QCheckBox("1点クリック"); self.item_settings_widgets['range_click'] = QCheckBox("範囲クリック"); self.item_settings_widgets['random_click'] = QCheckBox("範囲内ランダム")
         click_type_layout.addWidget(self.item_settings_widgets['point_click']); click_type_layout.addWidget(self.item_settings_widgets['range_click']); click_type_layout.addWidget(self.item_settings_widgets['random_click'])
-        item_settings_layout.addLayout(click_type_layout, 3, 0, 1, 3)
+        item_settings_layout.addLayout(click_type_layout, 4, 0, 1, 3) # 行番号を4に変更
         right_layout.addWidget(item_settings_group, 1)
 
         content_layout.addWidget(right_frame, 2); main_layout.addWidget(content_frame)
@@ -320,7 +324,6 @@ class UIManager(QMainWindow):
         self.app_settings_widgets['capture_method'].setChecked(self.app_config.get('capture_method', 'dxcam') == 'dxcam')
         self.app_settings_widgets['frame_skip_rate'].setValue(self.app_config.get('frame_skip_rate', 2))
         self.app_settings_widgets['grayscale_matching'].setChecked(self.app_config.get('grayscale_matching', False))
-        # ★★★ 変更点: OpenCL設定をUIに読み込む ★★★
         self.app_settings_widgets['use_opencl'].setChecked(self.app_config.get('use_opencl', True))
         self.update_auto_scale_info()
 
@@ -349,7 +352,6 @@ class UIManager(QMainWindow):
         self.app_config['capture_method'] = 'dxcam' if self.app_settings_widgets['capture_method'].isChecked() else 'mss'
         self.app_config['frame_skip_rate'] = self.app_settings_widgets['frame_skip_rate'].value()
         self.app_config['grayscale_matching'] = self.app_settings_widgets['grayscale_matching'].isChecked()
-        # ★★★ 変更点: OpenCL設定の変更をconfigに反映 ★★★
         self.app_config['use_opencl'] = self.app_settings_widgets['use_opencl'].isChecked()
         self.config_manager.save_app_config(self.app_config)
         self.update_auto_scale_info()
@@ -365,6 +367,10 @@ class UIManager(QMainWindow):
             if isinstance(widget, QDoubleSpinBox): widget.valueChanged.connect(self.on_item_settings_changed)
             elif isinstance(widget, QCheckBox): widget.stateChanged.connect(self.on_item_settings_changed)
         
+        # ★★★ 変更点: クリック設定の排他制御シグナルを接続 ★★★
+        self.item_settings_widgets['point_click'].toggled.connect(self.on_point_click_toggled)
+        self.item_settings_widgets['range_click'].toggled.connect(self.on_range_click_toggled)
+        
         for widget in list(self.auto_scale_widgets.values()) + list(self.app_settings_widgets.values()):
             if isinstance(widget, QDoubleSpinBox): widget.valueChanged.connect(self.on_app_settings_changed)
             elif isinstance(widget, QSpinBox): widget.valueChanged.connect(self.on_app_settings_changed)
@@ -373,6 +379,22 @@ class UIManager(QMainWindow):
         self.preview_label.settingChanged.connect(self.core_engine.on_preview_click_settings_changed)
         self.save_timer.timeout.connect(self.core_engine.save_current_settings)
         self.appConfigChanged.connect(self.core_engine.on_app_config_changed)
+
+    # ★★★ 新規追加: 「1点クリック」の排他制御ロジック ★★★
+    def on_point_click_toggled(self, checked):
+        if checked:
+            range_cb = self.item_settings_widgets['range_click']
+            range_cb.blockSignals(True)
+            range_cb.setChecked(False)
+            range_cb.blockSignals(False)
+
+    # ★★★ 新規追加: 「範囲クリック」の排他制御ロジック ★★★
+    def on_range_click_toggled(self, checked):
+        if checked:
+            point_cb = self.item_settings_widgets['point_click']
+            point_cb.blockSignals(True)
+            point_cb.setChecked(False)
+            point_cb.blockSignals(False)
 
     def update_image_tree(self):
         self.image_tree.blockSignals(True)

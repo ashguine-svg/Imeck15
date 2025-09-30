@@ -184,14 +184,15 @@ class CoreEngine(QObject):
         self._monitor_thread = None
         self._click_count = 0
         
-        # ★★★ 変更点: テンプレートキャッシュを通常用とバックアップ用に分離 ★★★
         self.normal_template_cache = {}
         self.backup_template_cache = {}
         
-        # ★★★ 変更点: バックアップクリックの新しい状態管理変数 ★★★
         self.is_backup_countdown_active = False
         self.backup_countdown_start_time = 0
         self.active_backup_info = None
+
+        # ★★★ 新規追加: デバウンス機能のための変数 ★★★
+        self._last_clicked_path = None
 
         self.recognition_area = None
         self._is_capturing_for_registration = False
@@ -386,7 +387,6 @@ class CoreEngine(QObject):
         self.ui_manager.set_tree_enabled(False)
         self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
 
-    # ★★★ 変更点: キャッシュ構築ロジックを分離対応 ★★★
     def _build_template_cache(self):
         with self.cache_lock:
             self.normal_template_cache.clear()
@@ -422,7 +422,6 @@ class CoreEngine(QObject):
             
             self.logger.log(f"テンプレートキャッシュ構築完了。通常: {len(self.normal_template_cache)}件, バックアップ: {len(self.backup_template_cache)}件")
 
-    # ★★★ 変更点: アイテムを通常用かバックアップ用かに振り分ける ★★★
     def _process_item_for_cache(self, item_data, scales):
         try:
             path = item_data['path']
@@ -449,7 +448,6 @@ class CoreEngine(QObject):
                     'best_scale': None if len(scales) > 1 else scales[0]
                 }
                 
-                # backup_clickがTrueならbackup_template_cacheへ、それ以外はnormal_template_cacheへ
                 if settings.get('backup_click', False):
                     self.backup_template_cache[path] = cache_entry
                 else:
@@ -464,10 +462,12 @@ class CoreEngine(QObject):
             self._click_count = 0
             self._cooldown_until = 0
             
-            # ★★★ 変更点: 監視開始時にバックアップ状態をリセット ★★★
             self.is_backup_countdown_active = False
             self.backup_countdown_start_time = 0
             self.active_backup_info = None
+
+            # ★★★ 変更点: デバウンス用の変数をリセット ★★★
+            self._last_clicked_path = None
 
             self.ui_manager.set_tree_enabled(False)
             self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
@@ -488,7 +488,6 @@ class CoreEngine(QObject):
             
             self.updateStatus.emit("待機中", "green"); self.logger.log("監視を停止しました。")
     
-    # ★★★ 変更点: 新しいロジックに基づいた監視ループ ★★★
     def _monitoring_loop(self):
         last_match_time_map = {}
         fps_last_time = time.time()
@@ -510,22 +509,18 @@ class CoreEngine(QObject):
                 continue
 
             try:
-                # フレームスキップ
                 if (frame_counter % self.frame_skip_rate) != 0: 
                     time.sleep(0.01)
                     continue
                 
-                # 画面キャプチャ
                 screen_bgr = self.capture_manager.capture_frame(region=self.recognition_area)
                 if screen_bgr is None:
                     self.updateLog.emit("画面のキャプチャに失敗しました。")
                     time.sleep(1.0)
                     continue
                 
-                # グレースケール変換
                 screen_gray = cv2.cvtColor(screen_bgr, cv2.COLOR_BGR2GRAY)
 
-                # --- 状態に応じた処理 ---
                 if self.is_backup_countdown_active:
                     self._handle_countdown_state(current_time, screen_bgr, screen_gray, last_match_time_map)
                 else:
@@ -535,15 +530,12 @@ class CoreEngine(QObject):
                 self.updateLog.emit(f"監視ループでエラーが発生しました: {e}")
                 time.sleep(1.0)
 
-    # ★★★ 新規追加: アイドル状態（通常時）の処理 ★★★
     def _handle_idle_state(self, current_time, screen_bgr, screen_gray, last_match_time_map):
-        # 1. 通常画像を検索
         normal_match = self._find_best_match(screen_bgr, screen_gray, self.normal_template_cache)
         if normal_match:
             self._handle_match(normal_match, last_match_time_map)
             return
 
-        # 2. 通常画像がなければ、バックアップ（トリガー）画像を検索
         backup_trigger_match = self._find_best_match(screen_bgr, screen_gray, self.backup_template_cache)
         if backup_trigger_match:
             self.is_backup_countdown_active = True
@@ -555,38 +547,30 @@ class CoreEngine(QObject):
             log_msg = f"バックアップ画像 '{Path(path).name}' を検出。{backup_time:.1f}秒のカウントダウンを開始します。"
             self.updateLog.emit(log_msg)
 
-    # ★★★ 新規追加: カウントダウン状態の処理 ★★★
     def _handle_countdown_state(self, current_time, screen_bgr, screen_gray, last_match_time_map):
         elapsed_time = current_time - self.backup_countdown_start_time
         backup_duration = self.active_backup_info['settings'].get('backup_time', 300.0)
 
-        # 1. カウントダウンが終了したかチェック
         if elapsed_time >= backup_duration:
             self.updateLog.emit(f"{backup_duration:.1f}秒が経過。バックアップクリックを実行します。")
             self._execute_final_backup_click()
-            # 状態をリセット
             self.is_backup_countdown_active = False
             self.active_backup_info = None
             self.backup_countdown_start_time = 0
-            self._cooldown_until = time.time() + 1.0 # 実行後少し待機
+            self._cooldown_until = time.time() + 1.0
             return
 
-        # 2. カウントダウン中に通常画像が見つかったかチェック (リセット条件)
         normal_match = self._find_best_match(screen_bgr, screen_gray, self.normal_template_cache)
         if normal_match:
             path = normal_match['path']
             self.updateLog.emit(f"通常画像 '{Path(path).name}' を検出。バックアップカウントダウンをリセットします。")
-            # 状態をリセット
             self.is_backup_countdown_active = False
             self.active_backup_info = None
             self.backup_countdown_start_time = 0
-            # 見つかった通常画像を処理
             self._handle_match(normal_match, last_match_time_map)
             return
 
-    # ★★★ 新規追加: カウントダウン終了時の最終クリック処理 ★★★
     def _execute_final_backup_click(self):
-        # 最新の画面で、目的のバックアップ画像の位置を再検索してクリックする
         screen_bgr = self.capture_manager.capture_frame(region=self.recognition_area)
         if screen_bgr is None:
             self.updateLog.emit("バックアップクリック失敗: 画面キャプチャができませんでした。")
@@ -594,7 +578,6 @@ class CoreEngine(QObject):
         
         screen_gray = cv2.cvtColor(screen_bgr, cv2.COLOR_BGR2GRAY)
         
-        # ターゲットの画像情報だけを辞書にいれて検索
         target_path = self.active_backup_info['path']
         target_cache_item = self.backup_template_cache.get(target_path)
         if not target_cache_item:
@@ -608,7 +591,6 @@ class CoreEngine(QObject):
         else:
             self.updateLog.emit(f"バックアップクリック失敗: 画面内に '{Path(target_path).name}' が見つかりませんでした。")
     
-    # ★★★ 変更点: 検索対象のキャッシュを引数で受け取るように変更 ★★★
     def _find_best_match(self, screen_bgr, screen_gray, template_cache_to_search):
         futures = []
         with self.cache_lock:
@@ -624,7 +606,7 @@ class CoreEngine(QObject):
                     templates_to_search = data['scaled_templates']
                 else:
                     templates_to_search = [t for t in data['scaled_templates'] if t['scale'] == data['best_scale']]
-                    if not templates_to_search: # フォールバック
+                    if not templates_to_search:
                         templates_to_search = data['scaled_templates']
                 
                 screen_to_use = screen_gray if should_use_grayscale else screen_bgr
@@ -645,7 +627,6 @@ class CoreEngine(QObject):
         best_match = max(results, key=lambda r: r['confidence'])
         
         with self.cache_lock:
-            # 検索対象のキャッシュから元のアイテムを探す
             if best_match['path'] in self.normal_template_cache:
                 cache_item = self.normal_template_cache.get(best_match['path'])
             else:
@@ -659,21 +640,34 @@ class CoreEngine(QObject):
         
         return best_match
 
+    # ★★★ 変更点: デバウンス機能のロジックをここに追加 ★★★
     def _handle_match(self, match_info, last_match_time_map):
         path, settings = match_info['path'], match_info['settings']
-        interval = settings.get('interval_time', 1.5)
         current_time = time.time()
 
-        if current_time - last_match_time_map.get(path, 0) > interval:
+        interval = settings.get('interval_time', 1.5)
+        debounce = settings.get('debounce_time', 0.0)
+        
+        #
+        effective_interval = interval
+        # 最後にクリックした画像と今回マッチした画像が同じかチェック
+        if self._last_clicked_path == path and debounce > 0:
+            effective_interval += debounce
+            # self.updateLog.emit(f"デバウンス適用: '{Path(path).name}' の待機時間を {effective_interval:.2f}秒に延長")
+
+        if current_time - last_match_time_map.get(path, 0) > effective_interval:
             self._execute_click(match_info)
             last_match_time_map[path] = current_time
+            # グローバルクールダウンは元の短いインターバルを基準にする
             self._cooldown_until = current_time + interval
             
+    # ★★★ 変更点: クリック後に画像パスを記録する処理を追加 ★★★
     def _execute_click(self, match_info):
         block_input(True)
         try:
             settings, rect = match_info['settings'], match_info['rect']
             scale = match_info.get('scale', 1.0)
+            path = match_info['path']
 
             offset_x, offset_y = (self.recognition_area[0], self.recognition_area[1]) if self.recognition_area else (0, 0)
             click_x, click_y = 0, 0
@@ -695,11 +689,14 @@ class CoreEngine(QObject):
                 click_pos = settings['click_position']
                 click_x = offset_x + rect[0] + (click_pos[0] * scale)
                 click_y = offset_y + rect[1] + (click_pos[1] * scale)
-            else: # デフォルトは画像中央
+            else:
                 click_x, click_y = offset_x + (rect[0] + rect[2]) / 2, offset_y + (rect[1] + rect[3]) / 2
             
             pyautogui.click(click_x, click_y)
             self._click_count += 1
+            
+            # 最後にクリックした画像のパスを記録
+            self._last_clicked_path = path
             
             log_msg = f"クリック: {Path(settings['image_path']).name} @({int(click_x)}, {int(click_y)}) conf:{match_info['confidence']:.2f}"
             if 'scale' in match_info:
@@ -905,7 +902,6 @@ class CoreEngine(QObject):
         img = self.capture_manager.capture_frame(region=self.recognition_area) if self.recognition_area else None
         self.updateRecAreaPreview.emit(img)
     
-    # ★★★ 変更点: パフォーマンスモニターに渡す残り時間を新しいロジックで計算 ★★★
     def get_backup_click_countdown(self) -> float:
         if self.is_backup_countdown_active and self.active_backup_info:
             elapsed_time = time.time() - self.backup_countdown_start_time
