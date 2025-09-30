@@ -72,6 +72,7 @@ except Exception as e:
 
 class SelectionOverlay(QWidget):
     selectionComplete = Signal(tuple)
+
     def __init__(self, parent=None, initial_rect=None):
         super().__init__(parent)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
@@ -80,40 +81,76 @@ class SelectionOverlay(QWidget):
         self.setGeometry(QApplication.primaryScreen().geometry())
         self.setMouseTracking(True)
         self.start_pos, self.end_pos, self.initial_rect = None, None, initial_rect
+        # ★★★ 修正点: devicePixelRatio をインスタンス変数として保持 ★★★
+        self.dpr = self.screen().devicePixelRatio() if self.screen() else 1.0
+
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.LeftButton:
             self.initial_rect = None
-            self.start_pos, self.end_pos = event.pos(), event.pos()
+            # ★★★ 修正点: 座標に devicePixelRatio を乗算 ★★★
+            self.start_pos = event.position().toPoint() * self.dpr
+            self.end_pos = self.start_pos
             self.update()
+
     def mouseMoveEvent(self, event: QMouseEvent):
         if self.start_pos is not None:
-            self.end_pos = event.pos()
+            # ★★★ 修正点: 座標に devicePixelRatio を乗算 ★★★
+            self.end_pos = event.position().toPoint() * self.dpr
             self.update()
+
     def mouseReleaseEvent(self, event: QMouseEvent):
         if event.button() == Qt.LeftButton and self.start_pos is not None:
-            x1, y1 = min(self.start_pos.x(), event.pos().x()), min(self.start_pos.y(), event.pos().y())
-            x2, y2 = max(self.start_pos.x(), event.pos().x()), max(self.start_pos.y(), event.pos().y())
-            if x2 - x1 > 0 and y2 - y1 > 0: self.selectionComplete.emit((x1, y1, x2 + 1, y2 + 1))
-            self.close(); self.deleteLater()
+            # ★★★ 修正点: 座標に devicePixelRatio を乗算 ★★★
+            end_pos_scaled = event.position().toPoint() * self.dpr
+            x1 = min(self.start_pos.x(), end_pos_scaled.x())
+            y1 = min(self.start_pos.y(), end_pos_scaled.y())
+            x2 = max(self.start_pos.x(), end_pos_scaled.x())
+            y2 = max(self.start_pos.y(), end_pos_scaled.y())
+
+            # 座標を整数に変換
+            rect_tuple = (int(x1), int(y1), int(x2) + 1, int(y2) + 1)
+
+            if rect_tuple[2] - rect_tuple[0] > 1 and rect_tuple[3] - rect_tuple[1] > 1:
+                self.selectionComplete.emit(rect_tuple)
+            self.close()
+            self.deleteLater()
+
     def paintEvent(self, event):
         painter = QPainter(self)
         outer_path, inner_path = QPainterPath(), QPainterPath()
         outer_path.addRect(self.rect())
         current_rect = None
-        if self.start_pos and self.end_pos: current_rect = QRect(self.start_pos, self.end_pos).normalized()
-        elif self.initial_rect: current_rect = self.initial_rect
+
+        # 描画は論理ピクセルで行うため、dprで割り戻す
+        if self.start_pos and self.end_pos:
+            start_pos_logical = self.start_pos / self.dpr
+            end_pos_logical = self.end_pos / self.dpr
+            current_rect = QRect(start_pos_logical, end_pos_logical).normalized()
+        elif self.initial_rect:
+            current_rect = self.initial_rect
+
         if current_rect:
             inner_path.addRect(current_rect)
             painter.setPen(QPen(QColor(0, 255, 255), 2))
             painter.drawRect(current_rect)
+
         final_path = outer_path.subtracted(inner_path)
         painter.fillPath(final_path, QBrush(QColor(0, 0, 0, 100)))
+
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() in (Qt.Key_Return, Qt.Key_Enter) and self.initial_rect:
-            coords = (self.initial_rect.left(), self.initial_rect.top(), self.initial_rect.right() + 1, self.initial_rect.bottom() + 1)
+            # ★★★ 修正点: 座標に devicePixelRatio を乗算 ★★★
+            x1 = self.initial_rect.left() * self.dpr
+            y1 = self.initial_rect.top() * self.dpr
+            x2 = self.initial_rect.right() * self.dpr
+            y2 = self.initial_rect.bottom() * self.dpr
+            coords = (int(x1), int(y1), int(x2) + 1, int(y2) + 1)
             self.selectionComplete.emit(coords)
-            self.close(); self.deleteLater()
-        elif event.key() == Qt.Key_Escape: self.close(); self.deleteLater()
+            self.close()
+            self.deleteLater()
+        elif event.key() == Qt.Key_Escape:
+            self.close()
+            self.deleteLater()
 
 
 class WindowSelectionListener(pynput.mouse.Listener):
@@ -909,3 +946,4 @@ class CoreEngine(QObject):
             remaining_time = backup_duration - elapsed_time
             return max(0, remaining_time)
         return -1.0
+

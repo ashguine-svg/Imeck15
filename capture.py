@@ -74,10 +74,24 @@ class CaptureManager(QObject):
                 sct = self.mss_thread_local.sct
                 
                 if region:
+                    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+                    # 修正点: プライマリモニタのオフセットを取得して座標を補正
+                    # sct.monitors[0]は仮想スクリーン全体、[1]がプライマリモニタ
+                    # これにより、マルチモニタ環境でプライマリモニタが(0,0)にない場合でも
+                    # 正しい領域をキャプチャできるようになる。
+                    monitor_index = 1 if len(sct.monitors) > 1 else 0
+                    primary_monitor = sct.monitors[monitor_index]
+                    offset_x = primary_monitor["left"]
+                    offset_y = primary_monitor["top"]
+                    
                     monitor = {
-                        "top": region[1], "left": region[0],
-                        "width": region[2] - region[0], "height": region[3] - region[1],
+                        "top": region[1] + offset_y, 
+                        "left": region[0] + offset_x,
+                        "width": region[2] - region[0], 
+                        "height": region[3] - region[1],
                     }
+                    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+
                     if monitor["width"] <= 0 or monitor["height"] <= 0:
                         print(f"[WARN] Invalid capture region for MSS: {monitor}")
                         return None
@@ -105,3 +119,4 @@ class CaptureManager(QObject):
                 print("[INFO] DXCam resources released.")
             except Exception as e:
                 print(f"[WARN] Error releasing DXCam resources: {e}")
+
