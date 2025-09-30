@@ -178,36 +178,48 @@ class CoreEngine(QObject):
         self.ui_manager, self.capture_manager, self.config_manager, self.logger = ui_manager, capture_manager, config_manager, logger
         self.performance_monitor = performance_monitor
         self.logger.log(OPENCL_STATUS_MESSAGE)
+        
+        # --- 監視スレッド関連 ---
         self.is_monitoring = False
         self._monitor_thread = None
         self._click_count = 0
-        self.template_cache = {}
+        
+        # ★★★ 変更点: テンプレートキャッシュを通常用とバックアップ用に分離 ★★★
+        self.normal_template_cache = {}
+        self.backup_template_cache = {}
+        
+        # ★★★ 変更点: バックアップクリックの新しい状態管理変数 ★★★
+        self.is_backup_countdown_active = False
+        self.backup_countdown_start_time = 0
+        self.active_backup_info = None
+
         self.recognition_area = None
         self._is_capturing_for_registration = False
-        self.last_successful_click_pos = None
-        self.backup_image_settings = None
         self.current_image_path = None
         self.current_image_settings = None
         self.current_image_mat = None
+        
         cpu_cores = os.cpu_count() or 1
         worker_threads = max(2, min(cpu_cores, 4))
         self.thread_pool = ThreadPoolExecutor(max_workers=worker_threads)
         self.logger.log(f"CPUコア数: {cpu_cores}, 認識スレッド数: {worker_threads}")
         self.cache_lock = threading.Lock()
+        
         self.right_click_timer = None
         self.last_right_click_time = 0
         self.DOUBLE_CLICK_INTERVAL = 0.3
         self.mouse_listener = pynput.mouse.Listener(on_click=self._on_global_click)
         self.mouse_listener.start()
+        
         self._showUiSignal.connect(self._show_ui_safe)
         self._areaSelectedForProcessing.connect(self.handle_area_selection)
         self.startMonitoringRequested.connect(self.start_monitoring)
         self.stopMonitoringRequested.connect(self.stop_monitoring)
+        
         self.app_config = self.ui_manager.app_config
         self.current_window_scale = None
         self._pending_window_info = None
         self._cooldown_until = 0
-        self._last_normal_match_time = 0
         self.on_app_config_changed()
 
     def set_opencl_enabled(self, enabled: bool):
@@ -374,10 +386,11 @@ class CoreEngine(QObject):
         self.ui_manager.set_tree_enabled(False)
         self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
 
+    # ★★★ 変更点: キャッシュ構築ロジックを分離対応 ★★★
     def _build_template_cache(self):
         with self.cache_lock:
-            self.template_cache.clear()
-            self.backup_image_settings = None
+            self.normal_template_cache.clear()
+            self.backup_template_cache.clear()
 
             auto_scale_settings = self.app_config.get('auto_scale', {})
             use_auto_scale = auto_scale_settings.get('enabled', False)
@@ -407,9 +420,9 @@ class CoreEngine(QObject):
             for item_data in items_to_process:
                 self._process_item_for_cache(item_data, scales)
             
-            self.logger.log(f"テンプレートキャッシュを構築しました。({len(self.template_cache)}個の画像を認識対象)")
-            if self.backup_image_settings: self.logger.log(f"バックアップクリックが画像 '{Path(self.backup_image_settings['image_path']).name}' に設定されています。")
+            self.logger.log(f"テンプレートキャッシュ構築完了。通常: {len(self.normal_template_cache)}件, バックアップ: {len(self.backup_template_cache)}件")
 
+    # ★★★ 変更点: アイテムを通常用かバックアップ用かに振り分ける ★★★
     def _process_item_for_cache(self, item_data, scales):
         try:
             path = item_data['path']
@@ -429,14 +442,19 @@ class CoreEngine(QObject):
                         resized_image = cv2.resize(original_image, (new_w, new_h), interpolation=inter)
                         scaled_templates.append({'scale': scale, 'image': resized_image})
 
-                self.template_cache[path] = {
+                cache_entry = {
                     'settings': settings,
                     'path': path,
                     'scaled_templates': scaled_templates,
                     'best_scale': None if len(scales) > 1 else scales[0]
                 }
+                
+                # backup_clickがTrueならbackup_template_cacheへ、それ以外はnormal_template_cacheへ
                 if settings.get('backup_click', False):
-                    self.backup_image_settings = settings
+                    self.backup_template_cache[path] = cache_entry
+                else:
+                    self.normal_template_cache[path] = cache_entry
+
         except Exception as e:
             self.updateLog.emit(f"キャッシュ作成失敗: {item_data.get('name')}, {e}")
 
@@ -444,9 +462,13 @@ class CoreEngine(QObject):
         if not self.is_monitoring:
             self.is_monitoring = True
             self._click_count = 0
-            self.last_successful_click_pos = None
             self._cooldown_until = 0
-            self._last_normal_match_time = 0
+            
+            # ★★★ 変更点: 監視開始時にバックアップ状態をリセット ★★★
+            self.is_backup_countdown_active = False
+            self.backup_countdown_start_time = 0
+            self.active_backup_info = None
+
             self.ui_manager.set_tree_enabled(False)
             self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
             self._monitor_thread = threading.Thread(target=self._monitoring_loop, daemon=True)
@@ -460,23 +482,23 @@ class CoreEngine(QObject):
             if self._monitor_thread and self._monitor_thread.is_alive(): self._monitor_thread.join(timeout=1.0)
             
             with self.cache_lock:
-                for path in self.template_cache:
-                    self.template_cache[path]['best_scale'] = None
+                all_caches = list(self.normal_template_cache.values()) + list(self.backup_template_cache.values())
+                for cache_item in all_caches:
+                    cache_item['best_scale'] = None
             
             self.updateStatus.emit("待機中", "green"); self.logger.log("監視を停止しました。")
     
+    # ★★★ 変更点: 新しいロジックに基づいた監視ループ ★★★
     def _monitoring_loop(self):
         last_match_time_map = {}
-        no_match_streak = 0
-        
         fps_last_time = time.time()
         frame_counter = 0
 
         while self.is_monitoring:
             current_time = time.time()
+            frame_counter += 1
 
             delta_time = current_time - fps_last_time
-            frame_counter += 1
             if delta_time >= 1.0:
                 fps = frame_counter / delta_time
                 self.fpsUpdated.emit(fps)
@@ -484,58 +506,117 @@ class CoreEngine(QObject):
                 frame_counter = 0
             
             if self._cooldown_until > current_time:
-                time.sleep(0.5)
+                time.sleep(0.1)
                 continue
 
-            if self.backup_image_settings and self._last_normal_match_time > 0:
-                backup_interval = self.backup_image_settings.get('backup_time', 300.0)
-                if current_time - self._last_normal_match_time > backup_interval:
-                    self.logger.log(f"{backup_interval:.1f}秒間通常マッチなしのためバックアップクリックを実行。")
-                    self._execute_backup_click()
-                    self._last_normal_match_time = time.time()
-                    time.sleep(1.0)
-                    continue
-            
-            sleep_duration = 0.1
             try:
+                # フレームスキップ
                 if (frame_counter % self.frame_skip_rate) != 0: 
                     time.sleep(0.01)
                     continue
                 
+                # 画面キャプチャ
                 screen_bgr = self.capture_manager.capture_frame(region=self.recognition_area)
                 if screen_bgr is None:
                     self.updateLog.emit("画面のキャプチャに失敗しました。")
-                    sleep_duration = 1.0
+                    time.sleep(1.0)
                     continue
                 
+                # グレースケール変換
                 screen_gray = cv2.cvtColor(screen_bgr, cv2.COLOR_BGR2GRAY)
 
-                match_info = self._find_best_match(screen_bgr, screen_gray)
-                if match_info:
-                    no_match_streak = 0
-                    if not match_info['settings'].get('backup_click', False):
-                        self._last_normal_match_time = time.time()
-                    self._handle_match(match_info, last_match_time_map)
+                # --- 状態に応じた処理 ---
+                if self.is_backup_countdown_active:
+                    self._handle_countdown_state(current_time, screen_bgr, screen_gray, last_match_time_map)
                 else:
-                    no_match_streak += 1
-                    sleep_duration = min(1.0, 0.1 + no_match_streak * 0.1)
+                    self._handle_idle_state(current_time, screen_bgr, screen_gray, last_match_time_map)
+
             except Exception as e:
                 self.updateLog.emit(f"監視ループでエラーが発生しました: {e}")
-                sleep_duration = 1.0
-            finally:
-                end_time = time.time() + sleep_duration
-                while time.time() < end_time:
-                    if not self.is_monitoring: return
-                    time.sleep(0.05)
+                time.sleep(1.0)
 
-    def _find_best_match(self, screen_bgr, screen_gray):
+    # ★★★ 新規追加: アイドル状態（通常時）の処理 ★★★
+    def _handle_idle_state(self, current_time, screen_bgr, screen_gray, last_match_time_map):
+        # 1. 通常画像を検索
+        normal_match = self._find_best_match(screen_bgr, screen_gray, self.normal_template_cache)
+        if normal_match:
+            self._handle_match(normal_match, last_match_time_map)
+            return
+
+        # 2. 通常画像がなければ、バックアップ（トリガー）画像を検索
+        backup_trigger_match = self._find_best_match(screen_bgr, screen_gray, self.backup_template_cache)
+        if backup_trigger_match:
+            self.is_backup_countdown_active = True
+            self.backup_countdown_start_time = current_time
+            self.active_backup_info = backup_trigger_match
+            
+            path = self.active_backup_info['path']
+            backup_time = self.active_backup_info['settings'].get('backup_time', 300.0)
+            log_msg = f"バックアップ画像 '{Path(path).name}' を検出。{backup_time:.1f}秒のカウントダウンを開始します。"
+            self.updateLog.emit(log_msg)
+
+    # ★★★ 新規追加: カウントダウン状態の処理 ★★★
+    def _handle_countdown_state(self, current_time, screen_bgr, screen_gray, last_match_time_map):
+        elapsed_time = current_time - self.backup_countdown_start_time
+        backup_duration = self.active_backup_info['settings'].get('backup_time', 300.0)
+
+        # 1. カウントダウンが終了したかチェック
+        if elapsed_time >= backup_duration:
+            self.updateLog.emit(f"{backup_duration:.1f}秒が経過。バックアップクリックを実行します。")
+            self._execute_final_backup_click()
+            # 状態をリセット
+            self.is_backup_countdown_active = False
+            self.active_backup_info = None
+            self.backup_countdown_start_time = 0
+            self._cooldown_until = time.time() + 1.0 # 実行後少し待機
+            return
+
+        # 2. カウントダウン中に通常画像が見つかったかチェック (リセット条件)
+        normal_match = self._find_best_match(screen_bgr, screen_gray, self.normal_template_cache)
+        if normal_match:
+            path = normal_match['path']
+            self.updateLog.emit(f"通常画像 '{Path(path).name}' を検出。バックアップカウントダウンをリセットします。")
+            # 状態をリセット
+            self.is_backup_countdown_active = False
+            self.active_backup_info = None
+            self.backup_countdown_start_time = 0
+            # 見つかった通常画像を処理
+            self._handle_match(normal_match, last_match_time_map)
+            return
+
+    # ★★★ 新規追加: カウントダウン終了時の最終クリック処理 ★★★
+    def _execute_final_backup_click(self):
+        # 最新の画面で、目的のバックアップ画像の位置を再検索してクリックする
+        screen_bgr = self.capture_manager.capture_frame(region=self.recognition_area)
+        if screen_bgr is None:
+            self.updateLog.emit("バックアップクリック失敗: 画面キャプチャができませんでした。")
+            return
+        
+        screen_gray = cv2.cvtColor(screen_bgr, cv2.COLOR_BGR2GRAY)
+        
+        # ターゲットの画像情報だけを辞書にいれて検索
+        target_path = self.active_backup_info['path']
+        target_cache_item = self.backup_template_cache.get(target_path)
+        if not target_cache_item:
+            self.updateLog.emit(f"バックアップクリック失敗: ターゲット '{Path(target_path).name}' がキャッシュにありません。")
+            return
+
+        final_match = self._find_best_match(screen_bgr, screen_gray, {target_path: target_cache_item})
+
+        if final_match:
+            self._execute_click(final_match)
+        else:
+            self.updateLog.emit(f"バックアップクリック失敗: 画面内に '{Path(target_path).name}' が見つかりませんでした。")
+    
+    # ★★★ 変更点: 検索対象のキャッシュを引数で受け取るように変更 ★★★
+    def _find_best_match(self, screen_bgr, screen_gray, template_cache_to_search):
         futures = []
         with self.cache_lock:
-            if not self.template_cache: return None
+            if not template_cache_to_search: return None
             
             use_global_grayscale = self.app_config.get('grayscale_matching', False)
 
-            for path, data in self.template_cache.items():
+            for path, data in template_cache_to_search.items():
                 is_search_phase = (data['best_scale'] is None)
                 should_use_grayscale = is_search_phase or use_global_grayscale
                 
@@ -543,7 +624,7 @@ class CoreEngine(QObject):
                     templates_to_search = data['scaled_templates']
                 else:
                     templates_to_search = [t for t in data['scaled_templates'] if t['scale'] == data['best_scale']]
-                    if not templates_to_search:
+                    if not templates_to_search: # フォールバック
                         templates_to_search = data['scaled_templates']
                 
                 screen_to_use = screen_gray if should_use_grayscale else screen_bgr
@@ -564,7 +645,12 @@ class CoreEngine(QObject):
         best_match = max(results, key=lambda r: r['confidence'])
         
         with self.cache_lock:
-            cache_item = self.template_cache.get(best_match['path'])
+            # 検索対象のキャッシュから元のアイテムを探す
+            if best_match['path'] in self.normal_template_cache:
+                cache_item = self.normal_template_cache.get(best_match['path'])
+            else:
+                cache_item = self.backup_template_cache.get(best_match['path'])
+
             if cache_item and cache_item['best_scale'] is None:
                  cache_item['best_scale'] = best_match['scale']
                  log_msg = f"最適スケール発見: {Path(best_match['path']).name} @ {best_match['scale']:.2f}倍 (信頼度: {best_match['confidence']:.2f})"
@@ -609,12 +695,11 @@ class CoreEngine(QObject):
                 click_pos = settings['click_position']
                 click_x = offset_x + rect[0] + (click_pos[0] * scale)
                 click_y = offset_y + rect[1] + (click_pos[1] * scale)
-            else:
+            else: # デフォルトは画像中央
                 click_x, click_y = offset_x + (rect[0] + rect[2]) / 2, offset_y + (rect[1] + rect[3]) / 2
             
             pyautogui.click(click_x, click_y)
             self._click_count += 1
-            self.last_successful_click_pos = (click_x, click_y)
             
             log_msg = f"クリック: {Path(settings['image_path']).name} @({int(click_x)}, {int(click_y)}) conf:{match_info['confidence']:.2f}"
             if 'scale' in match_info:
@@ -625,17 +710,6 @@ class CoreEngine(QObject):
         finally:
             block_input(False)
 
-    def _execute_backup_click(self):
-        if self.last_successful_click_pos:
-            block_input(True)
-            try:
-                pyautogui.click(*self.last_successful_click_pos)
-                self.updateLog.emit(f"バックアップクリック実行: @{self.last_successful_click_pos}")
-            finally:
-                block_input(False)
-        else:
-            self.updateLog.emit("バックアップクリック失敗: 最後に成功したクリック位置がありません。")
-        
     def set_recognition_area(self, method: str):
         self.selectionProcessStarted.emit()
         self.ui_manager.hide()
@@ -660,7 +734,6 @@ class CoreEngine(QObject):
             hwnd = win32gui.WindowFromPoint((x, y))
             if not hwnd: return
             
-            # DXCamが利用可能な場合、ウィンドウハンドルをキャプチャマネージャーに設定
             if 'dxcam' in sys.modules:
                 self.capture_manager.dxcam_sct.target_hwnd = hwnd
 
@@ -698,66 +771,33 @@ class CoreEngine(QObject):
         missing_tools = [tool for tool in needed_tools if not shutil.which(tool)]
         if missing_tools:
             self.logger.log(f"エラー: {', '.join(missing_tools)} が見つかりません。")
-            self.logger.log("ウィンドウ選択機能を使用するには、これらをインストールしてください。")
-            self.logger.log("(例: sudo apt install xdotool x11-utils)")
             self._showUiSignal.emit(); self.selectionProcessFinished.emit()
             return
         
         try:
-            # 1. マウス下のウィンドウIDを取得
             proc_id = subprocess.run(['xdotool', 'getmouselocation'], capture_output=True, text=True, check=True)
             window_id = [line.split(':')[1] for line in proc_id.stdout.strip().split() if 'window' in line][0]
-
-            # 2. ウィンドウのジオメトリを詳細に取得 (xwininfo)
             proc_info = subprocess.run(['xwininfo', '-id', window_id], capture_output=True, text=True, check=True)
             info = proc_info.stdout
-            
-            # 3. xwininfoの出力から必要な情報をすべてパースする
-            abs_x, abs_y, rel_x, rel_y, width, height = 0, 0, 0, 0, 0, 0
+            abs_x, abs_y, width, height = 0, 0, 0, 0
             title = f"Window (ID: {window_id})"
             for line in info.split('\n'):
                 line = line.strip()
                 if line.startswith('Absolute upper-left X:'): abs_x = int(line.split(':')[1].strip())
                 elif line.startswith('Absolute upper-left Y:'): abs_y = int(line.split(':')[1].strip())
-                elif line.startswith('Relative upper-left X:'): rel_x = int(line.split(':')[1].strip())
-                elif line.startswith('Relative upper-left Y:'): rel_y = int(line.split(':')[1].strip())
                 elif line.startswith('Width:'): width = int(line.split(':')[1].strip())
                 elif line.startswith('Height:'): height = int(line.split(':')[1].strip())
                 elif 'xwininfo: Window id:' in line and '"' in line:
                     title = line.split('"')[1]
 
-            # ★★★ 変更点: ここからクライアント領域の計算ロジックを修正 ★★★
-            # 4. クライアント領域を計算する
-            #   - 仮説: 一部のデスクトップ環境では、`Absolute X/Y` と `Width/Height` が
-            #     直接クライアント領域を示している。
-            #   - そのため、`Relative X/Y` (枠のオフセット) は加算しない。
+            rect = (abs_x, abs_y, abs_x + width, abs_y + height)
             
-            client_left = abs_x
-            client_top = abs_y
-            client_width = width
-            client_height = height
-            
-            client_right = client_left + client_width
-            client_bottom = client_top + client_height
-
-            rect = (client_left, client_top, client_right, client_bottom)
-            
-            self.logger.log(f"ウィンドウ '{title}' を検出。")
-            self.logger.log(f"  - 取得したジオメトリ (xwininfo): X={abs_x}, Y={abs_y}, W={client_width}, H={client_height}")
-            self.logger.log(f"  - 計算後のクライアント領域: {rect}")
-            # ★★★ 変更点: ここまで ★★★
-
             if self._is_capturing_for_registration:
                 self._areaSelectedForProcessing.emit(rect)
                 self.selectionProcessFinished.emit()
                 return
 
-            self._pending_window_info = {
-                "title": title,
-                "dims": {'width': client_width, 'height': client_height},
-                "rect": rect
-            }
-            
+            self._pending_window_info = { "title": title, "dims": {'width': width, 'height': height}, "rect": rect }
             scales_data = self.config_manager.load_window_scales()
             if title not in scales_data:
                 self.askToSaveWindowBaseSizeSignal.emit(title)
@@ -766,18 +806,12 @@ class CoreEngine(QObject):
             self.logger.log(f"Linuxでのウィンドウ領域取得に失敗: {e}")
             self._showUiSignal.emit(); self.selectionProcessFinished.emit()
 
-
     def process_base_size_prompt_response(self, save_as_base: bool):
         try:
             info = self._pending_window_info
             if not info: return
-
-            title = info['title']
-            current_dims = info['dims']
-            rect = info['rect']
-            
+            title, current_dims, rect = info['title'], info['dims'], info['rect']
             scales_data = self.config_manager.load_window_scales()
-
             if save_as_base:
                 scales_data[title] = current_dims
                 self.config_manager.save_window_scales(scales_data)
@@ -785,23 +819,13 @@ class CoreEngine(QObject):
                 self.logger.log(f"ウィンドウ '{title}' の基準サイズを保存しました。")
             elif title and title in scales_data:
                 base_dims = scales_data[title]
-                if base_dims['width'] > 0:
-                    scale = current_dims['width'] / base_dims['width']
-                    self.current_window_scale = scale
-                    self.logger.log(f"ウィンドウ '{title}' の計算スケール: {scale:.3f}")
-                else:
-                    self.current_window_scale = None
-            else:
-                self.current_window_scale = None
-
+                if base_dims['width'] > 0: self.current_window_scale = current_dims['width'] / base_dims['width']
+                else: self.current_window_scale = None
+            else: self.current_window_scale = None
             self.windowScaleCalculated.emit(self.current_window_scale if self.current_window_scale is not None else 0.0)
             self._areaSelectedForProcessing.emit(rect)
-
-        except Exception as e:
-            self.logger.log(f"基準サイズ応答の処理中にエラー: {e}")
-        finally:
-            self._pending_window_info = None
-            self._showUiSignal.emit(); self.selectionProcessFinished.emit()
+        except Exception as e: self.logger.log(f"基準サイズ応答の処理中にエラー: {e}")
+        finally: self._pending_window_info = None; self._showUiSignal.emit(); self.selectionProcessFinished.emit()
 
     def handle_area_selection(self, coords):
         if self._is_capturing_for_registration:
@@ -813,43 +837,27 @@ class CoreEngine(QObject):
             self._update_rec_area_preview()
             self.selectionProcessFinished.emit()
             self.ui_manager.show()
-
-        if hasattr(self, 'selection_overlay'):
-            self.selection_overlay = None
+        if hasattr(self, 'selection_overlay'): self.selection_overlay = None
         
     def _get_filename_from_user(self):
-        """OSに応じて最適な方法でユーザーからファイル名を取得する。"""
         if sys.platform == 'win32':
-            # WindowsではQInputDialogを使用
             file_name, ok = QInputDialog.getText(self.ui_manager, "ファイル名を入力", "保存するファイル名を入力してください:")
             return file_name, ok
         else:
-            # LinuxではZenityを使用
             if not shutil.which('zenity'):
-                QMessageBox.warning(self.ui_manager, "エラー", "名前入力機能には 'zenity' が必要です。\n'sudo apt install zenity' でインストールしてください。")
+                QMessageBox.warning(self.ui_manager, "エラー", "名前入力機能には 'zenity' が必要です。")
                 return None, False
-            
             try:
-                command = [
-                    'zenity', '--entry',
-                    '--title=ファイル名を入力',
-                    '--text=保存するファイル名を入力してください（拡張子不要）:'
-                ]
-                result = subprocess.run(command, capture_output=True, text=True, check=False) # check=Falseにする
-                
-                if result.returncode == 0: # OKが押された
-                    return result.stdout.strip(), True
-                else: # キャンセルまたはウィンドウが閉じられた
-                    return None, False
+                command = ['zenity', '--entry', '--title=ファイル名を入力', '--text=保存するファイル名を入力してください（拡張子不要）:']
+                result = subprocess.run(command, capture_output=True, text=True, check=False)
+                return (result.stdout.strip(), True) if result.returncode == 0 else (None, False)
             except Exception as e:
-                self.logger.log(f"Zenityの呼び出し中にエラー: {e}")
                 QMessageBox.critical(self.ui_manager, "エラー", f"Zenityの呼び出しに失敗しました:\n{e}")
                 return None, False
 
     def _save_captured_image(self, region_coords):
         try:
             captured_image = self.capture_manager.capture_frame(region=region_coords)
-            
             self._show_ui_safe()
             if self.performance_monitor and not self.performance_monitor.isVisible():
                 self.performance_monitor.show()
@@ -863,24 +871,19 @@ class CoreEngine(QObject):
             if ok and file_name:
                 self.ui_manager.set_tree_enabled(False)
                 save_path = self.config_manager.base_dir / f"{file_name}.png"
-                
                 if save_path.exists():
-                    reply = QMessageBox.question(self.ui_manager, "上書き確認", f"ファイル '{save_path.name}' は既に存在します。\n上書きしますか？",
+                    reply = QMessageBox.question(self.ui_manager, "上書き確認", f"'{save_path.name}' は既に存在します。上書きしますか？",
                                                  QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
                     if reply == QMessageBox.StandardButton.No:
                         self.ui_manager.set_tree_enabled(True)
                         return
-
                 try:
                     _, buffer = cv2.imencode('.png', captured_image)
                     buffer.tofile(str(save_path))
-
                     default_settings = self.config_manager.load_item_setting(Path())
                     default_settings['image_path'] = str(save_path)
                     self.config_manager.save_item_setting(save_path, default_settings)
-                    
                     self.config_manager.add_item(save_path)
-                    
                     self.logger.log(f"画像を保存しました: {save_path}")
                     self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
                 except Exception as e:
@@ -888,28 +891,25 @@ class CoreEngine(QObject):
                     self.ui_manager.set_tree_enabled(True)
         finally:
             self.selectionProcessFinished.emit()
-            if not self.ui_manager.isVisible():
-                self._show_ui_safe()
+            if not self.ui_manager.isVisible(): self._show_ui_safe()
                 
     def clear_recognition_area(self):
         self.recognition_area = None
         self.current_window_scale = None
         self.windowScaleCalculated.emit(0.0)
-        # DXCamが利用可能な場合、ターゲットウィンドウをリセット
-        if 'dxcam' in sys.modules:
-            self.capture_manager.dxcam_sct.target_hwnd = None
+        if 'dxcam' in sys.modules: self.capture_manager.dxcam_sct.target_hwnd = None
         self.logger.log("認識範囲をクリアしました。");
         self.updateRecAreaPreview.emit(None)
         
     def _update_rec_area_preview(self):
         img = self.capture_manager.capture_frame(region=self.recognition_area) if self.recognition_area else None
         self.updateRecAreaPreview.emit(img)
-
+    
+    # ★★★ 変更点: パフォーマンスモニターに渡す残り時間を新しいロジックで計算 ★★★
     def get_backup_click_countdown(self) -> float:
-        """バックアップクリックが有効な場合に、次の実行までの残り時間を返す"""
-        if self.backup_image_settings and self._last_normal_match_time > 0:
-            backup_interval = self.backup_image_settings.get('backup_time', 300.0)
-            elapsed_time = time.time() - self._last_normal_match_time
-            remaining_time = backup_interval - elapsed_time
-            return remaining_time
+        if self.is_backup_countdown_active and self.active_backup_info:
+            elapsed_time = time.time() - self.backup_countdown_start_time
+            backup_duration = self.active_backup_info['settings'].get('backup_time', 300.0)
+            remaining_time = backup_duration - elapsed_time
+            return max(0, remaining_time)
         return -1.0
