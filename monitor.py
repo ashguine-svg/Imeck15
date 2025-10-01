@@ -48,6 +48,7 @@ class PerformanceMonitor(QDialog):
         top_layout.setContentsMargins(0, 0, 0, 0)
 
         self.monitor_button = QPushButton("監視開始/停止")
+        # ★★★ 変更点: メインUIと同じツールチップを追加 ★★★
         self.monitor_button.setToolTip("右クリックで監視停止、右ダブルクリックで監視開始")
         top_layout.addWidget(self.monitor_button)
 
@@ -76,6 +77,13 @@ class PerformanceMonitor(QDialog):
         if self.ui_manager:
             self.rec_area_button.clicked.connect(self.ui_manager.setRecAreaDialog)
             
+    # ★★★ 新規追加: 監視状態に応じてボタンの色を変更するメソッド ★★★
+    def update_monitoring_status(self, status_text: str, color: str):
+        if status_text == "監視中...":
+            self.monitor_button.setStyleSheet("background-color: #3399FF; color: white;")
+        else:
+            self.monitor_button.setStyleSheet("") # デフォルトのスタイルに戻す
+
     def update_fps(self, fps):
         self.current_fps = fps
         

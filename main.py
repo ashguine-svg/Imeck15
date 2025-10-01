@@ -102,6 +102,8 @@ def main():
     ui_manager.core_engine = core_engine
     
     core_engine.updateStatus.connect(ui_manager.set_status)
+    # ★★★ 新規追加: パフォーマンスモニタのボタン色を更新するためのシグナル接続 ★★★
+    core_engine.updateStatus.connect(performance_monitor.update_monitoring_status)
     core_engine.updateLog.connect(logger.log)
     core_engine.updatePreview.connect(ui_manager.update_image_preview)
     core_engine.updateRecAreaPreview.connect(ui_manager.update_rec_area_preview)

@@ -238,7 +238,7 @@ class CoreEngine(QObject):
         self.current_image_mat = None
         
         cpu_cores = os.cpu_count() or 1
-        worker_threads = max(2, min(cpu_cores, 4))
+        worker_threads = 2
         self.thread_pool = ThreadPoolExecutor(max_workers=worker_threads)
         self.logger.log(f"CPUコア数: {cpu_cores}, 認識スレッド数: {worker_threads}")
         self.cache_lock = threading.Lock()
@@ -546,6 +546,10 @@ class CoreEngine(QObject):
                 continue
 
             try:
+                # ★★★ 新規追加: バックアップカウントダウン中は負荷を軽減するためにスリープを長くする ★★★
+                if self.is_backup_countdown_active:
+                    time.sleep(1.0)
+
                 if (frame_counter % self.frame_skip_rate) != 0: 
                     time.sleep(0.01)
                     continue
