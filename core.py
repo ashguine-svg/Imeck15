@@ -866,9 +866,16 @@ class CoreEngine(QObject):
                 self.logger.log(f"ウィンドウ '{title}' の基準サイズを保存しました。")
             elif title and title in scales_data:
                 base_dims = scales_data[title]
-                if base_dims['width'] > 0: self.current_window_scale = current_dims['width'] / base_dims['width']
-                else: self.current_window_scale = None
-            else: self.current_window_scale = None
+                if base_dims['width'] > 0:
+                    self.current_window_scale = current_dims['width'] / base_dims['width']
+                    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+                    # 修正点: 計算されたスケール倍率をログに出力する処理を追加
+                    self.logger.log(f"ウィンドウ '{title}' のスケールを計算: {self.current_window_scale:.3f}倍")
+                    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+                else:
+                    self.current_window_scale = None
+            else:
+                self.current_window_scale = None
             self.windowScaleCalculated.emit(self.current_window_scale if self.current_window_scale is not None else 0.0)
             self._areaSelectedForProcessing.emit(rect)
         except Exception as e: self.logger.log(f"基準サイズ応答の処理中にエラー: {e}")

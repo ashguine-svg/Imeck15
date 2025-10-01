@@ -85,12 +85,10 @@ def main():
         logger=logger
     )
     
-    # ★★★ 変更点: 親ウィンドウをNoneに設定し、独立したウィンドウにする ★★★
     performance_monitor = PerformanceMonitor(ui_manager, parent=None)
     
     logger.set_ui(ui_manager, performance_monitor)
     
-    # ★★★ 変更点: CoreEngineにperformance_monitorを渡す ★★★
     core_engine = CoreEngine(
         ui_manager=ui_manager,
         capture_manager=capture_manager,
@@ -102,7 +100,6 @@ def main():
     ui_manager.core_engine = core_engine
     
     core_engine.updateStatus.connect(ui_manager.set_status)
-    # ★★★ 新規追加: パフォーマンスモニタのボタン色を更新するためのシグナル接続 ★★★
     core_engine.updateStatus.connect(performance_monitor.update_monitoring_status)
     core_engine.updateLog.connect(logger.log)
     core_engine.updatePreview.connect(ui_manager.update_image_preview)
@@ -112,8 +109,13 @@ def main():
     core_engine.selectionProcessStarted.connect(performance_monitor.hide)
     core_engine.selectionProcessFinished.connect(performance_monitor.show)
     core_engine.bestScaleFound.connect(ui_manager.on_best_scale_found)
+
+    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    # 修正点: 欠けていた2行のシグナル接続を追加
+    # これにより、ウィンドウ倍率の自動計算機能が復活します
     core_engine.windowScaleCalculated.connect(ui_manager.on_window_scale_calculated)
     core_engine.askToSaveWindowBaseSizeSignal.connect(ui_manager.show_prompt_to_save_base_size)
+    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 
 
     ui_manager.startMonitoringRequested.connect(core_engine.start_monitoring)

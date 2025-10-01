@@ -7,17 +7,17 @@ import numpy as np
 import threading
 from PySide6.QtCore import QObject
 
-# ★★★ 変更点: Windows以外ではDXCamを無効化 ★★★
 DXCAM_AVAILABLE = False
 if sys.platform == 'win32':
-    # 条件付きインポート - Direct3D高速キャプチャ
     try:
         import dxcam
+        import win32api
+        import win32con
         DXCAM_AVAILABLE = True
         print("[INFO] DXCam capture backend is available.")
     except ImportError:
         DXCAM_AVAILABLE = False
-        print("[INFO] DXCam not found. Falling back to MSS capture backend.")
+        print("[INFO] DXCam not found or win32api is missing. Falling back to MSS capture backend.")
 else:
     print("[INFO] Running on non-Windows OS. Using MSS capture backend.")
 
@@ -34,46 +34,31 @@ class CaptureManager(QObject):
         self.dxcam_sct = None
         self.is_dxcam_ready = False
         
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        # 修正点: DXCAMが認識する画面解像度を保持する変数を初期化
+        self.target_width, self.target_height = 0, 0
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        
         if DXCAM_AVAILABLE:
             try:
-                # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-                # 修正点: 利用可能な全モニターをスキャンし、1024x768のモニターを特定して初期化する
-                target_device_idx = None
-                target_output_idx = None
-
-                try:
-                    devices = dxcam.get_devices()
-                    for i, device in enumerate(devices):
-                        print(f"[DXCam INFO] Device [{i}]: {device.name}")
-                        outputs = device.enum_outputs()
-                        for j, output in enumerate(outputs):
-                            print(f"  - Output [{j}]: {output.name} with resolution {output.resolution}")
-                            # ダミーモニターの解像度 (1024, 768) を持つモニターを探す
-                            if output.resolution == (1024, 768):
-                                target_device_idx = i
-                                target_output_idx = j
-                                print(f"  -> Found target dummy monitor at Device {i}, Output {j}")
-                                break
-                        if target_device_idx is not None:
-                            break
-                except Exception as e:
-                    print(f"[DXCam WARN] Failed to dynamically enumerate devices/outputs: {e}")
-
-                # 目的のモニターが見つかった場合はそのインデックスを使用し、見つからなかった場合はプライマリモニター(0, 0)にフォールバック
-                if target_device_idx is not None and target_output_idx is not None:
-                    print(f"[INFO] Initializing DXCam with specific target: Device {target_device_idx}, Output {target_output_idx}")
-                    self.dxcam_sct = dxcam.create(device_idx=target_device_idx, output_idx=target_output_idx)
-                else:
-                    print("[INFO] Target dummy monitor not found. Falling back to default primary monitor (output_idx=0).")
-                    self.dxcam_sct = dxcam.create(output_idx=0)
-                # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+                print("[INFO] Initializing DXCam with default primary monitor...")
+                self.dxcam_sct = dxcam.create()
                 
                 if self.dxcam_sct is None:
                     print("[WARN] DXCam instance creation failed. Falling back to MSS.")
                     self.is_dxcam_ready = False
                 else:
                     self.is_dxcam_ready = True
-                    print(f"[INFO] DXCam initialized successfully for output: {self.dxcam_sct.output.name} with resolution {self.dxcam_sct.output.resolution}")
+                    print(f"[INFO] DXCam initialized successfully.")
+                    frame = self.dxcam_sct.grab()
+                    if frame is not None:
+                        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+                        # 修正点: 取得した解像度を変数に保存
+                        self.target_height, self.target_width, _ = frame.shape
+                        print(f"[INFO] Target monitor resolution: {self.target_width}x{self.target_height}")
+                        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+                    else:
+                        print("[WARN] Could not determine target monitor resolution at init. This might indicate a problem.")
 
             except Exception as e:
                 print(f"[WARN] DXCam initialization failed: {e}. Falling back to MSS.")
@@ -94,24 +79,57 @@ class CaptureManager(QObject):
         regionは (left, top, right, bottom) のタプル。
         """
         try:
-            # ★★★ 変更点: DXCAM_AVAILABLEのチェックを追加 ★★★
             if self.current_method == 'dxcam' and self.is_dxcam_ready and DXCAM_AVAILABLE:
-                frame = self.dxcam_sct.grab(region=region)
-                if frame is None: 
-                    # Noneが返された場合でも、致命的なエラーとは限らないため警告レベルに留める
-                    # print(f"[WARN] DXCam.grab() returned None for region: {region}")
+                if self.dxcam_sct is None:
+                    print("[WARN] DXCam instance is missing, attempting to re-create...")
+                    self.dxcam_sct = dxcam.create()
+                    if self.dxcam_sct is None:
+                        print("[ERROR] Failed to re-create DXCam instance. Falling back to MSS for this frame.")
+                        self.current_method = 'mss'
+                        return self.capture_frame(region)
+                    # 再作成時に解像度を再取得
+                    frame = self.dxcam_sct.grab()
+                    if frame is not None:
+                        self.target_height, self.target_width, _ = frame.shape
+
+                # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+                # 修正点: 認識範囲の座標が画面解像度内に収まるようにクリッピングする
+                validated_region = region
+                if region is not None and self.target_width > 0 and self.target_height > 0:
+                    # 座標がDXCAMの認識する画面解像度の範囲内に収まるように値を調整
+                    left = max(0, region[0])
+                    top = max(0, region[1])
+                    right = min(self.target_width, region[2])
+                    bottom = min(self.target_height, region[3])
+
+                    # 幅と高さが0より大きいことを確認
+                    if right > left and bottom > top:
+                        validated_region = (left, top, right, bottom)
+                    else:
+                        # 領域が無効な場合はフルスクリーンキャプチャにフォールバック
+                        print(f"[WARN] Invalid region provided after clipping {region}, falling back to fullscreen grab for this frame.")
+                        validated_region = None
+                # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+                
+                frame = self.dxcam_sct.grab(region=validated_region)
+
+                if frame is None:
+                    print("[WARN] DXCam.grab() failed (returned None). Attempting to re-initialize for the next frame.")
+                    try:
+                        self.dxcam_sct.release()
+                    except Exception:
+                        pass
+                    self.dxcam_sct = None
                     return None
+                
                 return cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
             else: # MSS fallback
                 if not hasattr(self.mss_thread_local, 'sct'):
                     self.mss_thread_local.sct = mss.mss()
                 sct = self.mss_thread_local.sct
                 
                 if region:
-                    # 修正点: プライマリモニタのオフセットを取得して座標を補正
-                    # sct.monitors[0]は仮想スクリーン全体、[1]がプライマリモニタ
-                    # これにより、マルチモニタ環境でプライマリモニタが(0,0)にない場合でも
-                    # 正しい領域をキャプチャできるようになる。
                     monitor_index = 1 if len(sct.monitors) > 1 else 0
                     primary_monitor = sct.monitors[monitor_index]
                     offset_x = primary_monitor["left"]
@@ -129,17 +147,20 @@ class CaptureManager(QObject):
                         return None
                     sct_img = sct.grab(monitor)
                 else:
-                    # sct.monitors[0] は全画面を含むことがあるので、[1]でプライマリモニタを期待する
                     monitor_index = 1 if len(sct.monitors) > 1 else 0
                     sct_img = sct.grab(sct.monitors[monitor_index])
                 
                 img_bgra = np.array(sct_img)
                 return cv2.cvtColor(img_bgra, cv2.COLOR_BGRA2BGR)
         except Exception as e:
-            # DXCamのエラーはログに出力するが、監視ループを止めないようにNoneを返す
             if self.current_method == 'dxcam':
-                # print(f"Capture error with {self.current_method} (region: {region}): {e}")
-                pass
+                print(f"[ERROR] An unexpected error occurred in DXCam capture: {e}. Attempting re-initialization.")
+                try:
+                    if self.dxcam_sct:
+                        self.dxcam_sct.release()
+                except Exception:
+                    pass
+                self.dxcam_sct = None
             else:
                  print(f"Capture error with {self.current_method} (region: {region}): {e}")
 
@@ -149,7 +170,6 @@ class CaptureManager(QObject):
             
     def cleanup(self):
         """アプリケーション終了時にリソースを解放する"""
-        # ★★★ 変更点: DXCAM_AVAILABLEのチェックを追加 ★★★
         if self.dxcam_sct and DXCAM_AVAILABLE:
             try:
                 self.dxcam_sct.release()

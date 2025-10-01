@@ -597,14 +597,19 @@ class UIManager(QMainWindow):
             self.current_best_scale_label.setStyleSheet("color: green;")
 
     def on_window_scale_calculated(self, scale: float):
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        # 修正点: UIの更新ロジックを改善
         if scale > 0:
             self.current_best_scale_label.setText(f"計算スケール: {scale:.3f}倍")
+            # ご要望の通り、マゼンタに近い色(purple)で表示します
             self.current_best_scale_label.setStyleSheet("color: purple;")
-            if self.auto_scale_widgets['enabled'].isChecked():
-                self.auto_scale_widgets['center'].setValue(scale)
+            # 「自動スケール」が有効かどうかにかかわらず、計算されたスケールを中心値としてUIに設定します。
+            # これにより、後から機能を有効にした際に値が反映されるようになります。
+            self.auto_scale_widgets['center'].setValue(scale)
         else:
             self.current_best_scale_label.setText("最適スケール: ---")
             self.current_best_scale_label.setStyleSheet("color: gray;")
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
             
     def prompt_to_save_base_size(self, window_title: str) -> bool:
         reply = QMessageBox.question(
