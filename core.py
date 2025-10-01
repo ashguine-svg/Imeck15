@@ -729,13 +729,22 @@ class CoreEngine(QObject):
             else:
                 click_x, click_y = offset_x + (rect[0] + rect[2]) / 2, offset_y + (rect[1] + rect[3]) / 2
             
+            # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+            # 修正点: クリック座標が画面外に出ていないかチェックする
+            screen_width, screen_height = pyautogui.size()
+            # フェールセーフが作動する(0,0)も除外する
+            if not (0 < click_x < screen_width and 0 < click_y < screen_height):
+                self.updateLog.emit(f"警告: 計算されたクリック座標 ({int(click_x)}, {int(click_y)}) が画面外です。クリックを中止しました。")
+                return # returnの前にfinallyは実行される
+            # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+
             pyautogui.click(click_x, click_y)
             self._click_count += 1
             
             # 最後にクリックした画像のパスを記録
             self._last_clicked_path = path
             
-            log_msg = f"クリック: {Path(settings['image_path']).name} @({int(click_x)}, {int(click_y)}) conf:{match_info['confidence']:.2f}"
+            log_msg = f"クリック: {Path(path).name} @({int(click_x)}, {int(click_y)}) conf:{match_info['confidence']:.2f}"
             if 'scale' in match_info:
                 log_msg += f" scale:{match_info['scale']:.3f}"
             self.updateLog.emit(log_msg)
@@ -946,4 +955,3 @@ class CoreEngine(QObject):
             remaining_time = backup_duration - elapsed_time
             return max(0, remaining_time)
         return -1.0
-
