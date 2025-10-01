@@ -34,15 +34,21 @@ class ScaledPixmapLabel(QLabel):
         self.update()
 
     def paintEvent(self, event):
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        # 修正点: 背景を明示的に黒で塗りつぶす
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), Qt.black)
+        
         if self._pixmap.isNull():
-            super().paintEvent(event)
             return
+
         label_size = self.size()
         scaled_pixmap = self._pixmap.scaled(label_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         x = (label_size.width() - scaled_pixmap.width()) / 2
         y = (label_size.height() - scaled_pixmap.height()) / 2
-        painter = QPainter(self)
         painter.drawPixmap(int(x), int(y), scaled_pixmap)
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+
 
 class InteractivePreviewLabel(QLabel):
     settingChanged = Signal(dict)
@@ -106,29 +112,62 @@ class InteractivePreviewLabel(QLabel):
                 self.settingChanged.emit({'click_rect': [rect.left(), rect.top(), rect.right(), rect.bottom()]})
 
     def paintEvent(self, event):
-        super().paintEvent(event)
-        if self._pixmap.isNull(): return
-        painter = QPainter(self); pixmap_rect = self._get_pixmap_rect()
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        # 修正点: super().paintEvent(event)を削除し、背景を明示的に黒で塗りつぶす
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), Qt.black)
+
+        if self._pixmap.isNull():
+            return
+            
+        pixmap_rect = self._get_pixmap_rect()
         painter.drawPixmap(pixmap_rect.toRect(), self._pixmap)
-        if self._pixmap.width() == 0 or self._pixmap.height() == 0: return
-        scale_x = pixmap_rect.width() / self._pixmap.width(); scale_y = pixmap_rect.height() / self._pixmap.height()
+        
+        if self._pixmap.width() == 0 or self._pixmap.height() == 0:
+            return
+            
+        scale_x = pixmap_rect.width() / self._pixmap.width()
+        scale_y = pixmap_rect.height() / self._pixmap.height()
+
         def to_widget_coords(img_pos):
-            x = pixmap_rect.x() + img_pos[0] * scale_x; y = pixmap_rect.y() + img_pos[1] * scale_y
+            x = pixmap_rect.x() + img_pos[0] * scale_x
+            y = pixmap_rect.y() + img_pos[1] * scale_y
             return QPointF(x, y)
+            
         if self.click_settings.get('roi_enabled') and self.click_settings.get('roi_rect'):
-            roi = self.click_settings['roi_rect']; p1 = to_widget_coords((roi[0], roi[1])); p2 = to_widget_coords((roi[2], roi[3]))
-            painter.setPen(QPen(QColor(0, 255, 0), 1)); painter.setBrush(QColor(0, 255, 0, 40)); painter.drawRect(QRectF(p1, p2))
+            roi = self.click_settings['roi_rect']
+            p1 = to_widget_coords((roi[0], roi[1]))
+            p2 = to_widget_coords((roi[2], roi[3]))
+            painter.setPen(QPen(QColor(0, 255, 0), 1))
+            painter.setBrush(QColor(0, 255, 0, 40))
+            painter.drawRect(QRectF(p1, p2))
+            
         if self.is_drawing:
-            p1 = to_widget_coords((self.start_pos.x(), self.start_pos.y())); p2 = to_widget_coords((self.end_pos.x(), self.end_pos.y()))
-            if self.drawing_mode == 'point': painter.setPen(QPen(QColor(255, 0, 0), 3)); painter.setBrush(QColor(255, 0, 0)); painter.drawEllipse(p2, 3, 3)
-            elif self.drawing_mode == 'range': painter.setPen(QPen(QColor(0, 0, 255), 2)); painter.setBrush(Qt.NoBrush); painter.drawRect(QRectF(p1, p2))
+            p1 = to_widget_coords((self.start_pos.x(), self.start_pos.y()))
+            p2 = to_widget_coords((self.end_pos.x(), self.end_pos.y()))
+            if self.drawing_mode == 'point':
+                painter.setPen(QPen(QColor(255, 0, 0), 3))
+                painter.setBrush(QColor(255, 0, 0))
+                painter.drawEllipse(p2, 3, 3)
+            elif self.drawing_mode == 'range':
+                painter.setPen(QPen(QColor(0, 0, 255), 2))
+                painter.setBrush(Qt.NoBrush)
+                painter.drawRect(QRectF(p1, p2))
         else:
             if self.click_settings.get('point_click') and self.click_settings.get('click_position'):
-                pos = self.click_settings['click_position']; p = to_widget_coords(pos)
-                painter.setPen(QPen(QColor(255, 0, 0), 3)); painter.setBrush(QColor(255, 0, 0)); painter.drawEllipse(p, 3, 3)
+                pos = self.click_settings['click_position']
+                p = to_widget_coords(pos)
+                painter.setPen(QPen(QColor(255, 0, 0), 3))
+                painter.setBrush(QColor(255, 0, 0))
+                painter.drawEllipse(p, 3, 3)
             elif self.click_settings.get('range_click') and self.click_settings.get('click_rect'):
-                rect = self.click_settings['click_rect']; p1 = to_widget_coords((rect[0], rect[1])); p2 = to_widget_coords((rect[2], rect[3]))
-                painter.setPen(QPen(QColor(0, 0, 255), 2)); painter.setBrush(Qt.NoBrush); painter.drawRect(QRectF(p1, p2))
+                rect = self.click_settings['click_rect']
+                p1 = to_widget_coords((rect[0], rect[1]))
+                p2 = to_widget_coords((rect[2], rect[3]))
+                painter.setPen(QPen(QColor(0, 0, 255), 2))
+                painter.setBrush(Qt.NoBrush)
+                painter.drawRect(QRectF(p1, p2))
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 
 class RecAreaSelectionDialog(QDialog):
     selectionMade = Signal(str)
@@ -200,7 +239,9 @@ class UIManager(QMainWindow):
         
         self.preview_tabs = QTabWidget()
         main_preview_widget = QWidget(); main_preview_layout = QVBoxLayout(main_preview_widget)
-        self.preview_label = InteractivePreviewLabel(); self.preview_label.setAlignment(Qt.AlignCenter); self.preview_label.setStyleSheet("background-color: lightgray;")
+        self.preview_label = InteractivePreviewLabel(); self.preview_label.setAlignment(Qt.AlignCenter)
+        # ★★★ 変更点: setStyleSheetを削除 ★★★
+        # self.preview_label.setStyleSheet("background-color: lightgray;")
         main_preview_layout.addWidget(self.preview_label)
         self.preview_tabs.addTab(main_preview_widget, "画像プレビュー")
         
@@ -208,7 +249,9 @@ class UIManager(QMainWindow):
         rec_area_buttons_layout = QHBoxLayout()
         self.set_rec_area_button_main_ui = QPushButton("認識範囲設定"); self.clear_rec_area_button_main_ui = QPushButton("クリア")
         rec_area_buttons_layout.addWidget(self.set_rec_area_button_main_ui); rec_area_buttons_layout.addWidget(self.clear_rec_area_button_main_ui); rec_area_layout.addLayout(rec_area_buttons_layout)
-        self.rec_area_preview_label = ScaledPixmapLabel("認識範囲プレビュー"); self.rec_area_preview_label.setAlignment(Qt.AlignCenter); self.rec_area_preview_label.setStyleSheet("background-color: lightgray;")
+        self.rec_area_preview_label = ScaledPixmapLabel("認識範囲プレビュー"); self.rec_area_preview_label.setAlignment(Qt.AlignCenter)
+        # ★★★ 変更点: setStyleSheetを削除 ★★★
+        # self.rec_area_preview_label.setStyleSheet("background-color: lightgray;")
         rec_area_layout.addWidget(self.rec_area_preview_label)
         self.preview_tabs.addTab(rec_area_widget, "認識範囲")
         
