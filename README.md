@@ -46,10 +46,10 @@ Windowsユーザー向けの手順です。
     cd %USERPROFILE%\Desktop
 
     # Imeck15をダウンロード
-    git clone https://github.com/あなたのGitHubユーザー名/Imeck15.git
+    git clone https://github.com/ashguine-svg/Imeck15.git
     ```
 
-    ※ `あなたのGitHubユーザー名` の部分は、実際のプロジェクトのURLに合わせて変更してください。
+    ※ `ashguine-svg` の部分は、実際のプロジェクトのURLに合わせて変更してください。
 
 \</details\>
 
@@ -146,10 +146,10 @@ sudo apt install git python3 python3-pip python3-venv -y
 cd ~
 
 # Imeck15をダウンロード
-git clone https://github.com/あなたのGitHubユーザー名/Imeck15.git
+git clone https://github.com/ashguine-svg/Imeck15.git
 ```
 
-※ `あなたのGitHubユーザー名` の部分は、実際のプロジェクトのURLに合わせて変更してください。
+※ `ashguine-svg` の部分は、実際のプロジェクトのURLに合わせて変更してください。
 
 ### ステップ3：Imeck15の実行環境を準備する
 
