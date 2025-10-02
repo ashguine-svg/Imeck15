@@ -29,8 +29,7 @@ Windowsユーザー向けの手順です。
 
 プロジェクトファイルをPCにダウンロードします。方法は2つありますが、**Gitを使う方法が今後のアップデートに便利でおすすめです。**
 
-\<details\>
-\<summary\>\<strong\>方法A：Gitを使ってダウンロードする（推奨）\</strong\>\</summary\>
+>方法A：Gitを使ってダウンロードする（推奨）
 
 1.  **Git for Windowsをインストール**
     もしPCにGitがなければ、[こちらのサイト](https://git-scm.com/download/win)からインストーラーをダウンロードしてインストールしてください。設定はすべてデフォルトのままで問題ありません。
@@ -49,18 +48,12 @@ Windowsユーザー向けの手順です。
     git clone https://github.com/ashguine-svg/Imeck15.git
     ```
 
-    ※ `ashguine-svg` の部分は、実際のプロジェクトのURLに合わせて変更してください。
-
-\</details\>
-
-\<details\>
-\<summary\>\<strong\>方法B：ZIPファイルでダウンロードする\</strong\>\</summary\>
+>方法B：ZIPファイルでダウンロードする
 
 1.  GitHubプロジェクトページ右上の緑色の「**\<\> Code**」ボタンをクリックします。
 2.  「**Download ZIP**」を選択します。
 3.  ダウンロードしたZIPファイルを、デスクトップなどの分かりやすい場所で\*\*解凍（展開）\*\*してください。
 
-\</details\>
 
 ### ステップ2：Pythonのインストール
 
