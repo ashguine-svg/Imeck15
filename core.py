@@ -12,7 +12,8 @@ from PySide6.QtCore import QObject, Signal, QThread, QPoint, QRect, Qt, QTimer
 from PySide6.QtGui import QMouseEvent, QPainter, QPen, QColor, QBrush, QPainterPath, QKeyEvent
 from PySide6.QtWidgets import QDialog, QWidget, QLabel, QVBoxLayout, QMessageBox, QApplication, QInputDialog, QFileDialog
 from pathlib import Path
-import pynput
+# ★★★ 変更点: pynputからkeyboardもインポートします ★★★
+from pynput import mouse, keyboard
 from concurrent.futures import ThreadPoolExecutor
 from threading import Timer
 
@@ -72,6 +73,7 @@ except Exception as e:
 
 class SelectionOverlay(QWidget):
     selectionComplete = Signal(tuple)
+    selectionCancelled = Signal()
 
     def __init__(self, parent=None, initial_rect=None):
         super().__init__(parent)
@@ -81,33 +83,28 @@ class SelectionOverlay(QWidget):
         self.setGeometry(QApplication.primaryScreen().geometry())
         self.setMouseTracking(True)
         self.start_pos, self.end_pos, self.initial_rect = None, None, initial_rect
-        # ★★★ 修正点: devicePixelRatio をインスタンス変数として保持 ★★★
         self.dpr = self.screen().devicePixelRatio() if self.screen() else 1.0
 
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.LeftButton:
             self.initial_rect = None
-            # ★★★ 修正点: 座標に devicePixelRatio を乗算 ★★★
             self.start_pos = event.position().toPoint() * self.dpr
             self.end_pos = self.start_pos
             self.update()
 
     def mouseMoveEvent(self, event: QMouseEvent):
         if self.start_pos is not None:
-            # ★★★ 修正点: 座標に devicePixelRatio を乗算 ★★★
             self.end_pos = event.position().toPoint() * self.dpr
             self.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent):
         if event.button() == Qt.LeftButton and self.start_pos is not None:
-            # ★★★ 修正点: 座標に devicePixelRatio を乗算 ★★★
             end_pos_scaled = event.position().toPoint() * self.dpr
             x1 = min(self.start_pos.x(), end_pos_scaled.x())
             y1 = min(self.start_pos.y(), end_pos_scaled.y())
             x2 = max(self.start_pos.x(), end_pos_scaled.x())
             y2 = max(self.start_pos.y(), end_pos_scaled.y())
 
-            # 座標を整数に変換
             rect_tuple = (int(x1), int(y1), int(x2) + 1, int(y2) + 1)
 
             if rect_tuple[2] - rect_tuple[0] > 1 and rect_tuple[3] - rect_tuple[1] > 1:
@@ -121,7 +118,6 @@ class SelectionOverlay(QWidget):
         outer_path.addRect(self.rect())
         current_rect = None
 
-        # 描画は論理ピクセルで行うため、dprで割り戻す
         if self.start_pos and self.end_pos:
             start_pos_logical = self.start_pos / self.dpr
             end_pos_logical = self.end_pos / self.dpr
@@ -139,7 +135,6 @@ class SelectionOverlay(QWidget):
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() in (Qt.Key_Return, Qt.Key_Enter) and self.initial_rect:
-            # ★★★ 修正点: 座標に devicePixelRatio を乗算 ★★★
             x1 = self.initial_rect.left() * self.dpr
             y1 = self.initial_rect.top() * self.dpr
             x2 = self.initial_rect.right() * self.dpr
@@ -149,16 +144,17 @@ class SelectionOverlay(QWidget):
             self.close()
             self.deleteLater()
         elif event.key() == Qt.Key_Escape:
+            self.selectionCancelled.emit()
             self.close()
             self.deleteLater()
 
 
-class WindowSelectionListener(pynput.mouse.Listener):
+class WindowSelectionListener(mouse.Listener):
     def __init__(self, callback):
         super().__init__(on_click=self.on_click)
         self.callback = callback
     def on_click(self, x, y, button, pressed):
-        if pressed and button == pynput.mouse.Button.left: self.callback(x, y); return False
+        if pressed and button == mouse.Button.left: self.callback(x, y); return False
 
 def _match_template_task(screen_image, template_data):
     path, settings = template_data['path'], template_data['settings']
@@ -228,7 +224,6 @@ class CoreEngine(QObject):
         self.backup_countdown_start_time = 0
         self.active_backup_info = None
 
-        # ★★★ 新規追加: デバウンス機能のための変数 ★★★
         self._last_clicked_path = None
 
         self.recognition_area = None
@@ -236,6 +231,10 @@ class CoreEngine(QObject):
         self.current_image_path = None
         self.current_image_settings = None
         self.current_image_mat = None
+        
+        # ★★★ 変更点: ウィンドウ選択時のリスナーを保持する変数を追加 ★★★
+        self.window_selection_listener = None
+        self.keyboard_selection_listener = None
         
         cpu_cores = os.cpu_count() or 1
         worker_threads = 2
@@ -246,7 +245,7 @@ class CoreEngine(QObject):
         self.right_click_timer = None
         self.last_right_click_time = 0
         self.DOUBLE_CLICK_INTERVAL = 0.3
-        self.mouse_listener = pynput.mouse.Listener(on_click=self._on_global_click)
+        self.mouse_listener = mouse.Listener(on_click=self._on_global_click)
         self.mouse_listener.start()
         
         self._showUiSignal.connect(self._show_ui_safe)
@@ -282,7 +281,7 @@ class CoreEngine(QObject):
             self.ui_manager.activateWindow()
 
     def _on_global_click(self, x, y, button, pressed):
-        if button == pynput.mouse.Button.right and pressed:
+        if button == mouse.Button.right and pressed:
             current_time = time.time()
             if current_time - self.last_right_click_time < self.DOUBLE_CLICK_INTERVAL:
                 if self.right_click_timer is not None:
@@ -503,7 +502,6 @@ class CoreEngine(QObject):
             self.backup_countdown_start_time = 0
             self.active_backup_info = None
 
-            # ★★★ 変更点: デバウンス用の変数をリセット ★★★
             self._last_clicked_path = None
 
             self.ui_manager.set_tree_enabled(False)
@@ -546,7 +544,6 @@ class CoreEngine(QObject):
                 continue
 
             try:
-                # ★★★ 新規追加: バックアップカウントダウン中は負荷を軽減するためにスリープを長くする ★★★
                 if self.is_backup_countdown_active:
                     time.sleep(1.0)
 
@@ -681,7 +678,6 @@ class CoreEngine(QObject):
         
         return best_match
 
-    # ★★★ 変更点: デバウンス機能のロジックをここに追加 ★★★
     def _handle_match(self, match_info, last_match_time_map):
         path, settings = match_info['path'], match_info['settings']
         current_time = time.time()
@@ -689,20 +685,15 @@ class CoreEngine(QObject):
         interval = settings.get('interval_time', 1.5)
         debounce = settings.get('debounce_time', 0.0)
         
-        #
         effective_interval = interval
-        # 最後にクリックした画像と今回マッチした画像が同じかチェック
         if self._last_clicked_path == path and debounce > 0:
             effective_interval += debounce
-            # self.updateLog.emit(f"デバウンス適用: '{Path(path).name}' の待機時間を {effective_interval:.2f}秒に延長")
 
         if current_time - last_match_time_map.get(path, 0) > effective_interval:
             self._execute_click(match_info)
             last_match_time_map[path] = current_time
-            # グローバルクールダウンは元の短いインターバルを基準にする
             self._cooldown_until = current_time + interval
             
-    # ★★★ 変更点: クリック後に画像パスを記録する処理を追加 ★★★
     def _execute_click(self, match_info):
         block_input(True)
         try:
@@ -733,19 +724,14 @@ class CoreEngine(QObject):
             else:
                 click_x, click_y = offset_x + (rect[0] + rect[2]) / 2, offset_y + (rect[1] + rect[3]) / 2
             
-            # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-            # 修正点: クリック座標が画面外に出ていないかチェックする
             screen_width, screen_height = pyautogui.size()
-            # フェールセーフが作動する(0,0)も除外する
             if not (0 < click_x < screen_width and 0 < click_y < screen_height):
                 self.updateLog.emit(f"警告: 計算されたクリック座標 ({int(click_x)}, {int(click_y)}) が画面外です。クリックを中止しました。")
-                return # returnの前にfinallyは実行される
-            # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-
+                return
+            
             pyautogui.click(click_x, click_y)
             self._click_count += 1
             
-            # 最後にクリックした画像のパスを記録
             self._last_clicked_path = path
             
             log_msg = f"クリック: {Path(path).name} @({int(click_x)}, {int(click_y)}) conf:{match_info['confidence']:.2f}"
@@ -766,11 +752,59 @@ class CoreEngine(QObject):
         if method == "rectangle":
             self.current_window_scale = None
             self.windowScaleCalculated.emit(0.0)
-            self.selection_overlay = SelectionOverlay(); self.selection_overlay.selectionComplete.connect(self._areaSelectedForProcessing.emit); self.selection_overlay.showFullScreen()
+            self.selection_overlay = SelectionOverlay()
+            self.selection_overlay.selectionComplete.connect(self._areaSelectedForProcessing.emit)
+            self.selection_overlay.selectionCancelled.connect(self._on_selection_cancelled)
+            self.selection_overlay.showFullScreen()
         elif method == "window":
-            self.window_selection_listener = WindowSelectionListener(self._handle_window_click_for_selection); self.window_selection_listener.start()
+            # ★★★ 変更点: マウスとキーボードの両方のリスナーを開始する ★★★
+            self.logger.log("ウィンドウを選択してください... (ESCキーでキャンセル)")
+            self.window_selection_listener = WindowSelectionListener(self._handle_window_click_for_selection)
+            self.window_selection_listener.start()
+            self.keyboard_selection_listener = keyboard.Listener(on_press=self._on_key_press_for_selection)
+            self.keyboard_selection_listener.start()
             
+    def _on_selection_cancelled(self):
+        self.logger.log("範囲選択がキャンセルされました。")
+        if self._is_capturing_for_registration:
+            self._is_capturing_for_registration = False
+        
+        if hasattr(self, 'selection_overlay'):
+            self.selection_overlay = None
+
+        # ★★★ 変更点: ウィンドウ選択リスナーもクリアする ★★★
+        if self.window_selection_listener:
+            self.window_selection_listener.stop()
+            self.window_selection_listener = None
+        if self.keyboard_selection_listener:
+            self.keyboard_selection_listener.stop()
+            self.keyboard_selection_listener = None
+
+        self.selectionProcessFinished.emit()
+        self._show_ui_safe()
+
+    # ★★★ 新規追加: ウィンドウ選択中にキーが押されたときの処理 ★★★
+    def _on_key_press_for_selection(self, key):
+        if key == keyboard.Key.esc:
+            self.logger.log("キーボードによりウィンドウ選択がキャンセルされました。")
+            # リスナーを両方停止し、キャンセル処理を呼び出す
+            if self.window_selection_listener:
+                self.window_selection_listener.stop()
+            if self.keyboard_selection_listener:
+                self.keyboard_selection_listener.stop()
+            
+            # メインスレッドでUIを更新するため、シグナル経由でキャンセル処理を呼び出す
+            self._showUiSignal.connect(self._on_selection_cancelled)
+            self._showUiSignal.emit()
+            self._showUiSignal.disconnect(self._on_selection_cancelled) # 念のため切断
+            return False # リスナーを停止
+
     def _handle_window_click_for_selection(self, x, y):
+        # ★★★ 変更点: クリックされたら、まずキーボードリスナーを停止する ★★★
+        if self.keyboard_selection_listener:
+            self.keyboard_selection_listener.stop()
+            self.keyboard_selection_listener = None
+        
         if sys.platform == 'win32':
             self._handle_window_click_for_selection_windows(x, y)
         else:
@@ -868,10 +902,7 @@ class CoreEngine(QObject):
                 base_dims = scales_data[title]
                 if base_dims['width'] > 0:
                     self.current_window_scale = current_dims['width'] / base_dims['width']
-                    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-                    # 修正点: 計算されたスケール倍率をログに出力する処理を追加
                     self.logger.log(f"ウィンドウ '{title}' のスケールを計算: {self.current_window_scale:.3f}倍")
-                    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
                 else:
                     self.current_window_scale = None
             else:

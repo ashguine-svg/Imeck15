@@ -12,6 +12,8 @@ from PySide6.QtGui import QIcon, QPixmap, QImage, QPainter, QColor, QFontMetrics
 from PySide6.QtCore import Qt, QSize, QThread, Signal, QTimer, QObject, QRect, QPoint, QRectF, QPointF
 
 import os
+# ★★★ 変更点: subprocessモジュールをインポートします ★★★
+import subprocess
 import cv2
 import numpy as np
 from pathlib import Path
@@ -34,8 +36,6 @@ class ScaledPixmapLabel(QLabel):
         self.update()
 
     def paintEvent(self, event):
-        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-        # 修正点: 背景を明示的に黒で塗りつぶす
         painter = QPainter(self)
         painter.fillRect(self.rect(), Qt.black)
         
@@ -47,7 +47,6 @@ class ScaledPixmapLabel(QLabel):
         x = (label_size.width() - scaled_pixmap.width()) / 2
         y = (label_size.height() - scaled_pixmap.height()) / 2
         painter.drawPixmap(int(x), int(y), scaled_pixmap)
-        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 
 
 class InteractivePreviewLabel(QLabel):
@@ -112,8 +111,6 @@ class InteractivePreviewLabel(QLabel):
                 self.settingChanged.emit({'click_rect': [rect.left(), rect.top(), rect.right(), rect.bottom()]})
 
     def paintEvent(self, event):
-        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-        # 修正点: super().paintEvent(event)を削除し、背景を明示的に黒で塗りつぶす
         painter = QPainter(self)
         painter.fillRect(self.rect(), Qt.black)
 
@@ -167,7 +164,6 @@ class InteractivePreviewLabel(QLabel):
                 painter.setPen(QPen(QColor(0, 0, 255), 2))
                 painter.setBrush(Qt.NoBrush)
                 painter.drawRect(QRectF(p1, p2))
-        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 
 class RecAreaSelectionDialog(QDialog):
     selectionMade = Signal(str)
@@ -197,7 +193,6 @@ class UIManager(QMainWindow):
         self.auto_scale_widgets = {}
 
         self.setWindowTitle("Imeck15")
-        # ★★★ 変更点: ウィンドウの高さを少し広げる ★★★
         self.resize(800, 640)
         self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
 
@@ -218,6 +213,13 @@ class UIManager(QMainWindow):
         self.perf_monitor_button = QPushButton("パフォーマンス"); self.perf_monitor_button.setFixedSize(120, 30); header_layout.addWidget(self.perf_monitor_button)
         self.header_rec_area_button = QPushButton("認識範囲設定"); self.header_rec_area_button.setFixedSize(120, 30); self.header_rec_area_button.clicked.connect(self.setRecAreaDialog)
         header_layout.addWidget(self.header_rec_area_button)
+        
+        # ★★★ 変更点: 「画像フォルダ」ボタンを作成し、レイアウトに追加します ★★★
+        self.open_image_folder_button = QPushButton("画像フォルダ")
+        self.open_image_folder_button.setFixedSize(120, 30)
+        self.open_image_folder_button.setToolTip("登録画像が保存されているフォルダを開きます")
+        header_layout.addWidget(self.open_image_folder_button)
+        
         header_layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
         self.status_label = QLabel("待機中"); self.status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: green;"); header_layout.addWidget(self.status_label)
         main_layout.addWidget(header_frame); content_frame = QFrame(); content_layout = QHBoxLayout(content_frame)
@@ -240,8 +242,6 @@ class UIManager(QMainWindow):
         self.preview_tabs = QTabWidget()
         main_preview_widget = QWidget(); main_preview_layout = QVBoxLayout(main_preview_widget)
         self.preview_label = InteractivePreviewLabel(); self.preview_label.setAlignment(Qt.AlignCenter)
-        # ★★★ 変更点: setStyleSheetを削除 ★★★
-        # self.preview_label.setStyleSheet("background-color: lightgray;")
         main_preview_layout.addWidget(self.preview_label)
         self.preview_tabs.addTab(main_preview_widget, "画像プレビュー")
         
@@ -250,8 +250,6 @@ class UIManager(QMainWindow):
         self.set_rec_area_button_main_ui = QPushButton("認識範囲設定"); self.clear_rec_area_button_main_ui = QPushButton("クリア")
         rec_area_buttons_layout.addWidget(self.set_rec_area_button_main_ui); rec_area_buttons_layout.addWidget(self.clear_rec_area_button_main_ui); rec_area_layout.addLayout(rec_area_buttons_layout)
         self.rec_area_preview_label = ScaledPixmapLabel("認識範囲プレビュー"); self.rec_area_preview_label.setAlignment(Qt.AlignCenter)
-        # ★★★ 変更点: setStyleSheetを削除 ★★★
-        # self.rec_area_preview_label.setStyleSheet("background-color: lightgray;")
         rec_area_layout.addWidget(self.rec_area_preview_label)
         self.preview_tabs.addTab(rec_area_widget, "認識範囲")
         
@@ -319,7 +317,6 @@ class UIManager(QMainWindow):
         
         right_layout.addWidget(self.preview_tabs, 2)
 
-        # ★★★ 変更点: デバウンス設定を追加し、レイアウトを調整 ★★★
         item_settings_group = QGroupBox("画像ごとの設定"); item_settings_layout = QGridLayout(item_settings_group)
         item_settings_layout.addWidget(QLabel("認識精度:"), 0, 0)
         self.item_settings_widgets['threshold'] = QDoubleSpinBox(); self.item_settings_widgets['threshold'].setRange(0.5, 1.0); self.item_settings_widgets['threshold'].setSingleStep(0.01); self.item_settings_widgets['threshold'].setValue(0.8)
@@ -341,7 +338,6 @@ class UIManager(QMainWindow):
         self.item_settings_widgets['interval_time'] = QDoubleSpinBox(); self.item_settings_widgets['interval_time'].setRange(0.1, 10.0); self.item_settings_widgets['interval_time'].setSingleStep(0.1); self.item_settings_widgets['interval_time'].setValue(1.5)
         item_settings_layout.addWidget(self.item_settings_widgets['interval_time'], 2, 1)
 
-        # ★★★ 新規追加: デバウンス設定欄 ★★★
         item_settings_layout.addWidget(QLabel("デバウンス(秒):"), 3, 0)
         self.item_settings_widgets['debounce_time'] = QDoubleSpinBox(); self.item_settings_widgets['debounce_time'].setRange(0.0, 10.0); self.item_settings_widgets['debounce_time'].setSingleStep(0.1); self.item_settings_widgets['debounce_time'].setValue(0.0)
         self.item_settings_widgets['debounce_time'].setToolTip(
@@ -350,10 +346,9 @@ class UIManager(QMainWindow):
         )
         item_settings_layout.addWidget(self.item_settings_widgets['debounce_time'], 3, 1)
         
-        # ★★★ 変更点: クリック設定のレイアウトを調整 ★★★
         click_type_layout = QHBoxLayout(); self.item_settings_widgets['point_click'] = QCheckBox("1点クリック"); self.item_settings_widgets['range_click'] = QCheckBox("範囲クリック"); self.item_settings_widgets['random_click'] = QCheckBox("範囲内ランダム")
         click_type_layout.addWidget(self.item_settings_widgets['point_click']); click_type_layout.addWidget(self.item_settings_widgets['range_click']); click_type_layout.addWidget(self.item_settings_widgets['random_click'])
-        item_settings_layout.addLayout(click_type_layout, 4, 0, 1, 3) # 行番号を4に変更
+        item_settings_layout.addLayout(click_type_layout, 4, 0, 1, 3)
         right_layout.addWidget(item_settings_group, 1)
 
         content_layout.addWidget(right_frame, 2); main_layout.addWidget(content_frame)
@@ -406,11 +401,13 @@ class UIManager(QMainWindow):
         self.set_rec_area_button_main_ui.clicked.connect(self.setRecAreaDialog); self.clear_rec_area_button_main_ui.clicked.connect(self.core_engine.clear_recognition_area)
         self.image_tree.itemChanged.connect(self.on_tree_item_changed)
         
+        # ★★★ 変更点: 新しい「画像フォルダ」ボタンのシグナルを接続します ★★★
+        self.open_image_folder_button.clicked.connect(self.open_image_folder)
+        
         for widget in self.item_settings_widgets.values():
             if isinstance(widget, QDoubleSpinBox): widget.valueChanged.connect(self.on_item_settings_changed)
             elif isinstance(widget, QCheckBox): widget.stateChanged.connect(self.on_item_settings_changed)
         
-        # ★★★ 変更点: クリック設定の排他制御シグナルを接続 ★★★
         self.item_settings_widgets['point_click'].toggled.connect(self.on_point_click_toggled)
         self.item_settings_widgets['range_click'].toggled.connect(self.on_range_click_toggled)
         
@@ -422,8 +419,25 @@ class UIManager(QMainWindow):
         self.preview_label.settingChanged.connect(self.core_engine.on_preview_click_settings_changed)
         self.save_timer.timeout.connect(self.core_engine.save_current_settings)
         self.appConfigChanged.connect(self.core_engine.on_app_config_changed)
+        
+    # ★★★ 新規追加: 画像フォルダを開くためのメソッド ★★★
+    def open_image_folder(self):
+        """
+        設定された画像フォルダをOSのファイルマネージャーで開きます。
+        """
+        folder_path = str(self.config_manager.base_dir)
+        try:
+            if sys.platform == 'win32':
+                os.startfile(folder_path)
+            elif sys.platform == 'darwin': # macOS
+                subprocess.run(['open', folder_path])
+            else: # Linux
+                subprocess.run(['xdg-open', folder_path])
+            self.logger.log(f"画像フォルダを開きました: {folder_path}")
+        except Exception as e:
+            self.logger.log(f"画像フォルダを開けませんでした: {e}")
+            QMessageBox.warning(self, "エラー", f"フォルダを開けませんでした:\n{e}")
 
-    # ★★★ 新規追加: 「1点クリック」の排他制御ロジック ★★★
     def on_point_click_toggled(self, checked):
         if checked:
             range_cb = self.item_settings_widgets['range_click']
@@ -431,7 +445,6 @@ class UIManager(QMainWindow):
             range_cb.setChecked(False)
             range_cb.blockSignals(False)
 
-    # ★★★ 新規追加: 「範囲クリック」の排他制御ロジック ★★★
     def on_range_click_toggled(self, checked):
         if checked:
             point_cb = self.item_settings_widgets['point_click']
@@ -597,19 +610,13 @@ class UIManager(QMainWindow):
             self.current_best_scale_label.setStyleSheet("color: green;")
 
     def on_window_scale_calculated(self, scale: float):
-        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-        # 修正点: UIの更新ロジックを改善
         if scale > 0:
             self.current_best_scale_label.setText(f"計算スケール: {scale:.3f}倍")
-            # ご要望の通り、マゼンタに近い色(purple)で表示します
             self.current_best_scale_label.setStyleSheet("color: purple;")
-            # 「自動スケール」が有効かどうかにかかわらず、計算されたスケールを中心値としてUIに設定します。
-            # これにより、後から機能を有効にした際に値が反映されるようになります。
             self.auto_scale_widgets['center'].setValue(scale)
         else:
             self.current_best_scale_label.setText("最適スケール: ---")
             self.current_best_scale_label.setStyleSheet("color: gray;")
-        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
             
     def prompt_to_save_base_size(self, window_title: str) -> bool:
         reply = QMessageBox.question(
