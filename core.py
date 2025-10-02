@@ -12,7 +12,6 @@ from PySide6.QtCore import QObject, Signal, QThread, QPoint, QRect, Qt, QTimer
 from PySide6.QtGui import QMouseEvent, QPainter, QPen, QColor, QBrush, QPainterPath, QKeyEvent
 from PySide6.QtWidgets import QDialog, QWidget, QLabel, QVBoxLayout, QMessageBox, QApplication, QInputDialog, QFileDialog
 from pathlib import Path
-# ★★★ 変更点: pynputからkeyboardもインポートします ★★★
 from pynput import mouse, keyboard
 from concurrent.futures import ThreadPoolExecutor
 from threading import Timer
@@ -205,6 +204,8 @@ class CoreEngine(QObject):
     bestScaleFound = Signal(str, float)
     windowScaleCalculated = Signal(float)
     askToSaveWindowBaseSizeSignal = Signal(str)
+    askToApplyWindowScaleSignal = Signal(float)
+
 
     def __init__(self, ui_manager, capture_manager, config_manager, logger, performance_monitor):
         super().__init__()
@@ -212,7 +213,6 @@ class CoreEngine(QObject):
         self.performance_monitor = performance_monitor
         self.logger.log(OPENCL_STATUS_MESSAGE)
         
-        # --- 監視スレッド関連 ---
         self.is_monitoring = False
         self._monitor_thread = None
         self._click_count = 0
@@ -232,9 +232,11 @@ class CoreEngine(QObject):
         self.current_image_settings = None
         self.current_image_mat = None
         
-        # ★★★ 変更点: ウィンドウ選択時のリスナーを保持する変数を追加 ★★★
         self.window_selection_listener = None
         self.keyboard_selection_listener = None
+        
+        # ★★★ 変更点: ターゲットウィンドウのハンドルを記憶する変数を追加 ★★★
+        self.target_hwnd = None
         
         cpu_cores = os.cpu_count() or 1
         worker_threads = 2
@@ -256,6 +258,7 @@ class CoreEngine(QObject):
         self.app_config = self.ui_manager.app_config
         self.current_window_scale = None
         self._pending_window_info = None
+        self._pending_scale_prompt_info = None
         self._cooldown_until = 0
         self.on_app_config_changed()
 
@@ -429,21 +432,29 @@ class CoreEngine(QObject):
             self.backup_template_cache.clear()
 
             auto_scale_settings = self.app_config.get('auto_scale', {})
-            use_auto_scale = auto_scale_settings.get('enabled', False)
+            use_window_scale_base = auto_scale_settings.get('use_window_scale', True)
             
-            if self.current_window_scale is not None:
-                center_scale = self.current_window_scale
-                self.logger.log(f"ウィンドウ基準スケール ({center_scale:.3f}) を使用します。")
+            scales = [1.0] 
+
+            if use_window_scale_base:
+                use_scale_search = auto_scale_settings.get('enabled', False)
+                
+                if self.current_window_scale is not None:
+                    center_scale = self.current_window_scale
+                    self.logger.log(f"ウィンドウ基準スケール ({center_scale:.3f}) を中心とします。")
+                else:
+                    center_scale = auto_scale_settings.get('center', 1.0)
+                
+                if use_scale_search:
+                    range_ = auto_scale_settings.get('range', 0.2)
+                    steps = auto_scale_settings.get('steps', 5)
+                    if steps > 1:
+                        scales = np.linspace(center_scale - range_, center_scale + range_, steps)
+                    self.logger.log(f"スケール検索有効: {len(scales)}段階で探索 (中心: {center_scale:.3f})。")
+                else:
+                    scales = [center_scale]
             else:
-                center_scale = auto_scale_settings.get('center', 1.0)
-            
-            scales = [center_scale]
-            if use_auto_scale:
-                range_ = auto_scale_settings.get('range', 0.2)
-                steps = auto_scale_settings.get('steps', 5)
-                if steps > 1:
-                    scales = np.linspace(center_scale - range_, center_scale + range_, steps)
-                self.logger.log(f"自動スケール探索有効: {len(scales)}段階で探索 (中心: {center_scale:.3f})。")
+                self.logger.log("ウィンドウスケール基準が無効なため、スケール1.0倍で固定します。")
             
             hierarchical_list = self.config_manager.get_hierarchical_list()
             items_to_process = []
@@ -540,7 +551,7 @@ class CoreEngine(QObject):
                 frame_counter = 0
             
             if self._cooldown_until > current_time:
-                time.sleep(0.1)
+                time.sleep(0.01)
                 continue
 
             try:
@@ -672,7 +683,7 @@ class CoreEngine(QObject):
 
             if cache_item and cache_item['best_scale'] is None:
                  cache_item['best_scale'] = best_match['scale']
-                 log_msg = f"最適スケール発見: {Path(best_match['path']).name} @ {best_match['scale']:.2f}倍 (信頼度: {best_match['confidence']:.2f})"
+                 log_msg = f"最適スケール発見: {Path(best_match['path']).name} @ {best_match['scale']:.3f}倍 (信頼度: {best_match['confidence']:.2f})"
                  self.updateLog.emit(log_msg)
                  self.bestScaleFound.emit(best_match['path'], best_match['scale'])
         
@@ -681,6 +692,7 @@ class CoreEngine(QObject):
     def _handle_match(self, match_info, last_match_time_map):
         path, settings = match_info['path'], match_info['settings']
         current_time = time.time()
+        item_name = Path(path).name
 
         interval = settings.get('interval_time', 1.5)
         debounce = settings.get('debounce_time', 0.0)
@@ -688,56 +700,78 @@ class CoreEngine(QObject):
         effective_interval = interval
         if self._last_clicked_path == path and debounce > 0:
             effective_interval += debounce
+            self.logger.log(f"デバウンス適用: '{item_name}' のインターバルを {interval:.1f}s -> {effective_interval:.1f}s に延長")
 
-        if current_time - last_match_time_map.get(path, 0) > effective_interval:
+        last_match_time = last_match_time_map.get(path, 0)
+        elapsed = current_time - last_match_time
+
+        if elapsed > effective_interval:
             self._execute_click(match_info)
             last_match_time_map[path] = current_time
             self._cooldown_until = current_time + interval
-            
+
     def _execute_click(self, match_info):
         block_input(True)
         try:
-            settings, rect = match_info['settings'], match_info['rect']
+            settings = match_info['settings']
+            match_rect_in_rec_area = match_info['rect']
             scale = match_info.get('scale', 1.0)
             path = match_info['path']
 
-            offset_x, offset_y = (self.recognition_area[0], self.recognition_area[1]) if self.recognition_area else (0, 0)
-            click_x, click_y = 0, 0
+            rec_area_offset_x, rec_area_offset_y = (self.recognition_area[0], self.recognition_area[1]) if self.recognition_area else (0, 0)
+            
+            match_abs_x = rec_area_offset_x + match_rect_in_rec_area[0]
+            match_abs_y = rec_area_offset_y + match_rect_in_rec_area[1]
+            
+            click_x_float, click_y_float = 0.0, 0.0
 
-            if settings.get('range_click') and settings.get('click_rect'):
-                click_rect = settings['click_rect']
-                x1 = offset_x + rect[0] + (click_rect[0] * scale)
-                y1 = offset_y + rect[1] + (click_rect[1] * scale)
-                x2 = offset_x + rect[0] + (click_rect[2] * scale)
-                y2 = offset_y + rect[1] + (click_rect[3] * scale)
+            if settings.get('point_click') and settings.get('click_position'):
+                click_pos_in_template = settings['click_position']
+                scaled_offset_x = click_pos_in_template[0] * scale
+                scaled_offset_y = click_pos_in_template[1] * scale
+                
+                click_x_float = match_abs_x + scaled_offset_x
+                click_y_float = match_abs_y + scaled_offset_y
+
+            elif settings.get('range_click') and settings.get('click_rect'):
+                click_rect_in_template = settings['click_rect']
+                
+                x1 = match_abs_x + (click_rect_in_template[0] * scale)
+                y1 = match_abs_y + (click_rect_in_template[1] * scale)
+                x2 = match_abs_x + (click_rect_in_template[2] * scale)
+                y2 = match_abs_y + (click_rect_in_template[3] * scale)
 
                 if settings.get('random_click', True):
                     int_x1, int_x2 = int(min(x1, x2)), int(max(x1, x2))
                     int_y1, int_y2 = int(min(y1, y2)), int(max(y1, y2))
-                    click_x = int_x1 if int_x1 >= int_x2 else random.randint(int_x1, int_x2)
-                    click_y = int_y1 if int_y1 >= int_y2 else random.randint(int_y1, int_y2)
-                else: click_x, click_y = (x1 + x2) / 2, (y1 + y2) / 2
-            elif settings.get('point_click') and settings.get('click_position'):
-                click_pos = settings['click_position']
-                click_x = offset_x + rect[0] + (click_pos[0] * scale)
-                click_y = offset_y + rect[1] + (click_pos[1] * scale)
+                    click_x_float = int_x1 if int_x1 >= int_x2 else random.randint(int_x1, int_x2)
+                    click_y_float = int_y1 if int_y1 >= int_y2 else random.randint(int_y1, int_y2)
+                else:
+                    click_x_float = (x1 + x2) / 2
+                    click_y_float = (y1 + y2) / 2
             else:
-                click_x, click_y = offset_x + (rect[0] + rect[2]) / 2, offset_y + (rect[1] + rect[3]) / 2
+                match_width = match_rect_in_rec_area[2] - match_rect_in_rec_area[0]
+                match_height = match_rect_in_rec_area[3] - match_rect_in_rec_area[1]
+                click_x_float = match_abs_x + match_width / 2
+                click_y_float = match_abs_y + match_height / 2
             
             screen_width, screen_height = pyautogui.size()
-            if not (0 < click_x < screen_width and 0 < click_y < screen_height):
-                self.updateLog.emit(f"警告: 計算されたクリック座標 ({int(click_x)}, {int(click_y)}) が画面外です。クリックを中止しました。")
+            final_click_x = int(click_x_float)
+            final_click_y = int(click_y_float)
+            
+            if not (0 <= final_click_x < screen_width and 0 <= final_click_y < screen_height):
+                self.updateLog.emit(f"警告: 計算されたクリック座標 ({final_click_x}, {final_click_y}) が画面外です。クリックを中止しました。")
                 return
             
-            pyautogui.click(click_x, click_y)
+            pyautogui.click(final_click_x, final_click_y)
             self._click_count += 1
-            
             self._last_clicked_path = path
             
-            log_msg = f"クリック: {Path(path).name} @({int(click_x)}, {int(click_y)}) conf:{match_info['confidence']:.2f}"
+            log_msg = f"クリック: {Path(path).name} @({final_click_x}, {final_click_y}) conf:{match_info['confidence']:.2f}"
             if 'scale' in match_info:
                 log_msg += f" scale:{match_info['scale']:.3f}"
             self.updateLog.emit(log_msg)
+
         except Exception as e:
             self.updateLog.emit(f"クリック実行中にエラーが発生しました: {e}")
         finally:
@@ -750,14 +784,16 @@ class CoreEngine(QObject):
             self.performance_monitor.hide()
 
         if method == "rectangle":
+            # ★★★ 変更点: 四角指定時にターゲットウィンドウハンドルをリセット ★★★
+            self.target_hwnd = None
             self.current_window_scale = None
             self.windowScaleCalculated.emit(0.0)
+            self.logger.log("認識範囲を四角指定に設定しました。スケールは計算されません。")
             self.selection_overlay = SelectionOverlay()
             self.selection_overlay.selectionComplete.connect(self._areaSelectedForProcessing.emit)
             self.selection_overlay.selectionCancelled.connect(self._on_selection_cancelled)
             self.selection_overlay.showFullScreen()
         elif method == "window":
-            # ★★★ 変更点: マウスとキーボードの両方のリスナーを開始する ★★★
             self.logger.log("ウィンドウを選択してください... (ESCキーでキャンセル)")
             self.window_selection_listener = WindowSelectionListener(self._handle_window_click_for_selection)
             self.window_selection_listener.start()
@@ -772,7 +808,6 @@ class CoreEngine(QObject):
         if hasattr(self, 'selection_overlay'):
             self.selection_overlay = None
 
-        # ★★★ 変更点: ウィンドウ選択リスナーもクリアする ★★★
         if self.window_selection_listener:
             self.window_selection_listener.stop()
             self.window_selection_listener = None
@@ -783,24 +818,20 @@ class CoreEngine(QObject):
         self.selectionProcessFinished.emit()
         self._show_ui_safe()
 
-    # ★★★ 新規追加: ウィンドウ選択中にキーが押されたときの処理 ★★★
     def _on_key_press_for_selection(self, key):
         if key == keyboard.Key.esc:
             self.logger.log("キーボードによりウィンドウ選択がキャンセルされました。")
-            # リスナーを両方停止し、キャンセル処理を呼び出す
             if self.window_selection_listener:
                 self.window_selection_listener.stop()
             if self.keyboard_selection_listener:
                 self.keyboard_selection_listener.stop()
             
-            # メインスレッドでUIを更新するため、シグナル経由でキャンセル処理を呼び出す
             self._showUiSignal.connect(self._on_selection_cancelled)
             self._showUiSignal.emit()
-            self._showUiSignal.disconnect(self._on_selection_cancelled) # 念のため切断
-            return False # リスナーを停止
+            self._showUiSignal.disconnect(self._on_selection_cancelled)
+            return False
 
     def _handle_window_click_for_selection(self, x, y):
-        # ★★★ 変更点: クリックされたら、まずキーボードリスナーを停止する ★★★
         if self.keyboard_selection_listener:
             self.keyboard_selection_listener.stop()
             self.keyboard_selection_listener = None
@@ -815,12 +846,28 @@ class CoreEngine(QObject):
             hwnd = win32gui.WindowFromPoint((x, y))
             if not hwnd: return
             
-            if 'dxcam' in sys.modules:
+            # ★★★ 変更点: 取得したウィンドウハンドルをインスタンス変数に保存 ★★★
+            self.target_hwnd = hwnd
+            
+            if 'dxcam' in sys.modules and self.capture_manager.dxcam_sct:
                 self.capture_manager.dxcam_sct.target_hwnd = hwnd
 
             client_rect_win = win32gui.GetClientRect(hwnd)
             left, top = win32gui.ClientToScreen(hwnd, (0, 0))
             right, bottom = left + client_rect_win[2], top + client_rect_win[3]
+            
+            screen_width, screen_height = pyautogui.size()
+            left = max(0, left)
+            top = max(0, top)
+            right = min(screen_width, right)
+            bottom = min(screen_height, bottom)
+
+            if right <= left or bottom <= top:
+                self.logger.log(f"ウィンドウ領域の計算結果が無効です: ({left},{top},{right},{bottom})。処理を中断します。")
+                self.target_hwnd = None # ★★★ 変更点: 無効な場合はハンドルもリセット ★★★
+                self._on_selection_cancelled()
+                return
+            
             rect = (left, top, right, bottom)
             
             if self._is_capturing_for_registration:
@@ -831,7 +878,7 @@ class CoreEngine(QObject):
             title = win32gui.GetWindowText(hwnd)
             self._pending_window_info = {
                 "title": title,
-                "dims": {'width': client_rect_win[2], 'height': client_rect_win[3]},
+                "dims": {'width': rect[2] - rect[0], 'height': rect[3] - rect[1]},
                 "rect": rect
             }
 
@@ -845,6 +892,7 @@ class CoreEngine(QObject):
                 self.process_base_size_prompt_response(False)
         except Exception as e:
             self.logger.log(f"ウィンドウ領域の取得に失敗: {e}");
+            self.target_hwnd = None # ★★★ 変更点: エラー時もハンドルをリセット ★★★
             self._showUiSignal.emit(); self.selectionProcessFinished.emit()
     
     def _handle_window_click_for_selection_linux(self, x, y):
@@ -871,14 +919,27 @@ class CoreEngine(QObject):
                 elif 'xwininfo: Window id:' in line and '"' in line:
                     title = line.split('"')[1]
 
-            rect = (abs_x, abs_y, abs_x + width, abs_y + height)
+            left, top, right, bottom = abs_x, abs_y, abs_x + width, abs_y + height
+            
+            screen_width, screen_height = pyautogui.size()
+            left = max(0, left)
+            top = max(0, top)
+            right = min(screen_width, right)
+            bottom = min(screen_height, bottom)
+
+            if right <= left or bottom <= top:
+                self.logger.log(f"ウィンドウ領域の計算結果が無効です: ({left},{top},{right},{bottom})。処理を中断します。")
+                self._on_selection_cancelled()
+                return
+
+            rect = (left, top, right, bottom)
             
             if self._is_capturing_for_registration:
                 self._areaSelectedForProcessing.emit(rect)
                 self.selectionProcessFinished.emit()
                 return
 
-            self._pending_window_info = { "title": title, "dims": {'width': width, 'height': height}, "rect": rect }
+            self._pending_window_info = { "title": title, "dims": {'width': rect[2] - rect[0], 'height': rect[3] - rect[1]}, "rect": rect }
             scales_data = self.config_manager.load_window_scales()
             if title not in scales_data:
                 self.askToSaveWindowBaseSizeSignal.emit(title)
@@ -891,26 +952,79 @@ class CoreEngine(QObject):
         try:
             info = self._pending_window_info
             if not info: return
+            
             title, current_dims, rect = info['title'], info['dims'], info['rect']
             scales_data = self.config_manager.load_window_scales()
+            
             if save_as_base:
                 scales_data[title] = current_dims
                 self.config_manager.save_window_scales(scales_data)
                 self.current_window_scale = 1.0
                 self.logger.log(f"ウィンドウ '{title}' の基準サイズを保存しました。")
+                self.windowScaleCalculated.emit(1.0)
+                self._areaSelectedForProcessing.emit(rect)
+                self._showUiSignal.emit()
+                self.selectionProcessFinished.emit()
+
             elif title and title in scales_data:
                 base_dims = scales_data[title]
-                if base_dims['width'] > 0:
-                    self.current_window_scale = current_dims['width'] / base_dims['width']
-                    self.logger.log(f"ウィンドウ '{title}' のスケールを計算: {self.current_window_scale:.3f}倍")
+                calculated_scale = current_dims['width'] / base_dims['width'] if base_dims['width'] > 0 else 1.0
+
+                if 0.995 <= calculated_scale <= 1.005:
+                    self.current_window_scale = 1.0
+                    self.logger.log(f"ウィンドウ '{title}' のスケールを計算: {calculated_scale:.3f}倍 (1.0として補正)")
+                    self.windowScaleCalculated.emit(self.current_window_scale)
+                    self._areaSelectedForProcessing.emit(rect)
+                    self._showUiSignal.emit()
+                    self.selectionProcessFinished.emit()
                 else:
-                    self.current_window_scale = None
+                    self._pending_scale_prompt_info = info.copy()
+                    self._pending_scale_prompt_info['calculated_scale'] = calculated_scale
+                    self.askToApplyWindowScaleSignal.emit(calculated_scale)
+                    return 
             else:
                 self.current_window_scale = None
+                self.windowScaleCalculated.emit(0.0)
+                self._areaSelectedForProcessing.emit(rect)
+                self._showUiSignal.emit()
+                self.selectionProcessFinished.emit()
+        
+        except Exception as e: 
+            self.logger.log(f"基準サイズ応答の処理中にエラー: {e}")
+            self._showUiSignal.emit()
+            self.selectionProcessFinished.emit()
+        finally: 
+            self._pending_window_info = None
+
+    def process_apply_scale_prompt_response(self, apply_scale: bool):
+        try:
+            info = self._pending_scale_prompt_info
+            if not info: return
+
+            scale = info['calculated_scale']
+            rect = info['rect']
+
+            if apply_scale:
+                self.ui_manager.app_config['auto_scale']['use_window_scale'] = True
+                self.ui_manager.auto_scale_widgets['use_window_scale'].setChecked(True)
+                self.ui_manager.on_app_settings_changed() 
+                
+                self.current_window_scale = scale
+                self.logger.log(f"ユーザーの選択により、ウィンドウスケール {scale:.3f}倍 を適用します。")
+            else:
+                self.current_window_scale = None
+                self.logger.log(f"計算されたウィンドウスケール {scale:.3f}倍 は適用されませんでした。")
+            
             self.windowScaleCalculated.emit(self.current_window_scale if self.current_window_scale is not None else 0.0)
             self._areaSelectedForProcessing.emit(rect)
-        except Exception as e: self.logger.log(f"基準サイズ応答の処理中にエラー: {e}")
-        finally: self._pending_window_info = None; self._showUiSignal.emit(); self.selectionProcessFinished.emit()
+
+        except Exception as e:
+            self.logger.log(f"スケール適用応答の処理中にエラー: {e}")
+        finally:
+            self._pending_scale_prompt_info = None
+            self._showUiSignal.emit()
+            self.selectionProcessFinished.emit()
+
 
     def handle_area_selection(self, coords):
         if self._is_capturing_for_registration:
@@ -981,8 +1095,11 @@ class CoreEngine(QObject):
     def clear_recognition_area(self):
         self.recognition_area = None
         self.current_window_scale = None
+        # ★★★ 変更点: 認識範囲クリア時にターゲットウィンドウハンドルをリセット ★★★
+        self.target_hwnd = None
         self.windowScaleCalculated.emit(0.0)
-        if 'dxcam' in sys.modules: self.capture_manager.dxcam_sct.target_hwnd = None
+        if 'dxcam' in sys.modules and self.capture_manager.dxcam_sct:
+            self.capture_manager.dxcam_sct.target_hwnd = None
         self.logger.log("認識範囲をクリアしました。");
         self.updateRecAreaPreview.emit(None)
         

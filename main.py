@@ -109,14 +109,14 @@ def main():
     core_engine.selectionProcessStarted.connect(performance_monitor.hide)
     core_engine.selectionProcessFinished.connect(performance_monitor.show)
     core_engine.bestScaleFound.connect(ui_manager.on_best_scale_found)
-
-    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-    # 修正点: 欠けていた2行のシグナル接続を追加
-    # これにより、ウィンドウ倍率の自動計算機能が復活します
     core_engine.windowScaleCalculated.connect(ui_manager.on_window_scale_calculated)
     core_engine.askToSaveWindowBaseSizeSignal.connect(ui_manager.show_prompt_to_save_base_size)
+    
     # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-
+    # 修正点: 欠落していたシグナル接続を1行追加
+    # これにより、ウィンドウ倍率が異なる場合に表示される確認ダイアログが正しく機能します。
+    core_engine.askToApplyWindowScaleSignal.connect(ui_manager.show_prompt_to_apply_scale)
+    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 
     ui_manager.startMonitoringRequested.connect(core_engine.start_monitoring)
     ui_manager.stopMonitoringRequested.connect(core_engine.stop_monitoring)

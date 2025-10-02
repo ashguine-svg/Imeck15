@@ -12,7 +12,6 @@ from PySide6.QtGui import QIcon, QPixmap, QImage, QPainter, QColor, QFontMetrics
 from PySide6.QtCore import Qt, QSize, QThread, Signal, QTimer, QObject, QRect, QPoint, QRectF, QPointF
 
 import os
-# ★★★ 変更点: subprocessモジュールをインポートします ★★★
 import subprocess
 import cv2
 import numpy as np
@@ -214,7 +213,6 @@ class UIManager(QMainWindow):
         self.header_rec_area_button = QPushButton("認識範囲設定"); self.header_rec_area_button.setFixedSize(120, 30); self.header_rec_area_button.clicked.connect(self.setRecAreaDialog)
         header_layout.addWidget(self.header_rec_area_button)
         
-        # ★★★ 変更点: 「画像フォルダ」ボタンを作成し、レイアウトに追加します ★★★
         self.open_image_folder_button = QPushButton("画像フォルダ")
         self.open_image_folder_button.setFixedSize(120, 30)
         self.open_image_folder_button.setToolTip("登録画像が保存されているフォルダを開きます")
@@ -259,25 +257,42 @@ class UIManager(QMainWindow):
         self.preview_tabs.addTab(log_widget, "ログ")
 
         auto_scale_group = QGroupBox(); auto_scale_layout = QGridLayout(auto_scale_group)
-        self.auto_scale_widgets['enabled'] = QCheckBox("有効にする"); auto_scale_layout.addWidget(self.auto_scale_widgets['enabled'], 0, 0)
-        auto_scale_layout.addWidget(QLabel("中心:"), 1, 0); self.auto_scale_widgets['center'] = QDoubleSpinBox(); self.auto_scale_widgets['center'].setRange(0.5, 2.0); self.auto_scale_widgets['center'].setSingleStep(0.1); auto_scale_layout.addWidget(self.auto_scale_widgets['center'], 1, 1)
-        auto_scale_layout.addWidget(QLabel("範囲(±):"), 1, 2); self.auto_scale_widgets['range'] = QDoubleSpinBox(); self.auto_scale_widgets['range'].setRange(0.1, 0.5); self.auto_scale_widgets['range'].setSingleStep(0.05); auto_scale_layout.addWidget(self.auto_scale_widgets['range'], 1, 3)
-        auto_scale_layout.addWidget(QLabel("ステップ数:"), 2, 0); self.auto_scale_widgets['steps'] = QSpinBox(); self.auto_scale_widgets['steps'].setRange(3, 11); self.auto_scale_widgets['steps'].setSingleStep(2); auto_scale_layout.addWidget(self.auto_scale_widgets['steps'], 2, 1)
-        self.auto_scale_info_label = QLabel("探索: 0.80 ... 1.20"); auto_scale_layout.addWidget(self.auto_scale_info_label, 2, 2, 1, 2)
+        
+        # ★★★ 変更点: UI要素のテキスト変更と新しいチェックボックスの追加 ★★★
+        self.auto_scale_widgets['use_window_scale'] = QCheckBox("ウィンドウスケール基準")
+        self.auto_scale_widgets['use_window_scale'].setToolTip(
+            "ON: ウィンドウや探索で得られた最適スケールをテンプレートに適用します。\n"
+            "OFF: スケール補正を無効にし、常に元の画像サイズ(1.0倍)で認識を試みます。"
+        )
+        auto_scale_layout.addWidget(self.auto_scale_widgets['use_window_scale'], 0, 0, 1, 2)
+        
+        self.auto_scale_widgets['enabled'] = QCheckBox("スケール検索を有効にする")
+        auto_scale_layout.addWidget(self.auto_scale_widgets['enabled'], 1, 0, 1, 2)
+
+        auto_scale_layout.addWidget(QLabel("中心:"), 2, 0); self.auto_scale_widgets['center'] = QDoubleSpinBox(); self.auto_scale_widgets['center'].setRange(0.5, 2.0); self.auto_scale_widgets['center'].setSingleStep(0.1); auto_scale_layout.addWidget(self.auto_scale_widgets['center'], 2, 1)
+        auto_scale_layout.addWidget(QLabel("範囲(±):"), 2, 2); self.auto_scale_widgets['range'] = QDoubleSpinBox(); self.auto_scale_widgets['range'].setRange(0.1, 0.5); self.auto_scale_widgets['range'].setSingleStep(0.05); auto_scale_layout.addWidget(self.auto_scale_widgets['range'], 2, 3)
+        auto_scale_layout.addWidget(QLabel("ステップ数:"), 3, 0); self.auto_scale_widgets['steps'] = QSpinBox(); self.auto_scale_widgets['steps'].setRange(3, 11); self.auto_scale_widgets['steps'].setSingleStep(2); auto_scale_layout.addWidget(self.auto_scale_widgets['steps'], 3, 1)
+        self.auto_scale_info_label = QLabel("探索: 0.80 ... 1.20"); auto_scale_layout.addWidget(self.auto_scale_info_label, 3, 2, 1, 2)
+        
+        scale_info_layout = QHBoxLayout()
         self.current_best_scale_label = QLabel("最適スケール: ---")
         font = self.current_best_scale_label.font(); font.setBold(True)
         self.current_best_scale_label.setFont(font)
         self.current_best_scale_label.setStyleSheet("color: gray;")
-        auto_scale_layout.addWidget(self.current_best_scale_label, 3, 0, 1, 4)
+        scale_info_layout.addWidget(self.current_best_scale_label)
+        scale_info_layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
+
+        auto_scale_layout.addLayout(scale_info_layout, 4, 0, 1, 4)
+        
         as_desc_label = QLabel(
-            "<b>ウィンドウ基準スケーリング:</b><br>"
-            "認識範囲をウィンドウに設定すると、そのウィンドウの基準サイズからの拡縮率を自動計算し、最適なスケールを適用します。<br><br>"
-            "<b>自動スケール探索:</b><br>"
-            "上記が使えない場合、「有効にする」にチェックを入れると、設定した中心・範囲・ステップ数で最適なスケールを探索します。監視開始直後の負荷が高くなります。"
+            "<b>ウィンドウスケール基準:</b><br>"
+            "認識範囲をウィンドウに設定すると、その基準サイズからの拡縮率を自動計算し、スケールとして適用します。<br><br>"
+            "<b>スケール検索:</b><br>"
+            "上記が使えない場合、これを有効にすると設定した範囲で最適なスケールを探索します。監視開始直後の負荷が高くなります。"
         )
         as_desc_label.setWordWrap(True)
         as_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
-        auto_scale_layout.addWidget(as_desc_label, 4, 0, 1, 4)
+        auto_scale_layout.addWidget(as_desc_label, 5, 0, 1, 4)
         auto_scale_group.setFlat(True)
         self.preview_tabs.addTab(auto_scale_group, "自動スケール")
 
@@ -354,7 +369,9 @@ class UIManager(QMainWindow):
         content_layout.addWidget(right_frame, 2); main_layout.addWidget(content_frame)
 
     def load_app_settings_to_ui(self):
+        # ★★★ 変更点: 新しい設定項目 'use_window_scale' を読み込む ★★★
         as_conf = self.app_config.get('auto_scale', {})
+        self.auto_scale_widgets['use_window_scale'].setChecked(as_conf.get('use_window_scale', True))
         self.auto_scale_widgets['enabled'].setChecked(as_conf.get('enabled', False))
         self.auto_scale_widgets['center'].setValue(as_conf.get('center', 1.0))
         self.auto_scale_widgets['range'].setValue(as_conf.get('range', 0.2))
@@ -366,7 +383,9 @@ class UIManager(QMainWindow):
         self.update_auto_scale_info()
 
     def get_auto_scale_settings(self) -> dict:
+        # ★★★ 変更点: 新しい設定項目 'use_window_scale' を辞書に含める ★★★
         return {
+            "use_window_scale": self.auto_scale_widgets['use_window_scale'].isChecked(),
             "enabled": self.auto_scale_widgets['enabled'].isChecked(),
             "center": self.auto_scale_widgets['center'].value(),
             "range": self.auto_scale_widgets['range'].value(),
@@ -379,7 +398,7 @@ class UIManager(QMainWindow):
             range_ = self.auto_scale_widgets['range'].value()
             steps = self.auto_scale_widgets['steps'].value()
             scales = np.linspace(center - range_, center + range_, steps)
-            self.auto_scale_info_label.setText(f"探索: {scales[0]:.2f} ... {scales[-1]:.2f}")
+            self.auto_scale_info_label.setText(f"探索: {scales[0]:.3f} ... {scales[-1]:.3f}")
             self.auto_scale_info_label.setStyleSheet("color: blue;")
         else:
             self.auto_scale_info_label.setText("無効")
@@ -401,7 +420,6 @@ class UIManager(QMainWindow):
         self.set_rec_area_button_main_ui.clicked.connect(self.setRecAreaDialog); self.clear_rec_area_button_main_ui.clicked.connect(self.core_engine.clear_recognition_area)
         self.image_tree.itemChanged.connect(self.on_tree_item_changed)
         
-        # ★★★ 変更点: 新しい「画像フォルダ」ボタンのシグナルを接続します ★★★
         self.open_image_folder_button.clicked.connect(self.open_image_folder)
         
         for widget in self.item_settings_widgets.values():
@@ -420,18 +438,14 @@ class UIManager(QMainWindow):
         self.save_timer.timeout.connect(self.core_engine.save_current_settings)
         self.appConfigChanged.connect(self.core_engine.on_app_config_changed)
         
-    # ★★★ 新規追加: 画像フォルダを開くためのメソッド ★★★
     def open_image_folder(self):
-        """
-        設定された画像フォルダをOSのファイルマネージャーで開きます。
-        """
         folder_path = str(self.config_manager.base_dir)
         try:
             if sys.platform == 'win32':
                 os.startfile(folder_path)
-            elif sys.platform == 'darwin': # macOS
+            elif sys.platform == 'darwin':
                 subprocess.run(['open', folder_path])
-            else: # Linux
+            else:
                 subprocess.run(['xdg-open', folder_path])
             self.logger.log(f"画像フォルダを開きました: {folder_path}")
         except Exception as e:
@@ -606,7 +620,8 @@ class UIManager(QMainWindow):
     def on_best_scale_found(self, image_path: str, scale: float):
         current_selected_path, _ = self.get_selected_item_path()
         if image_path and image_path == current_selected_path:
-            self.current_best_scale_label.setText(f"最適スケール: {scale:.2f}倍")
+            # ★★★ 変更点: 小数点第二位から第三位へ変更 ★★★
+            self.current_best_scale_label.setText(f"最適スケール: {scale:.3f}倍")
             self.current_best_scale_label.setStyleSheet("color: green;")
 
     def on_window_scale_calculated(self, scale: float):
@@ -632,6 +647,19 @@ class UIManager(QMainWindow):
         save_as_base = self.prompt_to_save_base_size(window_title)
         if self.core_engine:
             self.core_engine.process_base_size_prompt_response(save_as_base)
+            
+    # ★★★ 新規追加: スケール適用の確認ダイアログを表示するメソッド ★★★
+    def show_prompt_to_apply_scale(self, scale: float):
+        reply = QMessageBox.question(
+            self,
+            "スケール適用の確認",
+            f"認識範囲のスケールが {scale:.3f}倍 です。\nこの倍率でスケーリングを有効にしますか？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes
+        )
+        apply_scale = (reply == QMessageBox.StandardButton.Yes)
+        if self.core_engine:
+            self.core_engine.process_apply_scale_prompt_response(apply_scale)
 
     def load_images_dialog(self):
         file_paths, _ = QFileDialog.getOpenFileNames(self, "画像を選択", str(self.config_manager.base_dir), "画像ファイル (*.png *.jpg *.jpeg *.bmp)")
