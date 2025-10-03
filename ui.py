@@ -192,7 +192,10 @@ class UIManager(QMainWindow):
         self.auto_scale_widgets = {}
 
         self.setWindowTitle("Imeck15")
-        self.resize(800, 640)
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        # 変更点: ウィンドウの初期横幅を 1024 に変更
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        self.resize(1024, 640)
         self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
 
         self.save_timer = QTimer(self); self.save_timer.setSingleShot(True); self.save_timer.setInterval(1000)
@@ -258,7 +261,6 @@ class UIManager(QMainWindow):
 
         auto_scale_group = QGroupBox(); auto_scale_layout = QGridLayout(auto_scale_group)
         
-        # ★★★ 変更点: UI要素のテキスト変更と新しいチェックボックスの追加 ★★★
         self.auto_scale_widgets['use_window_scale'] = QCheckBox("ウィンドウスケール基準")
         self.auto_scale_widgets['use_window_scale'].setToolTip(
             "ON: ウィンドウや探索で得られた最適スケールをテンプレートに適用します。\n"
@@ -329,6 +331,88 @@ class UIManager(QMainWindow):
         app_settings_layout.setColumnStretch(1, 1)
         app_settings_group.setFlat(True)
         self.preview_tabs.addTab(app_settings_group, "アプリ設定")
+
+        usage_widget = QWidget()
+        usage_layout = QVBoxLayout(usage_widget)
+        
+        usage_text = QTextEdit()
+        usage_text.setReadOnly(True)
+        
+        usage_html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <style>
+            body { font-family: sans-serif; font-size: 13px; }
+            h3 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px;}
+            h4 { color: #34495e; margin-top: 15px; margin-bottom: 5px; }
+            p, li { line-height: 1.6; }
+            b { color: #e74c3c; }
+            code { background-color: #f4f4f4; padding: 2px 4px; border-radius: 3px; font-family: monospace; }
+            .important { border-left: 3px solid #f39c12; padding-left: 10px; background-color: #fef9e7; margin: 10px 0;}
+        </style>
+        </head>
+        <body>
+            <h3>Imeck15 画像ごとのクリック設定ガイド</h3>
+            <p>
+                このガイドでは、登録した画像を見つけたときに、どのようにクリック動作をさせるかを設定する方法について説明します。主にウィンドウで表示されるアプリケーションの操作を自動化することを目的としています。
+            </p>
+
+            <h4>1. クリックさせたい画像の登録方法</h4>
+            <p>
+                まず、クリックの目印となる画像を登録します。「画像キャプチャ」機能を使うのが基本です。<br>
+                <b>ポイント：</b>ボタンやアイコンなど、クリックしたい対象を<b>部品のように小さく切り取る</b>ことをお勧めします。
+            </p>
+            <ul>
+                <li><b>理由1：処理が高速になる</b><br>画面全体から探すよりも、小さな画像を探す方がPCへの負荷が軽くなります。</li>
+                <li><b>理由2：正確なクリックができる</b><br>画面内に同じボタンが複数あっても、特定の部分だけを切り取っておけば、狙った場所を正確にクリックできます。</li>
+            </ul>
+
+            <h4>2. クリックの順番をコントロールする方法（インターバル設定）</h4>
+            <p>
+                「インターバル」は、一度クリックしてから次に<b>同じ画像</b>を再度クリックするまでの最低待ち時間（秒）です。
+            </p>
+            <div class="important">
+                <b>【重要】クリックの優先順位の仕組み</b><br>
+                監視中にクリック可能な画像が画面内に複数見つかった場合、Imeck15は<b>「インターバル」の設定値が最も短いものを優先してクリック</b>し、他の画像へのクリックは行いません。この仕組みを利用して、クリックの順序を制御します。
+            </div>
+
+            <h4>3. 1つの画面で複数の場所をクリックするテクニック</h4>
+            <p>
+                上記の「インターバル設定」の仕組みを応用すると、1つの画面で複数の箇所を順番にクリックさせることができます。<br>
+                <b>前提条件：</b>クリックすると、その場所の画像や文字が変化する（消える、グレーアウトするなど）必要があります。
+            </p>
+            <p><b>設定手順の例：</b></p>
+            <ol>
+                <li>画面内でクリックしたい部品A、B、Cをそれぞれ画像として登録します。</li>
+                <li>クリックしたい順番に、インターバルの時間を短く設定します。(例: A: <code>1.5</code>秒, B: <code>2.0</code>秒, C: <code>2.5</code>秒)</li>
+                <li>監視を開始すると、まずインターバルが最も短い<b>部品A</b>がクリックされます。</li>
+                <li>クリック後、部品Aが画面から消えると、次の監視では<b>部品B</b>がクリック対象になります。</li>
+                <li>同様に、最後に<b>部品C</b>がクリックされます。</li>
+            </ol>
+
+            <h4>4. 認識の精度と範囲を調整する方法</h4>
+            <ul>
+                <li><b>認識精度（閾値）：</b><br>画像がどれくらい似ていたら「同じ」と判断するかの設定です。通常は<code>0.8</code>程度で十分ですが、僅かな文字の違いなどを厳密に区別したい場合は<code>0.9</code>以上に設定すると効果的です。</li>
+                <li><b>探索範囲（ROI設定）：</b><br>「ROI有効」にすると、クリック座標を中心とした<b>200x200ピクセルの範囲のみ</b>を探索対象にします。処理が非常に高速になり、PCへの負荷を大幅に軽減できます。</li>
+            </ul>
+
+            <h4>5. 特殊な状況で役立つ「デバウンス」設定</h4>
+            <p>
+                「デバウンス」は、「短いインターバルの画像Aをクリックした後、別の画像Bをクリックし、その後、少し間を置いてから再び画像Aで次の画面に進む」といった複雑な操作を実現したい場合に使用します。
+            </p>
+            <p>
+                <b>仕組み：</b>デバウンス時間を設定すると、同じ画像が連続でクリック対象になった場合、2回目のクリックまでの待ち時間が<b>「インターバル ＋ デバウンス時間」</b>に延長されます。これにより、他の画像が先にクリックされる機会を作ることができます。
+            </p>
+        </body>
+        </html>
+        """
+        usage_text.setHtml(usage_html)
+        
+        usage_layout.addWidget(usage_text)
+        usage_widget.setLayout(usage_layout)
+        
+        self.preview_tabs.addTab(usage_widget, "使い方")
         
         right_layout.addWidget(self.preview_tabs, 2)
 
@@ -369,7 +453,6 @@ class UIManager(QMainWindow):
         content_layout.addWidget(right_frame, 2); main_layout.addWidget(content_frame)
 
     def load_app_settings_to_ui(self):
-        # ★★★ 変更点: 新しい設定項目 'use_window_scale' を読み込む ★★★
         as_conf = self.app_config.get('auto_scale', {})
         self.auto_scale_widgets['use_window_scale'].setChecked(as_conf.get('use_window_scale', True))
         self.auto_scale_widgets['enabled'].setChecked(as_conf.get('enabled', False))
@@ -383,7 +466,6 @@ class UIManager(QMainWindow):
         self.update_auto_scale_info()
 
     def get_auto_scale_settings(self) -> dict:
-        # ★★★ 変更点: 新しい設定項目 'use_window_scale' を辞書に含める ★★★
         return {
             "use_window_scale": self.auto_scale_widgets['use_window_scale'].isChecked(),
             "enabled": self.auto_scale_widgets['enabled'].isChecked(),
@@ -620,7 +702,6 @@ class UIManager(QMainWindow):
     def on_best_scale_found(self, image_path: str, scale: float):
         current_selected_path, _ = self.get_selected_item_path()
         if image_path and image_path == current_selected_path:
-            # ★★★ 変更点: 小数点第二位から第三位へ変更 ★★★
             self.current_best_scale_label.setText(f"最適スケール: {scale:.3f}倍")
             self.current_best_scale_label.setStyleSheet("color: green;")
 
@@ -648,7 +729,6 @@ class UIManager(QMainWindow):
         if self.core_engine:
             self.core_engine.process_base_size_prompt_response(save_as_base)
             
-    # ★★★ 新規追加: スケール適用の確認ダイアログを表示するメソッド ★★★
     def show_prompt_to_apply_scale(self, scale: float):
         reply = QMessageBox.question(
             self,
