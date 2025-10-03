@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QGroupBox, QSpinBox, QDoubleSpinBox, QCheckBox,
     QGridLayout, QSizePolicy, QSpacerItem, QToolButton, QFileDialog, QLineEdit,
     QTreeWidget, QTreeWidgetItem, QMenu, QTabWidget, QTextEdit, QDialog, QMessageBox,
-    QComboBox
+    QComboBox, QDialogButtonBox, QRadioButton, QButtonGroup
 )
 from PySide6.QtGui import QIcon, QPixmap, QImage, QPainter, QColor, QFontMetrics, QPen, QCursor, QBrush, QFont
 from PySide6.QtCore import Qt, QSize, QThread, Signal, QTimer, QObject, QRect, QPoint, QRectF, QPointF
@@ -176,10 +176,105 @@ class RecAreaSelectionDialog(QDialog):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape: self.reject()
 
+class FolderSettingsDialog(QDialog):
+    def __init__(self, folder_name, current_settings, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"フォルダ設定: {folder_name}")
+        self.layout = QVBoxLayout(self)
+
+        # モード選択
+        mode_box = QGroupBox("フォルダの動作モード")
+        mode_layout = QVBoxLayout()
+        self.radio_normal = QRadioButton("通常 (監視対象)")
+        self.radio_excluded = QRadioButton("検索停止 (監視対象外)")
+        self.radio_priority = QRadioButton("タイマー付き優先")
+        
+        self.mode_group = QButtonGroup(self)
+        self.mode_group.addButton(self.radio_normal, 0)
+        self.mode_group.addButton(self.radio_excluded, 1)
+        self.mode_group.addButton(self.radio_priority, 2)
+        
+        mode_layout.addWidget(self.radio_normal)
+        mode_layout.addWidget(self.radio_excluded)
+        mode_layout.addWidget(self.radio_priority)
+        mode_box.setLayout(mode_layout)
+        self.layout.addWidget(mode_box)
+
+        # タイマー設定
+        self.timer_box = QGroupBox("タイマー付き優先 の詳細設定")
+        timer_layout = QGridLayout()
+        timer_layout.addWidget(QLabel("有効になるまでの間隔:"), 0, 0)
+        self.interval_spin = QSpinBox()
+        self.interval_spin.setRange(1, 999)
+        self.interval_spin.setSuffix(" 分")
+        timer_layout.addWidget(self.interval_spin, 0, 1)
+        
+        timer_layout.addWidget(QLabel("優先モードを解除する時間:"), 1, 0)
+        self.timeout_spin = QSpinBox()
+        self.timeout_spin.setRange(1, 999)
+        self.timeout_spin.setSuffix(" 分")
+        timer_layout.addWidget(self.timeout_spin, 1, 1)
+        self.timer_box.setLayout(timer_layout)
+        self.layout.addWidget(self.timer_box)
+
+        self.radio_priority.toggled.connect(self.timer_box.setEnabled)
+        
+        # ツールチップ設定
+        tooltip_text = (
+            "<b>タイマー付き優先モードの詳細:</b><br>"
+            "設定した<b>『有効になるまでの間隔』</b>が経過すると、このフォルダ内の画像のみを優先的に探します。<br>"
+            "優先モードは、以下のいずれかの条件で解除され、通常の検索に戻ります。<br>"
+            "<ul>"
+            "<li>このフォルダ内の<b>すべての画像</b>が一度ずつクリックされた。</li>"
+            "<li>優先モード開始後、<b>『優先モードを解除する時間』</b>が経過した。</li>"
+            "</ul>"
+            "このフォルダ内の画像がクリックされると、有効化タイマーはリセットされます。"
+        )
+        self.radio_priority.setToolTip(tooltip_text)
+        self.timer_box.setToolTip(tooltip_text)
+        self.radio_priority.setToolTipDuration(-1) # マウスが外れるまで表示
+        self.timer_box.setToolTipDuration(-1)
+
+        # OK / Cancel ボタン
+        self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        self.buttons.accepted.connect(self.accept)
+        self.buttons.rejected.connect(self.reject)
+        self.layout.addWidget(self.buttons)
+
+        self.load_settings(current_settings)
+
+    def load_settings(self, settings):
+        mode = settings.get('mode', 'normal')
+        if mode == 'excluded':
+            self.radio_excluded.setChecked(True)
+        elif mode == 'priority_timer':
+            self.radio_priority.setChecked(True)
+        else:
+            self.radio_normal.setChecked(True)
+        
+        self.interval_spin.setValue(settings.get('priority_interval', 10))
+        self.timeout_spin.setValue(settings.get('priority_timeout', 5))
+        self.timer_box.setEnabled(mode == 'priority_timer')
+
+    def get_settings(self):
+        mode_id = self.mode_group.checkedId()
+        mode = 'normal'
+        if mode_id == 1:
+            mode = 'excluded'
+        elif mode_id == 2:
+            mode = 'priority_timer'
+            
+        return {
+            'mode': mode,
+            'priority_interval': self.interval_spin.value(),
+            'priority_timeout': self.timeout_spin.value()
+        }
+
 class UIManager(QMainWindow):
     startMonitoringRequested = Signal(); stopMonitoringRequested = Signal(); openPerformanceMonitorRequested = Signal()
     loadImagesRequested = Signal(list); setRecAreaMethodSelected = Signal(str); captureImageRequested = Signal()
-    deleteItemRequested = Signal(); orderChanged = Signal(); toggleFolderExclusionRequested = Signal(str)
+    deleteItemRequested = Signal(); orderChanged = Signal()
+    folderSettingsChanged = Signal()
     imageSettingsChanged = Signal(dict); createFolderRequested = Signal(); moveItemIntoFolderRequested = Signal()
     moveItemOutOfFolderRequested = Signal()
     appConfigChanged = Signal()
@@ -192,9 +287,6 @@ class UIManager(QMainWindow):
         self.auto_scale_widgets = {}
 
         self.setWindowTitle("Imeck15")
-        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-        # 変更点: ウィンドウの初期横幅を 1024 に変更
-        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
         self.resize(1024, 640)
         self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
 
@@ -499,8 +591,9 @@ class UIManager(QMainWindow):
     def connect_signals(self):
         self.monitor_button.clicked.connect(self.toggle_monitoring); self.perf_monitor_button.clicked.connect(self.openPerformanceMonitorRequested.emit)
         self.image_tree.itemSelectionChanged.connect(self.on_image_tree_selection_changed)
+        self.image_tree.itemClicked.connect(self.on_tree_item_clicked)
+        
         self.set_rec_area_button_main_ui.clicked.connect(self.setRecAreaDialog); self.clear_rec_area_button_main_ui.clicked.connect(self.core_engine.clear_recognition_area)
-        self.image_tree.itemChanged.connect(self.on_tree_item_changed)
         
         self.open_image_folder_button.clicked.connect(self.open_image_folder)
         
@@ -547,6 +640,11 @@ class UIManager(QMainWindow):
             point_cb.blockSignals(True)
             point_cb.setChecked(False)
             point_cb.blockSignals(False)
+            
+    def create_colored_icon(self, color, size=16):
+        pixmap = QPixmap(size, size)
+        pixmap.fill(color)
+        return QIcon(pixmap)
 
     def update_image_tree(self):
         self.image_tree.blockSignals(True)
@@ -557,41 +655,62 @@ class UIManager(QMainWindow):
                 path = item.data(0, Qt.UserRole)
                 if path and item.isExpanded(): expanded_folders.add(path)
         self.image_tree.clear()
-        hierarchical_list, item_to_reselect = self.config_manager.get_hierarchical_list(), None
+        
+        hierarchical_list = self.config_manager.get_hierarchical_list()
+        item_to_reselect = None
+        
         for item_data in hierarchical_list:
             if item_data['type'] == 'folder':
+                folder_settings = item_data['settings']
+                mode = folder_settings.get('mode', 'normal')
+
                 folder_item = QTreeWidgetItem(self.image_tree, [f"📁 {item_data['name']}"])
-                folder_item.setData(0, Qt.UserRole, item_data['path']); is_excluded = item_data.get('is_excluded', False)
-                folder_item.setFlags(folder_item.flags() | Qt.ItemIsUserCheckable)
-                folder_item.setCheckState(0, Qt.Unchecked if is_excluded else Qt.Checked)
-                if is_excluded: folder_item.setForeground(0, QBrush(Qt.red))
+                folder_item.setData(0, Qt.UserRole, item_data['path'])
+
+                color = Qt.transparent
+                brush = QBrush(QApplication.palette().text().color())
+
+                if mode == 'excluded':
+                    color = Qt.red
+                    brush = QBrush(Qt.red)
+                elif mode == 'priority_timer':
+                    color = Qt.green
+                    brush = QBrush(Qt.darkGreen)
+
+                folder_item.setIcon(0, self.create_colored_icon(color))
+                folder_item.setForeground(0, brush)
+
                 if item_data['path'] in expanded_folders: folder_item.setExpanded(True)
                 if item_data['path'] == selected_path: item_to_reselect = folder_item
+                
                 for child_data in item_data['children']:
                     child_item = QTreeWidgetItem(folder_item, [child_data['name']])
                     child_item.setData(0, Qt.UserRole, child_data['path'])
-                    if is_excluded: child_item.setForeground(0, QBrush(Qt.red))
+                    child_item.setForeground(0, brush) # 子アイテムも同じ色に
                     if child_data['path'] == selected_path: item_to_reselect = child_item
+            
             elif item_data['type'] == 'image':
                 image_item = QTreeWidgetItem(self.image_tree, [item_data['name']])
                 image_item.setData(0, Qt.UserRole, item_data['path'])
+                image_item.setIcon(0, self.create_colored_icon(Qt.transparent))
                 if item_data['path'] == selected_path: item_to_reselect = image_item
+                
         if item_to_reselect: self.image_tree.setCurrentItem(item_to_reselect)
         self.image_tree.blockSignals(False)
 
-    def on_tree_item_changed(self, item, column):
-        if self.is_processing_tree_change:
+    def on_tree_item_clicked(self, item, column):
+        path_str = item.data(0, Qt.UserRole)
+        if not path_str or not Path(path_str).is_dir():
             return
-        
-        if column == 0 and item.flags() & Qt.ItemIsUserCheckable:
-            path = item.data(0, Qt.UserRole)
-            if not path:
-                return
 
-            self.is_processing_tree_change = True
-            self.set_tree_enabled(False)
-            
-            self.toggleFolderExclusionRequested.emit(path)
+        folder_path = Path(path_str)
+        current_settings = self.config_manager.load_item_setting(folder_path)
+
+        dialog = FolderSettingsDialog(folder_path.name, current_settings, self)
+        if dialog.exec():
+            new_settings = dialog.get_settings()
+            self.config_manager.save_item_setting(folder_path, new_settings)
+            self.folderSettingsChanged.emit()
 
     def set_tree_enabled(self, enabled: bool):
         self.image_tree.setEnabled(enabled)
@@ -658,13 +777,22 @@ class UIManager(QMainWindow):
         return settings
         
     def set_settings_from_data(self, settings_data):
-        if not settings_data:
+        is_folder = Path(self.get_selected_item_path()[0] or "").is_dir()
+        
+        for widget in self.item_settings_widgets.values():
+            widget.setEnabled(not is_folder)
+
+        if not settings_data or is_folder:
             for widget in self.item_settings_widgets.values():
                 widget.blockSignals(True)
                 if isinstance(widget, QDoubleSpinBox): widget.setValue(0)
                 elif isinstance(widget, QCheckBox): widget.setChecked(False)
                 widget.blockSignals(False)
-            self.preview_label.set_drawing_data(None); return
+            self.preview_label.set_drawing_data(None)
+            if is_folder:
+                self.preview_label.setText("フォルダを選択中")
+                self.preview_label.set_pixmap(None)
+            return
         
         self.preview_label.set_drawing_data(settings_data)
         for key, value in settings_data.items():
@@ -748,7 +876,11 @@ class UIManager(QMainWindow):
     def update_image_preview(self, cv_image: np.ndarray, settings_data: dict = None):
         self.set_settings_from_data(settings_data)
         if cv_image is None or cv_image.size == 0:
-            self.preview_label.setText("画像を選択してください"); self.preview_label.set_pixmap(None); return
+            if not (self.get_selected_item_path()[0] and Path(self.get_selected_item_path()[0]).is_dir()):
+                self.preview_label.setText("画像を選択してください")
+                self.preview_label.set_pixmap(None)
+            return
+            
         h, w = cv_image.shape[:2]; q_image = QImage(cv_image.data, w, h, 3 * w, QImage.Format.Format_BGR888)
         pixmap = QPixmap.fromImage(q_image)
         self.preview_label.set_pixmap(pixmap)

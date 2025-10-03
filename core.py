@@ -235,8 +235,11 @@ class CoreEngine(QObject):
         self.window_selection_listener = None
         self.keyboard_selection_listener = None
         
-        # ★★★ 変更点: ターゲットウィンドウのハンドルを記憶する変数を追加 ★★★
         self.target_hwnd = None
+        
+        self.priority_mode_info = {}
+        self.priority_timers = {}
+        self.all_priority_children = {}
         
         cpu_cores = os.cpu_count() or 1
         worker_threads = 2
@@ -326,24 +329,21 @@ class CoreEngine(QObject):
                 self.logger.log(f"'{name}' の削除に失敗しました: {e}"); QMessageBox.critical(self.ui_manager, "エラー", f"削除に失敗しました:\n{e}")
                 self.ui_manager.set_tree_enabled(True)
 
-    def _toggle_and_rebuild_cache(self, folder_path):
-        if folder_path and Path(folder_path).is_dir():
-            is_excluded = self.config_manager.toggle_folder_exclusion(folder_path)
-            status = "除外" if is_excluded else "対象"
-            self.logger.log(f"フォルダ '{Path(folder_path).name}' を認識{status}にしました。")
-            self._build_template_cache()
-
-    def toggle_folder_exclusion(self, folder_path):
-        future = self.thread_pool.submit(self._toggle_and_rebuild_cache, folder_path)
-        future.add_done_callback(self._on_cache_build_done)
+    def on_folder_settings_changed(self):
+        self.logger.log("フォルダ設定が変更されました。キャッシュを再構築します。")
+        self.ui_manager.set_tree_enabled(False)
+        self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
         
     def create_folder(self):
         folder_name, ok = QInputDialog.getText(self.ui_manager, "フォルダ作成", "新しいフォルダの名前を入力してください:")
         if ok and folder_name:
             success, message = self.config_manager.create_folder(folder_name)
             if success:
-                self.logger.log(message); self.ui_manager.update_image_tree()
-            else: QMessageBox.warning(self.ui_manager, "エラー", message)
+                self.logger.log(message)
+                self.ui_manager.update_image_tree()
+                self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
+            else: 
+                QMessageBox.warning(self.ui_manager, "エラー", message)
 
     def move_item_into_folder(self):
         source_path_str, name = self.ui_manager.get_selected_item_path()
@@ -358,8 +358,12 @@ class CoreEngine(QObject):
         if ok and dest_folder_name:
             dest_folder_path_str = str(self.config_manager.base_dir / dest_folder_name)
             success, message = self.config_manager.move_item(source_path_str, dest_folder_path_str)
-            if success: self.logger.log(message); self.ui_manager.update_image_tree()
-            else: QMessageBox.critical(self.ui_manager, "エラー", message)
+            if success: 
+                self.logger.log(message)
+                self.ui_manager.update_image_tree()
+                self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
+            else: 
+                QMessageBox.critical(self.ui_manager, "エラー", message)
 
     def move_item_out_of_folder(self):
         source_path_str, name = self.ui_manager.get_selected_item_path()
@@ -369,13 +373,22 @@ class CoreEngine(QObject):
             QMessageBox.warning(self.ui_manager, "警告", "フォルダの中にある画像ファイルを選択してください。"); return
         dest_folder_path_str = str(self.config_manager.base_dir)
         success, message = self.config_manager.move_item(source_path_str, dest_folder_path_str)
-        if success: self.logger.log(message); self.ui_manager.update_image_tree()
-        else: QMessageBox.critical(self.ui_manager, "エラー", message)
+        if success: 
+            self.logger.log(message)
+            self.ui_manager.update_image_tree()
+            self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
+        else: 
+            QMessageBox.critical(self.ui_manager, "エラー", message)
 
     def load_image_and_settings(self, file_path: str):
-        if file_path is None:
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        # 修正点: フォルダが選択された場合にエラーを出さずに処理を中断する
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        if file_path is None or Path(file_path).is_dir():
             self.current_image_path, self.current_image_settings, self.current_image_mat = None, None, None
-            self.updatePreview.emit(None, None); return
+            self.updatePreview.emit(None, None)
+            return
+            
         try:
             self.current_image_path = file_path
             self.current_image_settings = self.config_manager.load_item_setting(Path(file_path))
@@ -430,6 +443,8 @@ class CoreEngine(QObject):
         with self.cache_lock:
             self.normal_template_cache.clear()
             self.backup_template_cache.clear()
+            self.priority_timers.clear()
+            self.all_priority_children.clear()
 
             auto_scale_settings = self.app_config.get('auto_scale', {})
             use_window_scale_base = auto_scale_settings.get('use_window_scale', True)
@@ -457,19 +472,34 @@ class CoreEngine(QObject):
                 self.logger.log("ウィンドウスケール基準が無効なため、スケール1.0倍で固定します。")
             
             hierarchical_list = self.config_manager.get_hierarchical_list()
-            items_to_process = []
-            for item_data in hierarchical_list:
-                if item_data['type'] == 'folder' and not item_data.get('is_excluded', False):
-                    items_to_process.extend(item_data['children'])
-                elif item_data['type'] == 'image':
-                    items_to_process.append(item_data)
             
-            for item_data in items_to_process:
-                self._process_item_for_cache(item_data, scales)
+            for item_data in hierarchical_list:
+                if item_data['type'] == 'folder':
+                    folder_path = item_data['path']
+                    folder_settings = item_data['settings']
+                    folder_mode = folder_settings.get('mode', 'normal')
+
+                    if folder_mode == 'priority_timer':
+                        interval_seconds = folder_settings.get('priority_interval', 10) * 60
+                        if not self.is_monitoring:
+                             self.priority_timers[folder_path] = time.time() + interval_seconds
+                        elif folder_path not in self.priority_timers:
+                             self.priority_timers[folder_path] = time.time() + interval_seconds
+                        
+                        children_paths = {child['path'] for child in item_data.get('children', [])}
+                        self.all_priority_children[folder_path] = children_paths
+
+                    for child_data in item_data.get('children', []):
+                        self._process_item_for_cache(child_data, scales, folder_path, folder_mode)
+
+                elif item_data['type'] == 'image':
+                    self._process_item_for_cache(item_data, scales, None, 'normal')
             
             self.logger.log(f"テンプレートキャッシュ構築完了。通常: {len(self.normal_template_cache)}件, バックアップ: {len(self.backup_template_cache)}件")
+            self.logger.log(f"タイマー付き優先フォルダ: {len(self.priority_timers)}件")
 
-    def _process_item_for_cache(self, item_data, scales):
+
+    def _process_item_for_cache(self, item_data, scales, folder_path, folder_mode):
         try:
             path = item_data['path']
             with open(path, 'rb') as f: file_bytes = np.fromfile(f, np.uint8)
@@ -492,7 +522,9 @@ class CoreEngine(QObject):
                     'settings': settings,
                     'path': path,
                     'scaled_templates': scaled_templates,
-                    'best_scale': None if len(scales) > 1 else scales[0]
+                    'best_scale': None if len(scales) > 1 else scales[0],
+                    'folder_path': folder_path,
+                    'folder_mode': folder_mode,
                 }
                 
                 if settings.get('backup_click', False):
@@ -514,6 +546,8 @@ class CoreEngine(QObject):
             self.active_backup_info = None
 
             self._last_clicked_path = None
+            
+            self.priority_mode_info = {}
 
             self.ui_manager.set_tree_enabled(False)
             self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
@@ -553,8 +587,11 @@ class CoreEngine(QObject):
             if self._cooldown_until > current_time:
                 time.sleep(0.01)
                 continue
-
+            
             try:
+                if not self.priority_mode_info:
+                    self._check_and_activate_priority_mode()
+
                 if self.is_backup_countdown_active:
                     time.sleep(1.0)
 
@@ -569,8 +606,10 @@ class CoreEngine(QObject):
                     continue
                 
                 screen_gray = cv2.cvtColor(screen_bgr, cv2.COLOR_BGR2GRAY)
-
-                if self.is_backup_countdown_active:
+                
+                if self.priority_mode_info:
+                    self._handle_priority_state(current_time, screen_bgr, screen_gray)
+                elif self.is_backup_countdown_active:
                     self._handle_countdown_state(current_time, screen_bgr, screen_gray, last_match_time_map)
                 else:
                     self._handle_idle_state(current_time, screen_bgr, screen_gray, last_match_time_map)
@@ -578,14 +617,77 @@ class CoreEngine(QObject):
             except Exception as e:
                 self.updateLog.emit(f"監視ループでエラーが発生しました: {e}")
                 time.sleep(1.0)
+    
+    def _check_and_activate_priority_mode(self):
+        current_time = time.time()
+        for path, activation_time in self.priority_timers.items():
+            if current_time >= activation_time:
+                self._start_priority_mode(path)
+                break 
+
+    def _start_priority_mode(self, folder_path):
+        folder_settings = self.config_manager.load_item_setting(Path(folder_path))
+        timeout_seconds = folder_settings.get('priority_timeout', 5) * 60
+        self.priority_mode_info = {
+            'folder_path': folder_path,
+            'timeout_time': time.time() + timeout_seconds,
+            'matched_children': set()
+        }
+        self.logger.log(f"フォルダ '{Path(folder_path).name}' の優先監視を開始しました。(解除時間: {timeout_seconds/60:.1f}分)")
+
+    def _stop_priority_mode(self, reason: str):
+        if self.priority_mode_info:
+            folder_path = self.priority_mode_info.get('folder_path')
+            if folder_path:
+                self.logger.log(f"フォルダ '{Path(folder_path).name}' の優先監視を終了しました。({reason})")
+            self.priority_mode_info = {}
+
+    def _handle_priority_state(self, current_time, screen_bgr, screen_gray):
+        if current_time >= self.priority_mode_info['timeout_time']:
+            self._stop_priority_mode("タイムアウト")
+            return
+        
+        folder_path = self.priority_mode_info['folder_path']
+        
+        def filter_by_folder(cache):
+            return {p: d for p, d in cache.items() if d.get('folder_path') == folder_path}
+
+        priority_normal_cache = filter_by_folder(self.normal_template_cache)
+        priority_backup_cache = filter_by_folder(self.backup_template_cache)
+
+        best_match = self._find_best_match(screen_bgr, screen_gray, priority_normal_cache)
+        if not best_match:
+            best_match = self._find_best_match(screen_bgr, screen_gray, priority_backup_cache)
+
+        if best_match:
+            self._execute_click(best_match)
+            self._cooldown_until = time.time() + best_match['settings'].get('interval_time', 1.5)
+            
+            self.priority_mode_info['matched_children'].add(best_match['path'])
+            
+            folder_settings = self.config_manager.load_item_setting(Path(folder_path))
+            interval_seconds = folder_settings.get('priority_interval', 10) * 60
+            self.priority_timers[folder_path] = time.time() + interval_seconds
+            
+            if self.priority_mode_info['matched_children'] >= self.all_priority_children.get(folder_path, set()):
+                self._stop_priority_mode("全画像マッチ")
 
     def _handle_idle_state(self, current_time, screen_bgr, screen_gray, last_match_time_map):
-        normal_match = self._find_best_match(screen_bgr, screen_gray, self.normal_template_cache)
+        def filter_cache(cache):
+            return {
+                p: d for p, d in cache.items() 
+                if d.get('folder_mode') not in ['excluded', 'priority_timer']
+            }
+        
+        active_normal_cache = filter_cache(self.normal_template_cache)
+        active_backup_cache = filter_cache(self.backup_template_cache)
+        
+        normal_match = self._find_best_match(screen_bgr, screen_gray, active_normal_cache)
         if normal_match:
             self._handle_match(normal_match, last_match_time_map)
             return
 
-        backup_trigger_match = self._find_best_match(screen_bgr, screen_gray, self.backup_template_cache)
+        backup_trigger_match = self._find_best_match(screen_bgr, screen_gray, active_backup_cache)
         if backup_trigger_match:
             self.is_backup_countdown_active = True
             self.backup_countdown_start_time = current_time
@@ -608,8 +710,15 @@ class CoreEngine(QObject):
             self.backup_countdown_start_time = 0
             self._cooldown_until = time.time() + 1.0
             return
+        
+        def filter_cache(cache):
+            return {
+                p: d for p, d in cache.items() 
+                if d.get('folder_mode') not in ['excluded', 'priority_timer']
+            }
+        active_normal_cache = filter_cache(self.normal_template_cache)
 
-        normal_match = self._find_best_match(screen_bgr, screen_gray, self.normal_template_cache)
+        normal_match = self._find_best_match(screen_bgr, screen_gray, active_normal_cache)
         if normal_match:
             path = normal_match['path']
             self.updateLog.emit(f"通常画像 '{Path(path).name}' を検出。バックアップカウントダウンをリセットします。")
@@ -649,7 +758,7 @@ class CoreEngine(QObject):
 
             for path, data in template_cache_to_search.items():
                 is_search_phase = (data['best_scale'] is None)
-                should_use_grayscale = is_search_phase or use_global_grayscale
+                should_use_grayscale = use_global_grayscale
                 
                 if is_search_phase:
                     templates_to_search = data['scaled_templates']
@@ -784,7 +893,6 @@ class CoreEngine(QObject):
             self.performance_monitor.hide()
 
         if method == "rectangle":
-            # ★★★ 変更点: 四角指定時にターゲットウィンドウハンドルをリセット ★★★
             self.target_hwnd = None
             self.current_window_scale = None
             self.windowScaleCalculated.emit(0.0)
@@ -846,7 +954,6 @@ class CoreEngine(QObject):
             hwnd = win32gui.WindowFromPoint((x, y))
             if not hwnd: return
             
-            # ★★★ 変更点: 取得したウィンドウハンドルをインスタンス変数に保存 ★★★
             self.target_hwnd = hwnd
             
             if 'dxcam' in sys.modules and self.capture_manager.dxcam_sct:
@@ -864,7 +971,7 @@ class CoreEngine(QObject):
 
             if right <= left or bottom <= top:
                 self.logger.log(f"ウィンドウ領域の計算結果が無効です: ({left},{top},{right},{bottom})。処理を中断します。")
-                self.target_hwnd = None # ★★★ 変更点: 無効な場合はハンドルもリセット ★★★
+                self.target_hwnd = None
                 self._on_selection_cancelled()
                 return
             
@@ -892,7 +999,7 @@ class CoreEngine(QObject):
                 self.process_base_size_prompt_response(False)
         except Exception as e:
             self.logger.log(f"ウィンドウ領域の取得に失敗: {e}");
-            self.target_hwnd = None # ★★★ 変更点: エラー時もハンドルをリセット ★★★
+            self.target_hwnd = None
             self._showUiSignal.emit(); self.selectionProcessFinished.emit()
     
     def _handle_window_click_for_selection_linux(self, x, y):
@@ -1029,7 +1136,8 @@ class CoreEngine(QObject):
     def handle_area_selection(self, coords):
         if self._is_capturing_for_registration:
             self._is_capturing_for_registration = False
-            self._save_captured_image(coords)
+            # ★★★ 変更点: オーバーレイが完全に消えるのを待つために、わずかな遅延の後にキャプチャを実行します ★★★
+            QTimer.singleShot(100, lambda: self._save_captured_image(coords))
         else:
             self.recognition_area = coords
             self.logger.log(f"認識範囲を設定: {coords}")
@@ -1095,7 +1203,6 @@ class CoreEngine(QObject):
     def clear_recognition_area(self):
         self.recognition_area = None
         self.current_window_scale = None
-        # ★★★ 変更点: 認識範囲クリア時にターゲットウィンドウハンドルをリセット ★★★
         self.target_hwnd = None
         self.windowScaleCalculated.emit(0.0)
         if 'dxcam' in sys.modules and self.capture_manager.dxcam_sct:

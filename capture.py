@@ -63,20 +63,13 @@ class CaptureManager(QObject):
         
         self.current_method = 'dxcam' if self.is_dxcam_ready else 'mss'
 
-    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-    # 修正点: set_capture_method メソッド全体を修正
-    # - メソッド切り替え時に、古いエンジンを明示的に解放し、新しいエンジンを即座に初期化するロジックに変更
-    # - これにより、UIからのON/OFF切り替え時の安定性が大幅に向上します
-    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
     def set_capture_method(self, method: str):
         requested_method = 'dxcam' if (method == 'dxcam' and DXCAM_AVAILABLE) else 'mss'
         
-        # 現在のメソッドと同じであれば何もしない
         if requested_method == self.current_method and \
            (requested_method == 'mss' or (requested_method == 'dxcam' and self.dxcam_sct is not None)):
             return
 
-        # --- 現在のエンジンを解放 ---
         if self.current_method == 'dxcam' and self.dxcam_sct:
             print("[INFO] Releasing existing DXCam instance...")
             try:
@@ -95,7 +88,6 @@ class CaptureManager(QObject):
                 pass
             del self.mss_thread_local.sct
 
-        # --- 新しいエンジンを初期化・設定 ---
         self.current_method = requested_method
         
         if self.current_method == 'dxcam':
@@ -105,7 +97,7 @@ class CaptureManager(QObject):
                 if self.dxcam_sct:
                     self.is_dxcam_ready = True
                     self.dxcam_error_count = 0
-                    frame = self.dxcam_sct.grab() # 解像度取得のための初回キャプチャ
+                    frame = self.dxcam_sct.grab()
                     if frame is not None:
                         self.target_height, self.target_width, _ = frame.shape
                         print(f"[INFO] DXCam initialized successfully. Resolution: {self.target_width}x{self.target_height}")
@@ -126,8 +118,8 @@ class CaptureManager(QObject):
             if self.current_method == 'dxcam' and self.is_dxcam_ready:
                 if self.dxcam_sct is None:
                     print("[WARN] DXCam instance was missing. Attempting to re-create...")
-                    self.set_capture_method('dxcam') # 初期化処理を再実行
-                    if not self.is_dxcam_ready: # それでもダメなら諦める
+                    self.set_capture_method('dxcam')
+                    if not self.is_dxcam_ready:
                         return None
                 
                 frame = self.dxcam_sct.grab(region=region)
@@ -139,7 +131,7 @@ class CaptureManager(QObject):
                     if self.dxcam_error_count >= self.DXCAM_ERROR_THRESHOLD:
                         print("[WARN] DXCam failed repeatedly. Switching to MSS for this session.")
                         self.set_capture_method('mss')
-                        return self.capture_frame(region) # MSSで再試行
+                        return self.capture_frame(region)
                     
                     return None
                 
@@ -174,13 +166,11 @@ class CaptureManager(QObject):
                     print("[WARN] DXCam encountered a critical error. Switching to MSS for this session.")
                     self.set_capture_method('mss')
             
-            # MSSでもエラーが出た場合は、インスタンスを削除して次回再作成を促す
             if self.current_method == 'mss' and hasattr(self.mss_thread_local, 'sct'):
                 del self.mss_thread_local.sct
             return None
             
     def cleanup(self):
-        """アプリケーション終了時にリソースを解放する"""
         if self.dxcam_sct and DXCAM_AVAILABLE:
             try:
                 self.dxcam_sct.release()

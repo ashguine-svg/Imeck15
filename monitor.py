@@ -21,12 +21,10 @@ class PerformanceMonitor(QDialog):
         self.ui_manager = ui_manager
         self.setWindowTitle("パフォーマンスモニター")
         
-        # ★★★ 変更点: Qt.Windowフラグを追加して、ウィンドウを完全に独立させる ★★★
         flags = Qt.Window | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint
         self.setWindowFlags(flags)
         
         self.resize(1024, 200)
-        # ★★★ 変更点: ご依頼の通り、最小の高さを100に設定 ★★★
         self.setMinimumSize(600, 100)
         
         self.process = psutil.Process()
@@ -48,7 +46,6 @@ class PerformanceMonitor(QDialog):
         top_layout.setContentsMargins(0, 0, 0, 0)
 
         self.monitor_button = QPushButton("監視開始/停止")
-        # ★★★ 変更点: メインUIと同じツールチップを追加 ★★★
         self.monitor_button.setToolTip("右クリックで監視停止、右ダブルクリックで監視開始")
         top_layout.addWidget(self.monitor_button)
 
@@ -77,7 +74,6 @@ class PerformanceMonitor(QDialog):
         if self.ui_manager:
             self.rec_area_button.clicked.connect(self.ui_manager.setRecAreaDialog)
             
-    # ★★★ 新規追加: 監視状態に応じてボタンの色を変更するメソッド ★★★
     def update_monitoring_status(self, status_text: str, color: str):
         if status_text == "監視中...":
             self.monitor_button.setStyleSheet("background-color: #3399FF; color: white;")

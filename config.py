@@ -22,6 +22,7 @@ class ConfigManager:
                 "center": 1.0,
                 "range": 0.2,
                 "steps": 5,
+                "use_window_scale": True,
             },
             "capture_method": "mss",
             "frame_skip_rate": 2,
@@ -77,24 +78,41 @@ class ConfigManager:
     def load_item_setting(self, item_path: Path) -> dict:
         setting_path = self._get_setting_path(item_path)
         if item_path.is_dir():
-            default_setting = {'is_excluded': False}
+            # ★★★ 変更点: フォルダ設定のデフォルト値に新機能の項目を追加 ★★★
+            default_setting = {
+                'mode': 'normal',  # 'normal', 'excluded', 'priority_timer'
+                'priority_interval': 10,  # minutes
+                'priority_timeout': 5,    # minutes
+            }
         else:
-            # ★★★ 変更点: デバウンス設定のデフォルト値を追加 ★★★
             default_setting = {
                 'image_path': str(item_path), 'click_position': None, 'click_rect': None, 'roi_rect': None,
                 'roi_enabled': False, 'point_click': True, 'range_click': False,
                 'random_click': False, 'interval_time': 1.5, 'backup_click': False,
                 'backup_time': 300.0, 'threshold': 0.8, 'debounce_time': 0.0
             }
+        
         if not setting_path.exists():
             return default_setting
+            
         try:
             with open(setting_path, 'r', encoding='utf-8') as f:
                 setting = json.load(f)
+
+                # 古い設定(is_excluded)から新しいmodeへの互換性維持
+                if item_path.is_dir() and 'is_excluded' in setting:
+                    if setting['is_excluded']:
+                        setting['mode'] = 'excluded'
+                    else:
+                        setting['mode'] = 'normal'
+                    del setting['is_excluded']
+
+                # 不要になったキーを削除
                 setting.pop('template_scale_enabled', None)
                 setting.pop('template_scale_factor', None)
                 setting.pop('matching_mode', None)
                 
+                # デフォルト値にないキーを追加
                 for key, value in default_setting.items():
                     setting.setdefault(key, value)
                 return setting
@@ -109,14 +127,6 @@ class ConfigManager:
                 json.dump(setting, f, indent=2, ensure_ascii=False)
         except Exception as e:
             print(f"設定ファイル保存エラー ({setting_path}): {e}")
-
-    def toggle_folder_exclusion(self, folder_path_str: str):
-        folder_path = Path(folder_path_str)
-        if not folder_path.is_dir(): return False
-        settings = self.load_item_setting(folder_path)
-        settings['is_excluded'] = not settings.get('is_excluded', False)
-        self.save_item_setting(folder_path, settings)
-        return settings['is_excluded']
 
     def load_image_order(self, folder_path=None) -> list:
         order_path = Path(folder_path) / self.sub_order_filename if folder_path else self.base_dir / self.image_order_filename
@@ -147,6 +157,13 @@ class ConfigManager:
         if not item_path.exists(): return
         try:
             if item_path.is_dir():
+                # フォルダ設定ファイルも一緒に削除
+                setting_path = self._get_setting_path(item_path)
+                if setting_path.exists():
+                    try:
+                        os.remove(setting_path)
+                    except OSError:
+                        pass # エラーは無視
                 shutil.rmtree(item_path)
             elif item_path.is_file():
                 setting_path = self._get_setting_path(item_path)
@@ -155,12 +172,14 @@ class ConfigManager:
                     setting_path.unlink()
             
             parent_dir = item_path.parent
-            order = self.load_image_order(parent_dir if parent_dir != self.base_dir else None)
+            order_file_owner = parent_dir if parent_dir != self.base_dir else None
+            order = self.load_image_order(order_file_owner)
             
-            item_key = str(item_path) if parent_dir == self.base_dir else item_path.name
-            if item_key in order:
-                order.remove(item_key)
-                self.save_image_order(order, parent_dir if parent_dir != self.base_dir else None)
+            item_key_in_order = str(item_path) if order_file_owner is None else item_path.name
+            
+            if item_key_in_order in order:
+                order.remove(item_key_in_order)
+                self.save_image_order(order, order_file_owner)
 
         except Exception as e:
             print(f"アイテムの削除中にエラーが発生しました: {e}")
@@ -168,7 +187,11 @@ class ConfigManager:
 
     def get_ordered_item_list(self) -> list:
         ordered_paths_str = self.load_image_order()
-        all_items = {p for p in self.base_dir.iterdir() if p.is_dir() or p.suffix.lower() in ('.png', '.jpg', '.jpeg', '.bmp')}
+        try:
+            all_items = {p for p in self.base_dir.iterdir() if p.is_dir() or p.suffix.lower() in ('.png', '.jpg', '.jpeg', '.bmp')}
+        except FileNotFoundError:
+            all_items = set()
+            
         all_item_paths_str = {str(p) for p in all_items}
         
         final_order = [path_str for path_str in ordered_paths_str if path_str in all_item_paths_str]
@@ -187,7 +210,14 @@ class ConfigManager:
                 structured_list.append({'type': 'image', 'path': str(item_path), 'name': item_path.name})
             elif item_path.is_dir():
                 folder_settings = self.load_item_setting(item_path)
-                folder_item = {'type': 'folder', 'path': str(item_path), 'name': item_path.name, 'children': [], 'is_excluded': folder_settings.get('is_excluded', False)}
+                # ★★★ 変更点: is_excluded の代わりに folder_settings をそのまま渡す ★★★
+                folder_item = {
+                    'type': 'folder', 
+                    'path': str(item_path), 
+                    'name': item_path.name, 
+                    'children': [], 
+                    'settings': folder_settings
+                }
                 
                 ordered_child_names = self.load_image_order(item_path)
                 all_child_images = {p for p in item_path.iterdir() if p.is_file() and p.suffix.lower() in ('.png', '.jpg', '.jpeg', '.bmp')}
@@ -215,6 +245,10 @@ class ConfigManager:
             if folder_path.exists():
                 return False, f"フォルダ '{folder_name}' は既に存在します。"
             folder_path.mkdir()
+            # フォルダ作成と同時に順序リストにも追加
+            order = self.load_image_order()
+            order.append(str(folder_path))
+            self.save_image_order(order)
             return True, f"フォルダ '{folder_name}' を作成しました。"
         except Exception as e:
             return False, f"フォルダ作成中にエラーが発生しました: {e}"

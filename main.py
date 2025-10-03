@@ -4,11 +4,8 @@ import sys
 import os
 import socket
 
-# ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 # 実行されたスクリプト自身の場所を特定し、モジュール検索パスの先頭に追加する
-# これにより、バッチファイルのPYTHONPATH設定に依存せず、ui.pyなどを確実に見つけられるようになる
 try:
-    # PyInstallerやNuitkaでExe化した場合にも対応できる、より堅牢なパス取得方法
     if getattr(sys, 'frozen', False):
         script_directory = os.path.dirname(sys.executable)
     else:
@@ -16,9 +13,7 @@ try:
     
     sys.path.insert(0, script_directory)
 except NameError:
-    # 対話モードなどで__file__がない場合のフォールバック
     sys.path.insert(0, os.getcwd())
-# ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 
 from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import QObject, Signal
@@ -111,12 +106,7 @@ def main():
     core_engine.bestScaleFound.connect(ui_manager.on_best_scale_found)
     core_engine.windowScaleCalculated.connect(ui_manager.on_window_scale_calculated)
     core_engine.askToSaveWindowBaseSizeSignal.connect(ui_manager.show_prompt_to_save_base_size)
-    
-    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-    # 修正点: 欠落していたシグナル接続を1行追加
-    # これにより、ウィンドウ倍率が異なる場合に表示される確認ダイアログが正しく機能します。
     core_engine.askToApplyWindowScaleSignal.connect(ui_manager.show_prompt_to_apply_scale)
-    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 
     ui_manager.startMonitoringRequested.connect(core_engine.start_monitoring)
     ui_manager.stopMonitoringRequested.connect(core_engine.stop_monitoring)
@@ -124,7 +114,10 @@ def main():
     ui_manager.imageSettingsChanged.connect(core_engine.on_image_settings_changed)
     ui_manager.captureImageRequested.connect(core_engine.capture_image_for_registration)
     ui_manager.deleteItemRequested.connect(core_engine.delete_selected_item)
-    ui_manager.toggleFolderExclusionRequested.connect(core_engine.toggle_folder_exclusion)
+    
+    # ★★★ 変更点: フォルダ設定変更のシグナルを接続 ★★★
+    ui_manager.folderSettingsChanged.connect(core_engine.on_folder_settings_changed)
+    
     ui_manager.orderChanged.connect(core_engine.on_order_changed)
     ui_manager.createFolderRequested.connect(core_engine.create_folder)
     ui_manager.moveItemIntoFolderRequested.connect(core_engine.move_item_into_folder)
