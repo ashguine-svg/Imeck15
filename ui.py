@@ -646,6 +646,8 @@ class UIManager(QMainWindow):
         pixmap.fill(color)
         return QIcon(pixmap)
 
+    # ★★★ 修正点 ★★★
+    # フォルダの属性に応じて、アイコンの色と文字色を設定するようにロジックを修正・追加
     def update_image_tree(self):
         self.image_tree.blockSignals(True)
         expanded_folders, (selected_path, _) = set(), self.get_selected_item_path()
@@ -667,17 +669,21 @@ class UIManager(QMainWindow):
                 folder_item = QTreeWidgetItem(self.image_tree, [f"📁 {item_data['name']}"])
                 folder_item.setData(0, Qt.UserRole, item_data['path'])
 
-                color = Qt.transparent
+                # デフォルトは通常の文字色
                 brush = QBrush(QApplication.palette().text().color())
+                icon_color = Qt.transparent
 
-                if mode == 'excluded':
-                    color = Qt.red
+                if mode == 'normal':
+                    brush = QBrush(QColor("darkgray")) # 通常フォルダの文字色を濃いグレーに
+                    icon_color = Qt.transparent # 通常フォルダのアイコンは透明
+                elif mode == 'excluded':
                     brush = QBrush(Qt.red)
+                    icon_color = Qt.red
                 elif mode == 'priority_timer':
-                    color = Qt.green
                     brush = QBrush(Qt.darkGreen)
+                    icon_color = Qt.green
 
-                folder_item.setIcon(0, self.create_colored_icon(color))
+                folder_item.setIcon(0, self.create_colored_icon(icon_color))
                 folder_item.setForeground(0, brush)
 
                 if item_data['path'] in expanded_folders: folder_item.setExpanded(True)
@@ -686,7 +692,8 @@ class UIManager(QMainWindow):
                 for child_data in item_data['children']:
                     child_item = QTreeWidgetItem(folder_item, [child_data['name']])
                     child_item.setData(0, Qt.UserRole, child_data['path'])
-                    child_item.setForeground(0, brush) # 子アイテムも同じ色に
+                    # 子アイテムも親フォルダと同じ文字色に設定
+                    child_item.setForeground(0, brush)
                     if child_data['path'] == selected_path: item_to_reselect = child_item
             
             elif item_data['type'] == 'image':

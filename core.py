@@ -155,35 +155,27 @@ class WindowSelectionListener(mouse.Listener):
     def on_click(self, x, y, button, pressed):
         if pressed and button == mouse.Button.left: self.callback(x, y); return False
 
-def _match_template_task(screen_image, template_data):
+def _match_template_task(screen_image, template_data, screen_shape, template_shape):
     path, settings = template_data['path'], template_data['settings']
     template_image = template_data['template']
     scale = template_data['scale'] 
     
     threshold = settings.get('threshold', 0.8)
-    screen_to_match = screen_image
 
-    if isinstance(screen_to_match, cv2.UMat):
-        screen_to_match = screen_to_match.get()
+    s_h, s_w = screen_shape
+    t_h, t_w = template_shape
 
-    screen_channels = 1 if len(screen_to_match.shape) == 2 else screen_to_match.shape[2]
-    template_channels = 1 if len(template_image.shape) == 2 else template_image.shape[2]
-
-    if screen_channels == 1 and template_channels == 3:
-        template_image = cv2.cvtColor(template_image, cv2.COLOR_BGR2GRAY)
-
-    if template_image.shape[0] > screen_to_match.shape[0] or template_image.shape[1] > screen_to_match.shape[1]:
+    if t_h > s_h or t_w > s_w:
         return None
 
-    result = cv2.matchTemplate(screen_to_match, template_image, cv2.TM_CCOEFF_NORMED)
+    result = cv2.matchTemplate(screen_image, template_image, cv2.TM_CCOEFF_NORMED)
     _, max_val, _, max_loc = cv2.minMaxLoc(result)
 
     if max_val >= threshold:
-        h, w = template_image.shape[:2]
         return {
             'path': path, 'settings': settings, 'location': max_loc,
             'confidence': max_val, 'scale': scale,
-            'rect': (max_loc[0], max_loc[1], max_loc[0] + w, max_loc[1] + h)
+            'rect': (max_loc[0], max_loc[1], max_loc[0] + t_w, max_loc[1] + t_h)
         }
     return None
 
@@ -271,6 +263,9 @@ class CoreEngine(QObject):
                 cv2.ocl.setUseOpenCL(enabled)
                 status = "有効" if cv2.ocl.useOpenCL() else "無効"
                 self.logger.log(f"OpenCLを{status}に設定しました。")
+                if self.is_monitoring:
+                    self.logger.log("設定変更を反映するため、キャッシュを再構築します。")
+                    self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
             except Exception as e:
                 self.logger.log(f"OpenCLの設定変更中にエラーが発生しました: {e}")
     
@@ -381,9 +376,6 @@ class CoreEngine(QObject):
             QMessageBox.critical(self.ui_manager, "エラー", message)
 
     def load_image_and_settings(self, file_path: str):
-        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-        # 修正点: フォルダが選択された場合にエラーを出さずに処理を中断する
-        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
         if file_path is None or Path(file_path).is_dir():
             self.current_image_path, self.current_image_settings, self.current_image_mat = None, None, None
             self.updatePreview.emit(None, None)
@@ -415,14 +407,21 @@ class CoreEngine(QObject):
 
     def calculate_roi_rect(self, image_size, settings):
         if not settings.get('roi_enabled', False): return None
-        img_w, img_h = image_size; center_x, center_y = -1, -1
-        if settings.get('point_click') and settings.get('click_position'): center_x, center_y = settings['click_position']
+        center_x, center_y = -1, -1
+        if settings.get('point_click') and settings.get('click_position'):
+            center_x, center_y = settings['click_position']
         elif settings.get('range_click') and settings.get('click_rect'):
-            rect = settings['click_rect']; center_x, center_y = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
+            rect = settings['click_rect']
+            center_x, center_y = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
+        
         if center_x == -1: return None
-        roi_w, roi_h = 200, 200; x1, y1 = center_x - roi_w / 2, center_y - roi_h / 2
-        x1_clipped, y1_clipped = max(0, x1), max(0, y1); x2_clipped, y2_clipped = min(img_w, x1 + roi_w), min(img_h, y1 + roi_h)
-        return (int(x1_clipped), int(y1_clipped), int(x2_clipped), int(y2_clipped))
+
+        roi_w, roi_h = 200, 200
+        x1 = center_x - roi_w / 2
+        y1 = center_y - roi_h / 2
+        x2 = x1 + roi_w
+        y2 = y1 + roi_h
+        return (int(x1), int(y1), int(x2), int(y2))
 
     def save_current_settings(self):
         if self.current_image_path and self.current_image_settings:
@@ -498,7 +497,6 @@ class CoreEngine(QObject):
             self.logger.log(f"テンプレートキャッシュ構築完了。通常: {len(self.normal_template_cache)}件, バックアップ: {len(self.backup_template_cache)}件")
             self.logger.log(f"タイマー付き優先フォルダ: {len(self.priority_timers)}件")
 
-
     def _process_item_for_cache(self, item_data, scales, folder_path, folder_mode):
         try:
             path = item_data['path']
@@ -507,24 +505,51 @@ class CoreEngine(QObject):
 
             if original_image is not None:
                 settings = self.config_manager.load_item_setting(Path(path))
+                image_to_process = original_image
                 
+                if settings.get('roi_enabled', False):
+                    h, w = original_image.shape[:2]
+                    roi_rect = settings.get('roi_rect') 
+                    if roi_rect:
+                        x1, y1, x2, y2 = max(0, roi_rect[0]), max(0, roi_rect[1]), min(w, roi_rect[2]), min(h, roi_rect[3])
+                        if x1 < x2 and y1 < y2:
+                            image_to_process = original_image[y1:y2, x1:x2]
+                            self.logger.log(f"'{Path(path).name}' にROIを適用しました。")
+                        else:
+                            self.logger.log(f"警告: '{Path(path).name}' のROI領域が無効なため、フル画像を使用します。")
+                    else:
+                        self.logger.log(f"警告: '{Path(path).name}' のROIが有効ですが、領域が未設定です。クリック位置を設定してください。")
+                
+                gray_image_to_process = cv2.cvtColor(image_to_process, cv2.COLOR_BGR2GRAY)
+                use_opencl = cv2.ocl.useOpenCL()
+
                 scaled_templates = []
                 for scale in scales:
                     if scale <= 0: continue
-                    h, w = original_image.shape[:2]
+                    h, w = image_to_process.shape[:2]
                     new_w, new_h = int(w * scale), int(h * scale)
                     if new_w > 0 and new_h > 0:
                         inter = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_LINEAR
-                        resized_image = cv2.resize(original_image, (new_w, new_h), interpolation=inter)
-                        scaled_templates.append({'scale': scale, 'image': resized_image})
+                        
+                        resized_image = cv2.resize(image_to_process, (new_w, new_h), interpolation=inter)
+                        resized_gray = cv2.resize(gray_image_to_process, (new_w, new_h), interpolation=inter)
+                        
+                        t_h, t_w = resized_image.shape[:2]
+                        template_entry = {'scale': scale, 'image': resized_image, 'gray': resized_gray, 'shape': (t_h, t_w)}
+
+                        if use_opencl:
+                            try:
+                                template_entry['image_umat'] = cv2.UMat(resized_image)
+                                template_entry['gray_umat'] = cv2.UMat(resized_gray)
+                            except Exception as e:
+                                self.logger.log(f"UMat変換エラー: {Path(path).name} - {e}")
+
+                        scaled_templates.append(template_entry)
 
                 cache_entry = {
-                    'settings': settings,
-                    'path': path,
-                    'scaled_templates': scaled_templates,
+                    'settings': settings, 'path': path, 'scaled_templates': scaled_templates,
                     'best_scale': None if len(scales) > 1 else scales[0],
-                    'folder_path': folder_path,
-                    'folder_mode': folder_mode,
+                    'folder_path': folder_path, 'folder_mode': folder_mode,
                 }
                 
                 if settings.get('backup_click', False):
@@ -606,13 +631,20 @@ class CoreEngine(QObject):
                     continue
                 
                 screen_gray = cv2.cvtColor(screen_bgr, cv2.COLOR_BGR2GRAY)
-                
+                screen_bgr_umat, screen_gray_umat = None, None
+                if cv2.ocl.useOpenCL():
+                    try:
+                        screen_bgr_umat = cv2.UMat(screen_bgr)
+                        screen_gray_umat = cv2.UMat(screen_gray)
+                    except Exception as e:
+                        self.logger.log(f"スクリーンショットのUMat変換に失敗: {e}")
+
                 if self.priority_mode_info:
-                    self._handle_priority_state(current_time, screen_bgr, screen_gray)
+                    self._handle_priority_state(current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat)
                 elif self.is_backup_countdown_active:
-                    self._handle_countdown_state(current_time, screen_bgr, screen_gray, last_match_time_map)
+                    self._handle_countdown_state(current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, last_match_time_map)
                 else:
-                    self._handle_idle_state(current_time, screen_bgr, screen_gray, last_match_time_map)
+                    self._handle_idle_state(current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, last_match_time_map)
 
             except Exception as e:
                 self.updateLog.emit(f"監視ループでエラーが発生しました: {e}")
@@ -642,7 +674,7 @@ class CoreEngine(QObject):
                 self.logger.log(f"フォルダ '{Path(folder_path).name}' の優先監視を終了しました。({reason})")
             self.priority_mode_info = {}
 
-    def _handle_priority_state(self, current_time, screen_bgr, screen_gray):
+    def _handle_priority_state(self, current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat):
         if current_time >= self.priority_mode_info['timeout_time']:
             self._stop_priority_mode("タイムアウト")
             return
@@ -655,9 +687,9 @@ class CoreEngine(QObject):
         priority_normal_cache = filter_by_folder(self.normal_template_cache)
         priority_backup_cache = filter_by_folder(self.backup_template_cache)
 
-        best_match = self._find_best_match(screen_bgr, screen_gray, priority_normal_cache)
+        best_match = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, priority_normal_cache)
         if not best_match:
-            best_match = self._find_best_match(screen_bgr, screen_gray, priority_backup_cache)
+            best_match = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, priority_backup_cache)
 
         if best_match:
             self._execute_click(best_match)
@@ -672,7 +704,7 @@ class CoreEngine(QObject):
             if self.priority_mode_info['matched_children'] >= self.all_priority_children.get(folder_path, set()):
                 self._stop_priority_mode("全画像マッチ")
 
-    def _handle_idle_state(self, current_time, screen_bgr, screen_gray, last_match_time_map):
+    def _handle_idle_state(self, current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, last_match_time_map):
         def filter_cache(cache):
             return {
                 p: d for p, d in cache.items() 
@@ -682,12 +714,12 @@ class CoreEngine(QObject):
         active_normal_cache = filter_cache(self.normal_template_cache)
         active_backup_cache = filter_cache(self.backup_template_cache)
         
-        normal_match = self._find_best_match(screen_bgr, screen_gray, active_normal_cache)
+        normal_match = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, active_normal_cache)
         if normal_match:
             self._handle_match(normal_match, last_match_time_map)
             return
 
-        backup_trigger_match = self._find_best_match(screen_bgr, screen_gray, active_backup_cache)
+        backup_trigger_match = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, active_backup_cache)
         if backup_trigger_match:
             self.is_backup_countdown_active = True
             self.backup_countdown_start_time = current_time
@@ -698,7 +730,7 @@ class CoreEngine(QObject):
             log_msg = f"バックアップ画像 '{Path(path).name}' を検出。{backup_time:.1f}秒のカウントダウンを開始します。"
             self.updateLog.emit(log_msg)
 
-    def _handle_countdown_state(self, current_time, screen_bgr, screen_gray, last_match_time_map):
+    def _handle_countdown_state(self, current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, last_match_time_map):
         elapsed_time = current_time - self.backup_countdown_start_time
         backup_duration = self.active_backup_info['settings'].get('backup_time', 300.0)
 
@@ -718,7 +750,7 @@ class CoreEngine(QObject):
             }
         active_normal_cache = filter_cache(self.normal_template_cache)
 
-        normal_match = self._find_best_match(screen_bgr, screen_gray, active_normal_cache)
+        normal_match = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, active_normal_cache)
         if normal_match:
             path = normal_match['path']
             self.updateLog.emit(f"通常画像 '{Path(path).name}' を検出。バックアップカウントダウンをリセットします。")
@@ -735,60 +767,90 @@ class CoreEngine(QObject):
             return
         
         screen_gray = cv2.cvtColor(screen_bgr, cv2.COLOR_BGR2GRAY)
-        
+        screen_bgr_umat, screen_gray_umat = None, None
+        if cv2.ocl.useOpenCL():
+            try:
+                screen_bgr_umat = cv2.UMat(screen_bgr)
+                screen_gray_umat = cv2.UMat(screen_gray)
+            except Exception as e:
+                self.logger.log(f"バックアップクリック時のUMat変換に失敗: {e}")
+
         target_path = self.active_backup_info['path']
         target_cache_item = self.backup_template_cache.get(target_path)
         if not target_cache_item:
             self.updateLog.emit(f"バックアップクリック失敗: ターゲット '{Path(target_path).name}' がキャッシュにありません。")
             return
 
-        final_match = self._find_best_match(screen_bgr, screen_gray, {target_path: target_cache_item})
+        final_match = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, {target_path: target_cache_item})
 
         if final_match:
             self._execute_click(final_match)
         else:
             self.updateLog.emit(f"バックアップクリック失敗: 画面内に '{Path(target_path).name}' が見つかりませんでした。")
     
-    def _find_best_match(self, screen_bgr, screen_gray, template_cache_to_search):
-        futures = []
+    def _find_best_match(self, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, template_cache_to_search):
         with self.cache_lock:
-            if not template_cache_to_search: return None
+            if not template_cache_to_search:
+                return None
             
-            use_global_grayscale = self.app_config.get('grayscale_matching', False)
+            use_opencl = cv2.ocl.useOpenCL()
+            use_grayscale = self.app_config.get('grayscale_matching', False)
 
-            for path, data in template_cache_to_search.items():
-                is_search_phase = (data['best_scale'] is None)
-                should_use_grayscale = use_global_grayscale
-                
-                if is_search_phase:
-                    templates_to_search = data['scaled_templates']
-                else:
-                    templates_to_search = [t for t in data['scaled_templates'] if t['scale'] == data['best_scale']]
-                    if not templates_to_search:
-                        templates_to_search = data['scaled_templates']
-                
-                screen_to_use = screen_gray if should_use_grayscale else screen_bgr
+            if use_opencl:
+                screen_to_use = screen_gray_umat if use_grayscale else screen_bgr_umat
+                if screen_to_use is None:
+                    screen_to_use = screen_gray if use_grayscale else screen_bgr
+            else:
+                screen_to_use = screen_gray if use_grayscale else screen_bgr
 
-                for t in templates_to_search:
-                    task_data = { 'path': path, 'settings': data['settings'], 'template': t['image'], 'scale': t['scale'] }
-                    if cv2.ocl.useOpenCL():
-                         try: screen_to_use_umat = cv2.UMat(screen_to_use)
-                         except Exception: screen_to_use_umat = screen_to_use
-                    else:
-                         screen_to_use_umat = screen_to_use
-                    
-                    futures.append(self.thread_pool.submit(_match_template_task, screen_to_use_umat, task_data))
-        
-        results = [f.result() for f in futures if f.result() is not None]
-        if not results: return None
+            screen_shape = screen_to_use.get().shape[:2] if use_opencl and isinstance(screen_to_use, cv2.UMat) else screen_to_use.shape[:2]
+            
+            results = []
+            if use_opencl:
+                for path, data in template_cache_to_search.items():
+                    is_search_phase = (data['best_scale'] is None)
+                    templates_to_search = data['scaled_templates'] if is_search_phase else \
+                                          [t for t in data['scaled_templates'] if t['scale'] == data['best_scale']] or \
+                                          data['scaled_templates']
+
+                    for t in templates_to_search:
+                        if 'image_umat' in t:
+                            template_to_use = t['gray_umat'] if use_grayscale else t['image_umat']
+                        else:
+                            template_to_use = t['gray'] if use_grayscale else t['image']
+                        
+                        template_shape = t['shape']
+                        task_data = {'path': path, 'settings': data['settings'], 'template': template_to_use, 'scale': t['scale']}
+                        match = _match_template_task(screen_to_use, task_data, screen_shape, template_shape)
+                        if match:
+                            results.append(match)
+            else:
+                futures = []
+                for path, data in template_cache_to_search.items():
+                    is_search_phase = (data['best_scale'] is None)
+                    templates_to_search = data['scaled_templates'] if is_search_phase else \
+                                          [t for t in data['scaled_templates'] if t['scale'] == data['best_scale']] or \
+                                          data['scaled_templates']
+
+                    for t in templates_to_search:
+                        template_to_use = t['gray'] if use_grayscale else t['image']
+                        template_shape = t['shape']
+                        task_data = {'path': path, 'settings': data['settings'], 'template': template_to_use, 'scale': t['scale']}
+                        futures.append(self.thread_pool.submit(_match_template_task, screen_to_use, task_data, screen_shape, template_shape))
+                
+                for f in futures:
+                    result = f.result()
+                    if result is not None:
+                        results.append(result)
+
+        if not results:
+            return None
 
         best_match = max(results, key=lambda r: r['confidence'])
         
         with self.cache_lock:
-            if best_match['path'] in self.normal_template_cache:
-                cache_item = self.normal_template_cache.get(best_match['path'])
-            else:
-                cache_item = self.backup_template_cache.get(best_match['path'])
+            cache_to_update = self.normal_template_cache if best_match['path'] in self.normal_template_cache else self.backup_template_cache
+            cache_item = cache_to_update.get(best_match['path'])
 
             if cache_item and cache_item['best_scale'] is None:
                  cache_item['best_scale'] = best_match['scale']
@@ -833,11 +895,21 @@ class CoreEngine(QObject):
             match_abs_y = rec_area_offset_y + match_rect_in_rec_area[1]
             
             click_x_float, click_y_float = 0.0, 0.0
+            
+            roi_offset_x, roi_offset_y = 0, 0
+            if settings.get('roi_enabled') and settings.get('roi_rect'):
+                roi_rect = settings['roi_rect']
+                roi_offset_x = max(0, roi_rect[0])
+                roi_offset_y = max(0, roi_rect[1])
 
             if settings.get('point_click') and settings.get('click_position'):
                 click_pos_in_template = settings['click_position']
-                scaled_offset_x = click_pos_in_template[0] * scale
-                scaled_offset_y = click_pos_in_template[1] * scale
+                
+                click_offset_in_roi_x = click_pos_in_template[0] - roi_offset_x
+                click_offset_in_roi_y = click_pos_in_template[1] - roi_offset_y
+                
+                scaled_offset_x = click_offset_in_roi_x * scale
+                scaled_offset_y = click_offset_in_roi_y * scale
                 
                 click_x_float = match_abs_x + scaled_offset_x
                 click_y_float = match_abs_y + scaled_offset_y
@@ -845,10 +917,15 @@ class CoreEngine(QObject):
             elif settings.get('range_click') and settings.get('click_rect'):
                 click_rect_in_template = settings['click_rect']
                 
-                x1 = match_abs_x + (click_rect_in_template[0] * scale)
-                y1 = match_abs_y + (click_rect_in_template[1] * scale)
-                x2 = match_abs_x + (click_rect_in_template[2] * scale)
-                y2 = match_abs_y + (click_rect_in_template[3] * scale)
+                rect_x1_in_roi = click_rect_in_template[0] - roi_offset_x
+                rect_y1_in_roi = click_rect_in_template[1] - roi_offset_y
+                rect_x2_in_roi = click_rect_in_template[2] - roi_offset_x
+                rect_y2_in_roi = click_rect_in_template[3] - roi_offset_y
+
+                x1 = match_abs_x + (rect_x1_in_roi * scale)
+                y1 = match_abs_y + (rect_y1_in_roi * scale)
+                x2 = match_abs_x + (rect_x2_in_roi * scale)
+                y2 = match_abs_y + (rect_y2_in_roi * scale)
 
                 if settings.get('random_click', True):
                     int_x1, int_x2 = int(min(x1, x2)), int(max(x1, x2))
@@ -1136,7 +1213,6 @@ class CoreEngine(QObject):
     def handle_area_selection(self, coords):
         if self._is_capturing_for_registration:
             self._is_capturing_for_registration = False
-            # ★★★ 変更点: オーバーレイが完全に消えるのを待つために、わずかな遅延の後にキャプチャを実行します ★★★
             QTimer.singleShot(100, lambda: self._save_captured_image(coords))
         else:
             self.recognition_area = coords
