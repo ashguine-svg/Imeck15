@@ -8,8 +8,13 @@ from PySide6.QtWidgets import (
     QTreeWidget, QTreeWidgetItem, QMenu, QTabWidget, QTextEdit, QDialog, QMessageBox,
     QComboBox, QDialogButtonBox, QRadioButton, QButtonGroup
 )
-from PySide6.QtGui import QIcon, QPixmap, QImage, QPainter, QColor, QFontMetrics, QPen, QCursor, QBrush, QFont
-from PySide6.QtCore import Qt, QSize, QThread, Signal, QTimer, QObject, QRect, QPoint, QRectF, QPointF
+from PySide6.QtGui import (
+    QIcon, QPixmap, QImage, QPainter, QColor, QFontMetrics, QPen, QCursor, 
+    QBrush, QFont
+)
+from PySide6.QtCore import (
+    Qt, QSize, QThread, Signal, QTimer, QObject, QRect, QPoint, QRectF, QPointF
+)
 
 import os
 import subprocess
@@ -611,6 +616,7 @@ class UIManager(QMainWindow):
 
         self.preview_label.settingChanged.connect(self.core_engine.on_preview_click_settings_changed)
         self.save_timer.timeout.connect(self.core_engine.save_current_settings)
+        # ★★★ 変更点: 閉じ括弧を追加 ★★★
         self.appConfigChanged.connect(self.core_engine.on_app_config_changed)
         
     def open_image_folder(self):
@@ -643,11 +649,29 @@ class UIManager(QMainWindow):
             
     def create_colored_icon(self, color, size=16):
         pixmap = QPixmap(size, size)
-        pixmap.fill(color)
+        pixmap.fill(Qt.transparent)
+
+        if color == Qt.transparent:
+            return QIcon(pixmap)
+
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        # 縁取りは黒の1px
+        pen = QPen(Qt.black, 1)
+        painter.setPen(pen)
+
+        # 塗りつぶしは指定された色
+        brush = QBrush(color)
+        painter.setBrush(brush)
+        
+        # 少しマージンを取って角の丸い四角形を描画
+        rect = QRectF(0.5, 0.5, size - 1, size - 1)
+        painter.drawRoundedRect(rect, 3.0, 3.0)
+
+        painter.end()
         return QIcon(pixmap)
 
-    # ★★★ 修正点 ★★★
-    # フォルダの属性に応じて、アイコンの色と文字色を設定するようにロジックを修正・追加
     def update_image_tree(self):
         self.image_tree.blockSignals(True)
         expanded_folders, (selected_path, _) = set(), self.get_selected_item_path()
@@ -669,13 +693,12 @@ class UIManager(QMainWindow):
                 folder_item = QTreeWidgetItem(self.image_tree, [f"📁 {item_data['name']}"])
                 folder_item.setData(0, Qt.UserRole, item_data['path'])
 
-                # デフォルトは通常の文字色
                 brush = QBrush(QApplication.palette().text().color())
                 icon_color = Qt.transparent
 
                 if mode == 'normal':
-                    brush = QBrush(QColor("darkgray")) # 通常フォルダの文字色を濃いグレーに
-                    icon_color = Qt.transparent # 通常フォルダのアイコンは透明
+                    brush = QBrush(QColor("darkgray"))
+                    icon_color = QColor("darkgray")
                 elif mode == 'excluded':
                     brush = QBrush(Qt.red)
                     icon_color = Qt.red
@@ -690,7 +713,7 @@ class UIManager(QMainWindow):
                 if item_data['path'] == selected_path: item_to_reselect = folder_item
                 
                 for child_data in item_data['children']:
-                    child_item = QTreeWidgetItem(folder_item, [child_data['name']])
+                    child_item = QTreeWidgetItem(folder_item, [f"  {child_data['name']}"])
                     child_item.setData(0, Qt.UserRole, child_data['path'])
                     # 子アイテムも親フォルダと同じ文字色に設定
                     child_item.setForeground(0, brush)
@@ -772,7 +795,12 @@ class UIManager(QMainWindow):
         for i in range(self.image_tree.topLevelItemCount()):
             item = self.image_tree.topLevelItem(i); path = item.data(0, Qt.UserRole)
             if path and Path(path).is_dir():
-                child_order = [item.child(j).text(0) for j in range(item.childCount())]
+                child_order = []
+                for j in range(item.childCount()):
+                    child_item = item.child(j)
+                    child_path_str = child_item.data(0, Qt.UserRole)
+                    if child_path_str:
+                        child_order.append(Path(child_path_str).name)
                 self.config_manager.save_image_order(child_order, folder_path=path)
         self.orderChanged.emit()
         
