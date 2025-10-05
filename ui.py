@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import (
     QIcon, QPixmap, QImage, QPainter, QColor, QFontMetrics, QPen, QCursor, 
-    QBrush, QFont
+    QBrush, QFont, QPalette
 )
 from PySide6.QtCore import (
     Qt, QSize, QThread, Signal, QTimer, QObject, QRect, QPoint, QRectF, QPointF
@@ -292,7 +292,6 @@ class UIManager(QMainWindow):
         self.auto_scale_widgets = {}
 
         self.setWindowTitle("Imeck15")
-        self.resize(1024, 640)
         self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
 
         self.save_timer = QTimer(self); self.save_timer.setSingleShot(True); self.save_timer.setInterval(1000)
@@ -302,6 +301,9 @@ class UIManager(QMainWindow):
         
         self.setup_ui()
         self.load_app_settings_to_ui()
+
+        # ウィンドウ表示後にサイズ調整を行うタイマーを設定
+        QTimer.singleShot(100, self.adjust_initial_size)
         
     def setup_ui(self):
         central_widget = QWidget(); self.setCentralWidget(central_widget); main_layout = QVBoxLayout(central_widget)
@@ -324,7 +326,15 @@ class UIManager(QMainWindow):
         left_frame = QFrame(); left_layout = QVBoxLayout(left_frame); left_layout.addWidget(QLabel("登録済み画像"))
         order_button_frame = QHBoxLayout(); move_up_button = QPushButton("▲ 上げる"); move_down_button = QPushButton("▼ 下げる")
         order_button_frame.addWidget(move_up_button); order_button_frame.addWidget(move_down_button); left_layout.addLayout(order_button_frame)
-        self.image_tree = QTreeWidget(); self.image_tree.setHeaderHidden(True); left_layout.addWidget(self.image_tree)
+        self.image_tree = QTreeWidget()
+        # ★★★ 変更点: ダークモード対応のため、背景色の固定指定を削除 ★★★
+        self.image_tree.setStyleSheet("""
+            QTreeWidget {
+                border: 1px solid darkgray;
+                border-radius: 0px;
+            }
+        """)
+        self.image_tree.setHeaderHidden(True); left_layout.addWidget(self.image_tree)
         button_layout = QGridLayout(); load_image_button = QPushButton("画像追加"); button_layout.addWidget(load_image_button, 0, 0)
         capture_image_button = QPushButton("画像キャプチャ"); button_layout.addWidget(capture_image_button, 0, 1)
         delete_item_button = QPushButton("選択を削除"); button_layout.addWidget(delete_item_button, 1, 0)
@@ -391,6 +401,7 @@ class UIManager(QMainWindow):
         )
         as_desc_label.setWordWrap(True)
         as_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
+        as_desc_label.setMinimumWidth(0)
         auto_scale_layout.addWidget(as_desc_label, 5, 0, 1, 4)
         auto_scale_group.setFlat(True)
         self.preview_tabs.addTab(auto_scale_group, "自動スケール")
@@ -401,6 +412,7 @@ class UIManager(QMainWindow):
         gs_desc_label = QLabel("<b>メリット:</b> 処理が高速になり、僅かな色の違いを無視できます。<br>"
                                "<b>デメリット:</b> 同じ形で色が違うだけの画像は区別できません。")
         gs_desc_label.setWordWrap(True); gs_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
+        gs_desc_label.setMinimumWidth(0)
         app_settings_layout.addWidget(gs_desc_label, 0, 1)
         self.app_settings_widgets['capture_method'] = QCheckBox("DXCamを使用")
         self.app_settings_widgets['capture_method'].setEnabled(DXCAM_AVAILABLE)
@@ -408,6 +420,7 @@ class UIManager(QMainWindow):
         dxcam_desc_label = QLabel("<b>メリット:</b> ゲーム等の描画に強く、CPU負荷が低い高速なキャプチャ方式です。<br>"
                                   "<b>デメリット:</b> 一部のアプリやPC環境では動作しない場合があります。")
         dxcam_desc_label.setWordWrap(True); dxcam_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
+        dxcam_desc_label.setMinimumWidth(0)
         app_settings_layout.addWidget(dxcam_desc_label, 1, 1)
         fs_layout = QHBoxLayout()
         fs_layout.addWidget(QLabel("フレームスキップ:"))
@@ -417,14 +430,23 @@ class UIManager(QMainWindow):
         fs_desc_label = QLabel("<b>メリット:</b> 値を大きくするとCPU負荷が下がります。<br>"
                                "<b>デメリット:</b> 画面の急な変化に対する反応が遅くなります。")
         fs_desc_label.setWordWrap(True); fs_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
+        fs_desc_label.setMinimumWidth(0)
         app_settings_layout.addWidget(fs_desc_label, 2, 1)
         self.app_settings_widgets['use_opencl'] = QCheckBox("OpenCL (GPU支援) を使用")
         self.app_settings_widgets['use_opencl'].setEnabled(OPENCL_AVAILABLE)
         app_settings_layout.addWidget(self.app_settings_widgets['use_opencl'], 3, 0)
-        opencl_desc_label = QLabel("<b>メリット:</b> GPUを利用して画像処理を高速化します。特に高解像度の画面や大きな画像の認識時にCPU負荷を下げ、パフォーマンスを向上させます。<br>"
-                                     "<b>デメリット:</b> 処理によっては僅かなオーバーヘッドが発生します。また、GPUドライバとの相性問題が発生する場合があります。")
+        
+        opencl_desc_label = QLabel(
+            "<b>メリット:</b> GPUを利用して画像処理を高速化します。特に高解像度の画面や大きな画像の認識時にCPU負荷を下げ、パフォーマンスを向上させます。<br>"
+            "<b>デメリット:</b> 処理によっては僅かなオーバーヘッドが発生します。また、GPUドライバとの相性問題が発生する場合があります。<br><br>"
+            "<font color='red'><b>【注意】</b>Linux環境や特定のゲームとの併用時に、"
+            "<code>amdgpu_cs_query_fence_status failed</code> のようなエラーが出て不安定になる場合は、"
+            "このオプションを<b>オフ</b>にしてください。</font>"
+        )
         opencl_desc_label.setWordWrap(True); opencl_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
+        opencl_desc_label.setMinimumWidth(0)
         app_settings_layout.addWidget(opencl_desc_label, 3, 1)
+        
         app_settings_layout.setColumnStretch(1, 1)
         app_settings_group.setFlat(True)
         self.preview_tabs.addTab(app_settings_group, "アプリ設定")
@@ -547,7 +569,19 @@ class UIManager(QMainWindow):
         item_settings_layout.addLayout(click_type_layout, 4, 0, 1, 3)
         right_layout.addWidget(item_settings_group, 1)
 
-        content_layout.addWidget(right_frame, 2); main_layout.addWidget(content_frame)
+        content_layout.addWidget(right_frame, 2)
+        main_layout.addWidget(content_frame)
+
+    # ★★★ 変更点: ダークモードを判定するヘルパーメソッドを追加 ★★★
+    def is_dark_mode(self):
+        """
+        現在のUIテーマがダークモードかどうかを判定します。
+        """
+        palette = self.palette()
+        # ウィンドウの背景色の輝度がテキスト色より低い場合、ダークモードとみなす
+        window_color = palette.color(QPalette.ColorRole.Window)
+        text_color = palette.color(QPalette.ColorRole.WindowText)
+        return window_color.lightness() < text_color.lightness()
 
     def load_app_settings_to_ui(self):
         as_conf = self.app_config.get('auto_scale', {})
@@ -616,7 +650,6 @@ class UIManager(QMainWindow):
 
         self.preview_label.settingChanged.connect(self.core_engine.on_preview_click_settings_changed)
         self.save_timer.timeout.connect(self.core_engine.save_current_settings)
-        # ★★★ 変更点: 閉じ括弧を追加 ★★★
         self.appConfigChanged.connect(self.core_engine.on_app_config_changed)
         
     def open_image_folder(self):
@@ -868,10 +901,13 @@ class UIManager(QMainWindow):
             self.current_best_scale_label.setText(f"最適スケール: {scale:.3f}倍")
             self.current_best_scale_label.setStyleSheet("color: green;")
 
+    # ★★★ 変更点: ダークモードを判別し、文字色を動的に変更するロジックを追加 ★★★
     def on_window_scale_calculated(self, scale: float):
         if scale > 0:
             self.current_best_scale_label.setText(f"計算スケール: {scale:.3f}倍")
-            self.current_best_scale_label.setStyleSheet("color: purple;")
+            # ダークモードの場合は白、ライトモードの場合は紫で表示
+            color = "white" if self.is_dark_mode() else "purple"
+            self.current_best_scale_label.setStyleSheet(f"color: {color};")
             self.auto_scale_widgets['center'].setValue(scale)
         else:
             self.current_best_scale_label.setText("最適スケール: ---")
@@ -937,3 +973,11 @@ class UIManager(QMainWindow):
         dialog.selectionMade.connect(self.setRecAreaMethodSelected)
         dialog.move(QCursor.pos())
         dialog.exec()
+
+    def adjust_initial_size(self):
+        """
+        ウィンドウの初期表示後にサイズを調整する。
+        Linuxのウィンドウマネージャの挙動に対応するため、少し遅延させて実行する。
+        """
+        self.setMinimumWidth(0)
+        self.resize(960, 640)

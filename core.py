@@ -233,10 +233,10 @@ class CoreEngine(QObject):
         self.priority_timers = {}
         self.all_priority_children = {}
         
-        cpu_cores = os.cpu_count() or 1
-        worker_threads = 2
+        cpu_cores = os.cpu_count() or 8
+        worker_threads = min(max(1, cpu_cores // 4), 2)
         self.thread_pool = ThreadPoolExecutor(max_workers=worker_threads)
-        self.logger.log(f"CPUコア数: {cpu_cores}, 認識スレッド数: {worker_threads}")
+        self.logger.log(f"CPU論理コア数: {cpu_cores}, 認識スレッド数: {worker_threads} (最大2)")
         self.cache_lock = threading.Lock()
         
         self.right_click_timer = None
@@ -600,18 +600,19 @@ class CoreEngine(QObject):
 
         while self.is_monitoring:
             current_time = time.time()
-            frame_counter += 1
 
+            if self._cooldown_until > current_time:
+                remaining_cooldown = self._cooldown_until - current_time
+                time.sleep(min(remaining_cooldown, 0.1)) # ★★★ 変更点: 他の処理（バックアップ等）のためのクールダウンは維持しつつ、最大待機時間を短くする ★★★
+                continue
+
+            frame_counter += 1
             delta_time = current_time - fps_last_time
             if delta_time >= 1.0:
                 fps = frame_counter / delta_time
                 self.fpsUpdated.emit(fps)
                 fps_last_time = current_time
                 frame_counter = 0
-            
-            if self._cooldown_until > current_time:
-                time.sleep(0.01)
-                continue
             
             try:
                 if not self.priority_mode_info:
@@ -640,7 +641,7 @@ class CoreEngine(QObject):
                         self.logger.log(f"スクリーンショットのUMat変換に失敗: {e}")
 
                 if self.priority_mode_info:
-                    self._handle_priority_state(current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat)
+                    self._handle_priority_state(current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, last_match_time_map)
                 elif self.is_backup_countdown_active:
                     self._handle_countdown_state(current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, last_match_time_map)
                 else:
@@ -674,7 +675,54 @@ class CoreEngine(QObject):
                 self.logger.log(f"フォルダ '{Path(folder_path).name}' の優先監視を終了しました。({reason})")
             self.priority_mode_info = {}
 
-    def _handle_priority_state(self, current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat):
+    # ★★★ 変更点: メソッド全体を書き換え ★★★
+    def _process_matches_as_sequence(self, all_matches, current_time, last_match_time_map):
+        """
+        見つかったマッチの中から、クリック条件を満たす最も優先度の高いものを1つだけクリックする。
+        """
+        if not all_matches:
+            return False
+
+        # 1. クリック可能なマッチ（インターバルが経過しているもの）をリストアップ
+        clickable_matches = []
+        for match in all_matches:
+            path = match['path']
+            settings = match['settings']
+            interval = settings.get('interval_time', 1.5)
+            debounce = settings.get('debounce_time', 0.0)
+            
+            effective_interval = interval
+            # 直前にクリックした画像と同じ場合、デバウンス時間を加算
+            if self._last_clicked_path == path and debounce > 0:
+                effective_interval += debounce
+            
+            last_match_time = last_match_time_map.get(path, 0)
+            if current_time - last_match_time > effective_interval:
+                clickable_matches.append(match)
+
+        if not clickable_matches:
+            return False
+
+        # 2. 優先順位（インターバルが短い順 > 信頼度が高い順）でソート
+        clickable_matches.sort(key=lambda m: (m['settings'].get('interval_time', 1.5), -m['confidence']))
+        
+        # 3. 最も優先度の高いものを1つだけ選ぶ
+        target_match = clickable_matches[0]
+
+        if not self.is_monitoring:
+            return False 
+
+        # 4. 選ばれた1つだけをクリックする
+        self._execute_click(target_match)
+        
+        path = target_match['path']
+        last_match_time_map[path] = time.time()
+        
+        # 5. グローバルなクールダウンは設定しない。ループは即座に次の監視サイクルに移る。
+        
+        return True
+
+    def _handle_priority_state(self, current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, last_match_time_map):
         if current_time >= self.priority_mode_info['timeout_time']:
             self._stop_priority_mode("タイムアウト")
             return
@@ -687,22 +735,15 @@ class CoreEngine(QObject):
         priority_normal_cache = filter_by_folder(self.normal_template_cache)
         priority_backup_cache = filter_by_folder(self.backup_template_cache)
 
-        best_match = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, priority_normal_cache)
-        if not best_match:
-            best_match = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, priority_backup_cache)
+        all_matches = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, priority_normal_cache)
+        all_matches.extend(self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, priority_backup_cache))
 
-        if best_match:
-            self._execute_click(best_match)
-            self._cooldown_until = time.time() + best_match['settings'].get('interval_time', 1.5)
-            
-            self.priority_mode_info['matched_children'].add(best_match['path'])
-            
+        clicked_in_sequence = self._process_matches_as_sequence(all_matches, current_time, last_match_time_map)
+
+        if clicked_in_sequence:
             folder_settings = self.config_manager.load_item_setting(Path(folder_path))
             interval_seconds = folder_settings.get('priority_interval', 10) * 60
             self.priority_timers[folder_path] = time.time() + interval_seconds
-            
-            if self.priority_mode_info['matched_children'] >= self.all_priority_children.get(folder_path, set()):
-                self._stop_priority_mode("全画像マッチ")
 
     def _handle_idle_state(self, current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, last_match_time_map):
         def filter_cache(cache):
@@ -712,18 +753,20 @@ class CoreEngine(QObject):
             }
         
         active_normal_cache = filter_cache(self.normal_template_cache)
-        active_backup_cache = filter_cache(self.backup_template_cache)
+        normal_matches = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, active_normal_cache)
         
-        normal_match = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, active_normal_cache)
-        if normal_match:
-            self._handle_match(normal_match, last_match_time_map)
+        was_clicked = self._process_matches_as_sequence(normal_matches, current_time, last_match_time_map)
+        if was_clicked:
             return
 
-        backup_trigger_match = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, active_backup_cache)
-        if backup_trigger_match:
+        active_backup_cache = filter_cache(self.backup_template_cache)
+        backup_trigger_matches = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, active_backup_cache)
+        if backup_trigger_matches:
+            best_backup_trigger = max(backup_trigger_matches, key=lambda m: m['confidence'])
+            
             self.is_backup_countdown_active = True
             self.backup_countdown_start_time = current_time
-            self.active_backup_info = backup_trigger_match
+            self.active_backup_info = best_backup_trigger
             
             path = self.active_backup_info['path']
             backup_time = self.active_backup_info['settings'].get('backup_time', 300.0)
@@ -731,9 +774,24 @@ class CoreEngine(QObject):
             self.updateLog.emit(log_msg)
 
     def _handle_countdown_state(self, current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, last_match_time_map):
+        def filter_cache(cache):
+            return {p: d for p, d in cache.items() if d.get('folder_mode') not in ['excluded', 'priority_timer']}
+        
+        active_normal_cache = filter_cache(self.normal_template_cache)
+        normal_matches = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, active_normal_cache)
+        
+        was_clicked = self._process_matches_as_sequence(normal_matches, current_time, last_match_time_map)
+
+        if was_clicked:
+            self.updateLog.emit("通常画像をクリックしたため、バックアップカウントダウンをリセットします。")
+            self.is_backup_countdown_active = False
+            self.active_backup_info = None
+            self.backup_countdown_start_time = 0
+            return
+        
         elapsed_time = current_time - self.backup_countdown_start_time
         backup_duration = self.active_backup_info['settings'].get('backup_time', 300.0)
-
+            
         if elapsed_time >= backup_duration:
             self.updateLog.emit(f"{backup_duration:.1f}秒が経過。バックアップクリックを実行します。")
             self._execute_final_backup_click()
@@ -741,23 +799,6 @@ class CoreEngine(QObject):
             self.active_backup_info = None
             self.backup_countdown_start_time = 0
             self._cooldown_until = time.time() + 1.0
-            return
-        
-        def filter_cache(cache):
-            return {
-                p: d for p, d in cache.items() 
-                if d.get('folder_mode') not in ['excluded', 'priority_timer']
-            }
-        active_normal_cache = filter_cache(self.normal_template_cache)
-
-        normal_match = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, active_normal_cache)
-        if normal_match:
-            path = normal_match['path']
-            self.updateLog.emit(f"通常画像 '{Path(path).name}' を検出。バックアップカウントダウンをリセットします。")
-            self.is_backup_countdown_active = False
-            self.active_backup_info = None
-            self.backup_countdown_start_time = 0
-            self._handle_match(normal_match, last_match_time_map)
             return
 
     def _execute_final_backup_click(self):
@@ -781,17 +822,18 @@ class CoreEngine(QObject):
             self.updateLog.emit(f"バックアップクリック失敗: ターゲット '{Path(target_path).name}' がキャッシュにありません。")
             return
 
-        final_match = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, {target_path: target_cache_item})
+        final_matches = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, {target_path: target_cache_item})
 
-        if final_match:
-            self._execute_click(final_match)
+        if final_matches:
+            best_match = max(final_matches, key=lambda m: m['confidence'])
+            self._execute_click(best_match)
         else:
             self.updateLog.emit(f"バックアップクリック失敗: 画面内に '{Path(target_path).name}' が見つかりませんでした。")
     
     def _find_best_match(self, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, template_cache_to_search):
         with self.cache_lock:
             if not template_cache_to_search:
-                return None
+                return []
             
             use_opencl = cv2.ocl.useOpenCL()
             use_grayscale = self.app_config.get('grayscale_matching', False)
@@ -844,42 +886,21 @@ class CoreEngine(QObject):
                         results.append(result)
 
         if not results:
-            return None
+            return []
 
-        best_match = max(results, key=lambda r: r['confidence'])
+        best_match_for_scale = max(results, key=lambda r: r['confidence'])
         
         with self.cache_lock:
-            cache_to_update = self.normal_template_cache if best_match['path'] in self.normal_template_cache else self.backup_template_cache
-            cache_item = cache_to_update.get(best_match['path'])
+            cache_to_update = self.normal_template_cache if best_match_for_scale['path'] in self.normal_template_cache else self.backup_template_cache
+            cache_item = cache_to_update.get(best_match_for_scale['path'])
 
             if cache_item and cache_item['best_scale'] is None:
-                 cache_item['best_scale'] = best_match['scale']
-                 log_msg = f"最適スケール発見: {Path(best_match['path']).name} @ {best_match['scale']:.3f}倍 (信頼度: {best_match['confidence']:.2f})"
+                 cache_item['best_scale'] = best_match_for_scale['scale']
+                 log_msg = f"最適スケール発見: {Path(best_match_for_scale['path']).name} @ {best_match_for_scale['scale']:.3f}倍 (信頼度: {best_match_for_scale['confidence']:.2f})"
                  self.updateLog.emit(log_msg)
-                 self.bestScaleFound.emit(best_match['path'], best_match['scale'])
+                 self.bestScaleFound.emit(best_match_for_scale['path'], best_match_for_scale['scale'])
         
-        return best_match
-
-    def _handle_match(self, match_info, last_match_time_map):
-        path, settings = match_info['path'], match_info['settings']
-        current_time = time.time()
-        item_name = Path(path).name
-
-        interval = settings.get('interval_time', 1.5)
-        debounce = settings.get('debounce_time', 0.0)
-        
-        effective_interval = interval
-        if self._last_clicked_path == path and debounce > 0:
-            effective_interval += debounce
-            self.logger.log(f"デバウンス適用: '{item_name}' のインターバルを {interval:.1f}s -> {effective_interval:.1f}s に延長")
-
-        last_match_time = last_match_time_map.get(path, 0)
-        elapsed = current_time - last_match_time
-
-        if elapsed > effective_interval:
-            self._execute_click(match_info)
-            last_match_time_map[path] = current_time
-            self._cooldown_until = current_time + interval
+        return results
 
     def _execute_click(self, match_info):
         block_input(True)
@@ -1209,7 +1230,7 @@ class CoreEngine(QObject):
             self._showUiSignal.emit()
             self.selectionProcessFinished.emit()
 
-
+    # ★★★ 変更点: 誤って削除されていた handle_area_selection メソッドを復元 ★★★
     def handle_area_selection(self, coords):
         if self._is_capturing_for_registration:
             self._is_capturing_for_registration = False

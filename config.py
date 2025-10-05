@@ -15,6 +15,63 @@ class ConfigManager:
         self.app_config_path = self.base_dir / "app_config.json"
         self.window_scales_path = self.base_dir / "window_scales.json"
 
+        # ★★★ 変更点: 起動時に孤立したJSONファイルをクリーンアップする処理を呼び出します ★★★
+        self._cleanup_orphaned_json_files()
+
+    # ★★★ 変更点: 孤立したJSONファイルを削除するための新しいメソッドを追加します ★★★
+    def _cleanup_orphaned_json_files(self):
+        """
+        ペアとなる画像ファイルが存在しない、孤立した設定JSONファイルを削除します。
+        """
+        # 削除から除外するシステム用のファイル名リスト
+        protected_files = [
+            self.app_config_path.name,
+            self.window_scales_path.name,
+            self.image_order_filename,
+            self.folder_config_filename,
+            self.sub_order_filename
+        ]
+        
+        # ペアとして認識する画像の拡張子
+        image_extensions = ['.png', '.jpg', '.jpeg', '.bmp']
+
+        print("[INFO] 孤立したJSONファイルのクリーンアップを開始します...")
+        cleaned_count = 0
+        try:
+            # click_picフォルダとサブフォルダ内のすべてのJSONファイルを再帰的に検索
+            for json_path in self.base_dir.rglob('*.json'):
+                # 保護対象のファイルはスキップ
+                if json_path.name in protected_files:
+                    continue
+
+                # ペアとなる画像ファイルの存在を確認
+                base_name = json_path.stem
+                parent_dir = json_path.parent
+                
+                has_pair = False
+                for ext in image_extensions:
+                    image_path = parent_dir / (base_name + ext)
+                    if image_path.exists():
+                        has_pair = True
+                        break
+                
+                # ペアとなる画像が見つからなければJSONファイルを削除
+                if not has_pair:
+                    try:
+                        json_path.unlink()
+                        print(f"[CLEANUP] 孤立したJSONファイルを削除しました: {json_path}")
+                        cleaned_count += 1
+                    except OSError as e:
+                        print(f"[ERROR] JSONファイルの削除に失敗しました: {json_path}, エラー: {e}")
+
+        except Exception as e:
+            print(f"[ERROR] クリーンアップ処理中に予期せぬエラーが発生しました: {e}")
+
+        if cleaned_count > 0:
+            print(f"[INFO] クリーンアップ完了。{cleaned_count}個の孤立したJSONファイルを削除しました。")
+        else:
+            print("[INFO] クリーンアップ完了。孤立したJSONファイルは見つかりませんでした。")
+
     def load_app_config(self) -> dict:
         default_config = {
             "auto_scale": {
@@ -78,7 +135,6 @@ class ConfigManager:
     def load_item_setting(self, item_path: Path) -> dict:
         setting_path = self._get_setting_path(item_path)
         if item_path.is_dir():
-            # ★★★ 変更点: フォルダ設定のデフォルト値に新機能の項目を追加 ★★★
             default_setting = {
                 'mode': 'normal',  # 'normal', 'excluded', 'priority_timer'
                 'priority_interval': 10,  # minutes
@@ -210,7 +266,6 @@ class ConfigManager:
                 structured_list.append({'type': 'image', 'path': str(item_path), 'name': item_path.name})
             elif item_path.is_dir():
                 folder_settings = self.load_item_setting(item_path)
-                # ★★★ 変更点: is_excluded の代わりに folder_settings をそのまま渡す ★★★
                 folder_item = {
                     'type': 'folder', 
                     'path': str(item_path), 
