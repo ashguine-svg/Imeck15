@@ -15,15 +15,12 @@ class ConfigManager:
         self.app_config_path = self.base_dir / "app_config.json"
         self.window_scales_path = self.base_dir / "window_scales.json"
 
-        # ★★★ 変更点: 起動時に孤立したJSONファイルをクリーンアップする処理を呼び出します ★★★
         self._cleanup_orphaned_json_files()
 
-    # ★★★ 変更点: 孤立したJSONファイルを削除するための新しいメソッドを追加します ★★★
     def _cleanup_orphaned_json_files(self):
         """
         ペアとなる画像ファイルが存在しない、孤立した設定JSONファイルを削除します。
         """
-        # 削除から除外するシステム用のファイル名リスト
         protected_files = [
             self.app_config_path.name,
             self.window_scales_path.name,
@@ -32,19 +29,15 @@ class ConfigManager:
             self.sub_order_filename
         ]
         
-        # ペアとして認識する画像の拡張子
         image_extensions = ['.png', '.jpg', '.jpeg', '.bmp']
 
         print("[INFO] 孤立したJSONファイルのクリーンアップを開始します...")
         cleaned_count = 0
         try:
-            # click_picフォルダとサブフォルダ内のすべてのJSONファイルを再帰的に検索
             for json_path in self.base_dir.rglob('*.json'):
-                # 保護対象のファイルはスキップ
                 if json_path.name in protected_files:
                     continue
 
-                # ペアとなる画像ファイルの存在を確認
                 base_name = json_path.stem
                 parent_dir = json_path.parent
                 
@@ -55,7 +48,6 @@ class ConfigManager:
                         has_pair = True
                         break
                 
-                # ペアとなる画像が見つからなければJSONファイルを削除
                 if not has_pair:
                     try:
                         json_path.unlink()
@@ -84,7 +76,9 @@ class ConfigManager:
             "capture_method": "mss",
             "frame_skip_rate": 2,
             "grayscale_matching": False,
-            "use_opencl": True
+            "use_opencl": True,
+            # ★★★ 変更点: 全体キャプチャスケール設定を追加 ★★★
+            "capture_scale_factor": 1.0
         }
         if not self.app_config_path.exists():
             return default_config
@@ -155,7 +149,6 @@ class ConfigManager:
             with open(setting_path, 'r', encoding='utf-8') as f:
                 setting = json.load(f)
 
-                # 古い設定(is_excluded)から新しいmodeへの互換性維持
                 if item_path.is_dir() and 'is_excluded' in setting:
                     if setting['is_excluded']:
                         setting['mode'] = 'excluded'
@@ -163,12 +156,10 @@ class ConfigManager:
                         setting['mode'] = 'normal'
                     del setting['is_excluded']
 
-                # 不要になったキーを削除
                 setting.pop('template_scale_enabled', None)
                 setting.pop('template_scale_factor', None)
                 setting.pop('matching_mode', None)
                 
-                # デフォルト値にないキーを追加
                 for key, value in default_setting.items():
                     setting.setdefault(key, value)
                 return setting
@@ -213,13 +204,12 @@ class ConfigManager:
         if not item_path.exists(): return
         try:
             if item_path.is_dir():
-                # フォルダ設定ファイルも一緒に削除
                 setting_path = self._get_setting_path(item_path)
                 if setting_path.exists():
                     try:
                         os.remove(setting_path)
                     except OSError:
-                        pass # エラーは無視
+                        pass
                 shutil.rmtree(item_path)
             elif item_path.is_file():
                 setting_path = self._get_setting_path(item_path)
@@ -300,7 +290,6 @@ class ConfigManager:
             if folder_path.exists():
                 return False, f"フォルダ '{folder_name}' は既に存在します。"
             folder_path.mkdir()
-            # フォルダ作成と同時に順序リストにも追加
             order = self.load_image_order()
             order.append(str(folder_path))
             self.save_image_order(order)

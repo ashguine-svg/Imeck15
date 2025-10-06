@@ -6,10 +6,10 @@ from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QGroupBox, QSpinBox, QDoubleSpinBox, QCheckBox,
     QGridLayout, QSizePolicy, QSpacerItem, QToolButton, QFileDialog, QLineEdit,
     QTreeWidget, QTreeWidgetItem, QMenu, QTabWidget, QTextEdit, QDialog, QMessageBox,
-    QComboBox, QDialogButtonBox, QRadioButton, QButtonGroup
+    QComboBox, QDialogButtonBox, QRadioButton, QButtonGroup, QScrollArea
 )
 from PySide6.QtGui import (
-    QIcon, QPixmap, QImage, QPainter, QColor, QFontMetrics, QPen, QCursor, 
+    QIcon, QPixmap, QImage, QPainter, QColor, QFontMetrics, QPen, QCursor,
     QBrush, QFont, QPalette
 )
 from PySide6.QtCore import (
@@ -187,7 +187,6 @@ class FolderSettingsDialog(QDialog):
         self.setWindowTitle(f"フォルダ設定: {folder_name}")
         self.layout = QVBoxLayout(self)
 
-        # モード選択
         mode_box = QGroupBox("フォルダの動作モード")
         mode_layout = QVBoxLayout()
         self.radio_normal = QRadioButton("通常 (監視対象)")
@@ -205,7 +204,6 @@ class FolderSettingsDialog(QDialog):
         mode_box.setLayout(mode_layout)
         self.layout.addWidget(mode_box)
 
-        # タイマー設定
         self.timer_box = QGroupBox("タイマー付き優先 の詳細設定")
         timer_layout = QGridLayout()
         timer_layout.addWidget(QLabel("有効になるまでの間隔:"), 0, 0)
@@ -224,7 +222,6 @@ class FolderSettingsDialog(QDialog):
 
         self.radio_priority.toggled.connect(self.timer_box.setEnabled)
         
-        # ツールチップ設定
         tooltip_text = (
             "<b>タイマー付き優先モードの詳細:</b><br>"
             "設定した<b>『有効になるまでの間隔』</b>が経過すると、このフォルダ内の画像のみを優先的に探します。<br>"
@@ -237,10 +234,9 @@ class FolderSettingsDialog(QDialog):
         )
         self.radio_priority.setToolTip(tooltip_text)
         self.timer_box.setToolTip(tooltip_text)
-        self.radio_priority.setToolTipDuration(-1) # マウスが外れるまで表示
+        self.radio_priority.setToolTipDuration(-1)
         self.timer_box.setToolTipDuration(-1)
 
-        # OK / Cancel ボタン
         self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         self.buttons.accepted.connect(self.accept)
         self.buttons.rejected.connect(self.reject)
@@ -275,6 +271,106 @@ class FolderSettingsDialog(QDialog):
             'priority_timeout': self.timeout_spin.value()
         }
 
+class FloatingWindow(QDialog):
+    startMonitoringRequested = Signal()
+    stopMonitoringRequested = Signal()
+    captureImageRequested = Signal()
+    toggleMainUIRequested = Signal()
+    closeRequested = Signal()
+    setRecAreaRequested = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Imeck15 Minimal UI")
+        self.setWindowFlags(
+            Qt.FramelessWindowHint |
+            Qt.WindowStaysOnTopHint |
+            Qt.Tool
+        )
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setWindowOpacity(0.85)
+
+        self.offset = None
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(5)
+
+        self.start_button = QPushButton("▶")
+        self.stop_button = QPushButton("■")
+        self.capture_button = QPushButton("●")
+        self.set_rec_area_button = QPushButton("⌚")
+        self.toggle_ui_button = QPushButton("⇔")
+        self.close_button = QPushButton("×")
+        
+        for btn in [self.start_button, self.stop_button, self.capture_button, self.set_rec_area_button, self.toggle_ui_button, self.close_button]:
+            btn.setFixedSize(24, 24)
+            font = btn.font()
+            font.setPointSize(10)
+            btn.setFont(font)
+            btn.setStyleSheet("QPushButton { border-radius: 12px; background-color: rgba(200, 200, 200, 150); color: black; } QPushButton:hover { background-color: rgba(220, 220, 220, 200); }")
+        
+        self.close_button.setStyleSheet("QPushButton { border-radius: 12px; background-color: rgba(231, 76, 60, 180); color: white; font-weight: bold; } QPushButton:hover { background-color: rgba(231, 76, 60, 230); }")
+
+
+        self.status_label = QLabel("待機中")
+        font = self.status_label.font()
+        font.setBold(True)
+        self.status_label.setFont(font)
+        self.status_label.setStyleSheet("color: #90EE90; background-color: transparent;")
+
+        layout.addWidget(self.start_button)
+        layout.addWidget(self.stop_button)
+        layout.addWidget(self.capture_button)
+        layout.addWidget(self.set_rec_area_button)
+        layout.addWidget(self.toggle_ui_button)
+        layout.addWidget(self.status_label)
+        layout.addSpacerItem(QSpacerItem(10, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
+        layout.addWidget(self.close_button)
+
+        
+        self.start_button.setToolTip("監視開始")
+        self.stop_button.setToolTip("監視停止")
+        self.capture_button.setToolTip("画像キャプチャ")
+        self.set_rec_area_button.setToolTip("認識範囲を設定")
+        self.toggle_ui_button.setToolTip("メインUIを表示/非表示")
+        self.close_button.setToolTip("最小UIモードを終了")
+
+        self.start_button.clicked.connect(self.startMonitoringRequested)
+        self.stop_button.clicked.connect(self.stopMonitoringRequested)
+        self.capture_button.clicked.connect(self.captureImageRequested)
+        self.toggle_ui_button.clicked.connect(self.toggleMainUIRequested)
+        self.close_button.clicked.connect(self.closeRequested)
+        self.set_rec_area_button.clicked.connect(self.setRecAreaRequested)
+    
+    def update_status(self, text, color="green"):
+        self.status_label.setText(text)
+        self.status_label.setStyleSheet(f"color: {color}; background-color: transparent;")
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(50, 50, 50, 200))
+        painter.drawRoundedRect(self.rect(), 15.0, 15.0)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            if self.close_button.underMouse():
+                return
+            self.offset = event.globalPosition().toPoint() - self.pos()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if self.offset is not None and event.buttons() == Qt.LeftButton:
+            self.move(event.globalPosition().toPoint() - self.offset)
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        self.offset = None
+        event.accept()
+
+
 class UIManager(QMainWindow):
     startMonitoringRequested = Signal(); stopMonitoringRequested = Signal(); openPerformanceMonitorRequested = Signal()
     loadImagesRequested = Signal(list); setRecAreaMethodSelected = Signal(str); captureImageRequested = Signal()
@@ -299,11 +395,18 @@ class UIManager(QMainWindow):
         
         self.app_config = self.config_manager.load_app_config()
         
+        self.performance_monitor = None
+        self.is_minimal_mode = False
+        self.normal_ui_geometries = {}
+        self.floating_window = None
+        
         self.setup_ui()
         self.load_app_settings_to_ui()
 
-        # ウィンドウ表示後にサイズ調整を行うタイマーを設定
         QTimer.singleShot(100, self.adjust_initial_size)
+    
+    def set_performance_monitor(self, monitor):
+        self.performance_monitor = monitor
         
     def setup_ui(self):
         central_widget = QWidget(); self.setCentralWidget(central_widget); main_layout = QVBoxLayout(central_widget)
@@ -315,6 +418,10 @@ class UIManager(QMainWindow):
         self.header_rec_area_button = QPushButton("認識範囲設定"); self.header_rec_area_button.setFixedSize(120, 30); self.header_rec_area_button.clicked.connect(self.setRecAreaDialog)
         header_layout.addWidget(self.header_rec_area_button)
         
+        self.toggle_minimal_ui_button = QPushButton("最小UIモード")
+        self.toggle_minimal_ui_button.setFixedSize(120, 30)
+        header_layout.addWidget(self.toggle_minimal_ui_button)
+
         self.open_image_folder_button = QPushButton("画像フォルダ")
         self.open_image_folder_button.setFixedSize(120, 30)
         self.open_image_folder_button.setToolTip("登録画像が保存されているフォルダを開きます")
@@ -327,7 +434,6 @@ class UIManager(QMainWindow):
         order_button_frame = QHBoxLayout(); move_up_button = QPushButton("▲ 上げる"); move_down_button = QPushButton("▼ 下げる")
         order_button_frame.addWidget(move_up_button); order_button_frame.addWidget(move_down_button); left_layout.addLayout(order_button_frame)
         self.image_tree = QTreeWidget()
-        # ★★★ 変更点: ダークモード対応のため、背景色の固定指定を削除 ★★★
         self.image_tree.setStyleSheet("""
             QTreeWidget {
                 border: 1px solid darkgray;
@@ -366,7 +472,7 @@ class UIManager(QMainWindow):
         log_layout.addWidget(self.log_text)
         self.preview_tabs.addTab(log_widget, "ログ")
 
-        auto_scale_group = QGroupBox(); auto_scale_layout = QGridLayout(auto_scale_group)
+        self.auto_scale_group = QGroupBox(); auto_scale_layout = QGridLayout(self.auto_scale_group)
         
         self.auto_scale_widgets['use_window_scale'] = QCheckBox("ウィンドウスケール基準")
         self.auto_scale_widgets['use_window_scale'].setToolTip(
@@ -403,39 +509,56 @@ class UIManager(QMainWindow):
         as_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
         as_desc_label.setMinimumWidth(0)
         auto_scale_layout.addWidget(as_desc_label, 5, 0, 1, 4)
-        auto_scale_group.setFlat(True)
-        self.preview_tabs.addTab(auto_scale_group, "自動スケール")
+        self.auto_scale_group.setFlat(True)
+        self.preview_tabs.addTab(self.auto_scale_group, "自動スケール")
 
-        app_settings_group = QGroupBox(); app_settings_layout = QGridLayout(app_settings_group)
+        # ★★★ 変更点: アプリ設定タブをスクロール可能にし、レイアウトを縦型に変更 ★★★
+        app_settings_scroll_area = QScrollArea()
+        app_settings_scroll_area.setWidgetResizable(True)
+        app_settings_scroll_area.setStyleSheet("QScrollArea { border: 0; }")
+        
+        app_settings_widget = QWidget()
+        app_settings_layout = QVBoxLayout(app_settings_widget)
+        app_settings_layout.setSpacing(10)
+        app_settings_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        # --- グレースケール検索 ---
         self.app_settings_widgets['grayscale_matching'] = QCheckBox("グレースケール検索 (高速)")
-        app_settings_layout.addWidget(self.app_settings_widgets['grayscale_matching'], 0, 0)
+        app_settings_layout.addWidget(self.app_settings_widgets['grayscale_matching'])
         gs_desc_label = QLabel("<b>メリット:</b> 処理が高速になり、僅かな色の違いを無視できます。<br>"
                                "<b>デメリット:</b> 同じ形で色が違うだけの画像は区別できません。")
-        gs_desc_label.setWordWrap(True); gs_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
-        gs_desc_label.setMinimumWidth(0)
-        app_settings_layout.addWidget(gs_desc_label, 0, 1)
+        gs_desc_label.setWordWrap(True)
+        gs_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
+        app_settings_layout.addWidget(gs_desc_label)
+
+        # --- DXCam ---
         self.app_settings_widgets['capture_method'] = QCheckBox("DXCamを使用")
         self.app_settings_widgets['capture_method'].setEnabled(DXCAM_AVAILABLE)
-        app_settings_layout.addWidget(self.app_settings_widgets['capture_method'], 1, 0)
+        app_settings_layout.addWidget(self.app_settings_widgets['capture_method'])
         dxcam_desc_label = QLabel("<b>メリット:</b> ゲーム等の描画に強く、CPU負荷が低い高速なキャプチャ方式です。<br>"
                                   "<b>デメリット:</b> 一部のアプリやPC環境では動作しない場合があります。")
-        dxcam_desc_label.setWordWrap(True); dxcam_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
-        dxcam_desc_label.setMinimumWidth(0)
-        app_settings_layout.addWidget(dxcam_desc_label, 1, 1)
+        dxcam_desc_label.setWordWrap(True)
+        dxcam_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
+        app_settings_layout.addWidget(dxcam_desc_label)
+        
+        # --- フレームスキップ ---
         fs_layout = QHBoxLayout()
         fs_layout.addWidget(QLabel("フレームスキップ:"))
-        self.app_settings_widgets['frame_skip_rate'] = QSpinBox(); self.app_settings_widgets['frame_skip_rate'].setRange(1, 10)
+        self.app_settings_widgets['frame_skip_rate'] = QSpinBox()
+        self.app_settings_widgets['frame_skip_rate'].setRange(1, 10)
         fs_layout.addWidget(self.app_settings_widgets['frame_skip_rate'])
-        app_settings_layout.addLayout(fs_layout, 2, 0)
+        fs_layout.addStretch()
+        app_settings_layout.addLayout(fs_layout)
         fs_desc_label = QLabel("<b>メリット:</b> 値を大きくするとCPU負荷が下がります。<br>"
                                "<b>デメリット:</b> 画面の急な変化に対する反応が遅くなります。")
-        fs_desc_label.setWordWrap(True); fs_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
-        fs_desc_label.setMinimumWidth(0)
-        app_settings_layout.addWidget(fs_desc_label, 2, 1)
+        fs_desc_label.setWordWrap(True)
+        fs_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
+        app_settings_layout.addWidget(fs_desc_label)
+        
+        # --- OpenCL ---
         self.app_settings_widgets['use_opencl'] = QCheckBox("OpenCL (GPU支援) を使用")
         self.app_settings_widgets['use_opencl'].setEnabled(OPENCL_AVAILABLE)
-        app_settings_layout.addWidget(self.app_settings_widgets['use_opencl'], 3, 0)
-        
+        app_settings_layout.addWidget(self.app_settings_widgets['use_opencl'])
         opencl_desc_label = QLabel(
             "<b>メリット:</b> GPUを利用して画像処理を高速化します。特に高解像度の画面や大きな画像の認識時にCPU負荷を下げ、パフォーマンスを向上させます。<br>"
             "<b>デメリット:</b> 処理によっては僅かなオーバーヘッドが発生します。また、GPUドライバとの相性問題が発生する場合があります。<br><br>"
@@ -443,13 +566,30 @@ class UIManager(QMainWindow):
             "<code>amdgpu_cs_query_fence_status failed</code> のようなエラーが出て不安定になる場合は、"
             "このオプションを<b>オフ</b>にしてください。</font>"
         )
-        opencl_desc_label.setWordWrap(True); opencl_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
-        opencl_desc_label.setMinimumWidth(0)
-        app_settings_layout.addWidget(opencl_desc_label, 3, 1)
+        opencl_desc_label.setWordWrap(True)
+        opencl_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
+        app_settings_layout.addWidget(opencl_desc_label)
         
-        app_settings_layout.setColumnStretch(1, 1)
-        app_settings_group.setFlat(True)
-        self.preview_tabs.addTab(app_settings_group, "アプリ設定")
+        # ★★★ 変更点: 軽量化モード ★★★
+        cs_layout = QHBoxLayout()
+        cs_layout.addWidget(QLabel("軽量化モード（実験的）:"))
+        self.app_settings_widgets['capture_scale_factor'] = QDoubleSpinBox()
+        self.app_settings_widgets['capture_scale_factor'].setRange(0.2, 1.0)
+        self.app_settings_widgets['capture_scale_factor'].setSingleStep(0.05)
+        self.app_settings_widgets['capture_scale_factor'].setValue(1.0)
+        cs_layout.addWidget(self.app_settings_widgets['capture_scale_factor'])
+        cs_layout.addStretch()
+        app_settings_layout.addLayout(cs_layout)
+        
+        cs_desc_label = QLabel("高解像度モニタでのパフォーマンスを向上させます。<b>1.0</b>以外に設定すると、キャプチャとテンプレートがこの倍率で縮小されます。<br>"
+                               "<b>注意:</b> この軽量化モードは自動スケール機能と競合するため、<b>1.0</b>以外に設定すると自動スケールタブは無効になります。")
+        cs_desc_label.setWordWrap(True)
+        cs_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
+        app_settings_layout.addWidget(cs_desc_label)
+        
+        app_settings_scroll_area.setWidget(app_settings_widget)
+        self.preview_tabs.addTab(app_settings_scroll_area, "アプリ設定")
+        # ★★★ 変更ここまで ★★★
 
         usage_widget = QWidget()
         usage_layout = QVBoxLayout(usage_widget)
@@ -572,13 +712,8 @@ class UIManager(QMainWindow):
         content_layout.addWidget(right_frame, 2)
         main_layout.addWidget(content_frame)
 
-    # ★★★ 変更点: ダークモードを判定するヘルパーメソッドを追加 ★★★
     def is_dark_mode(self):
-        """
-        現在のUIテーマがダークモードかどうかを判定します。
-        """
         palette = self.palette()
-        # ウィンドウの背景色の輝度がテキスト色より低い場合、ダークモードとみなす
         window_color = palette.color(QPalette.ColorRole.Window)
         text_color = palette.color(QPalette.ColorRole.WindowText)
         return window_color.lightness() < text_color.lightness()
@@ -594,8 +729,17 @@ class UIManager(QMainWindow):
         self.app_settings_widgets['frame_skip_rate'].setValue(self.app_config.get('frame_skip_rate', 2))
         self.app_settings_widgets['grayscale_matching'].setChecked(self.app_config.get('grayscale_matching', False))
         self.app_settings_widgets['use_opencl'].setChecked(self.app_config.get('use_opencl', True))
+        self.app_settings_widgets['capture_scale_factor'].setValue(self.app_config.get('capture_scale_factor', 1.0))
         self.update_auto_scale_info()
+        self.update_dependent_widgets_state()
 
+    def update_dependent_widgets_state(self):
+        """
+        設定値に応じて、他のUI要素の有効/無効を切り替えます。
+        """
+        is_global_scale_active = self.app_settings_widgets['capture_scale_factor'].value() != 1.0
+        self.auto_scale_group.setEnabled(not is_global_scale_active)
+        
     def get_auto_scale_settings(self) -> dict:
         return {
             "use_window_scale": self.auto_scale_widgets['use_window_scale'].isChecked(),
@@ -623,16 +767,23 @@ class UIManager(QMainWindow):
         self.app_config['frame_skip_rate'] = self.app_settings_widgets['frame_skip_rate'].value()
         self.app_config['grayscale_matching'] = self.app_settings_widgets['grayscale_matching'].isChecked()
         self.app_config['use_opencl'] = self.app_settings_widgets['use_opencl'].isChecked()
+        self.app_config['capture_scale_factor'] = self.app_settings_widgets['capture_scale_factor'].value()
+        
         self.config_manager.save_app_config(self.app_config)
         self.update_auto_scale_info()
+        self.update_dependent_widgets_state()
         self.appConfigChanged.emit()
 
     def connect_signals(self):
-        self.monitor_button.clicked.connect(self.toggle_monitoring); self.perf_monitor_button.clicked.connect(self.openPerformanceMonitorRequested.emit)
+        self.monitor_button.clicked.connect(self.toggle_monitoring)
+        self.perf_monitor_button.clicked.connect(self.openPerformanceMonitorRequested.emit)
         self.image_tree.itemSelectionChanged.connect(self.on_image_tree_selection_changed)
         self.image_tree.itemClicked.connect(self.on_tree_item_clicked)
         
-        self.set_rec_area_button_main_ui.clicked.connect(self.setRecAreaDialog); self.clear_rec_area_button_main_ui.clicked.connect(self.core_engine.clear_recognition_area)
+        self.set_rec_area_button_main_ui.clicked.connect(self.setRecAreaDialog)
+        self.clear_rec_area_button_main_ui.clicked.connect(self.core_engine.clear_recognition_area)
+        
+        self.toggle_minimal_ui_button.clicked.connect(self.toggle_minimal_ui_mode)
         
         self.open_image_folder_button.clicked.connect(self.open_image_folder)
         
@@ -690,15 +841,12 @@ class UIManager(QMainWindow):
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.Antialiasing)
 
-        # 縁取りは黒の1px
         pen = QPen(Qt.black, 1)
         painter.setPen(pen)
 
-        # 塗りつぶしは指定された色
         brush = QBrush(color)
         painter.setBrush(brush)
         
-        # 少しマージンを取って角の丸い四角形を描画
         rect = QRectF(0.5, 0.5, size - 1, size - 1)
         painter.drawRoundedRect(rect, 3.0, 3.0)
 
@@ -748,7 +896,6 @@ class UIManager(QMainWindow):
                 for child_data in item_data['children']:
                     child_item = QTreeWidgetItem(folder_item, [f"  {child_data['name']}"])
                     child_item.setData(0, Qt.UserRole, child_data['path'])
-                    # 子アイテムも親フォルダと同じ文字色に設定
                     child_item.setForeground(0, brush)
                     if child_data['path'] == selected_path: item_to_reselect = child_item
             
@@ -886,26 +1033,34 @@ class UIManager(QMainWindow):
         else: self.stopMonitoringRequested.emit()
         
     def set_status(self, text, color="green"):
-        if text == "監視中...": 
-            self.monitor_button.setText("監視停止"); self.status_label.setText("監視中..."); self.status_label.setStyleSheet("font-weight: bold; color: blue;")
-        elif text == "待機中": 
-            self.monitor_button.setText("監視開始"); self.status_label.setText("待機中"); self.status_label.setStyleSheet("font-weight: bold; color: green;")
+        display_text = text
+        style_color = color
+        if text == "監視中...":
+            self.monitor_button.setText("監視停止")
+            display_text = "監視中..."
+            style_color = "blue"
+        elif text == "待機中":
+            self.monitor_button.setText("監視開始")
+            display_text = "待機中"
+            style_color = "green"
             self.current_best_scale_label.setText("最適スケール: ---")
             self.current_best_scale_label.setStyleSheet("color: gray;")
-        else: 
-            self.status_label.setText(text); self.status_label.setStyleSheet(f"font-weight: bold; color: {color};")
-    
+        
+        self.status_label.setText(display_text)
+        self.status_label.setStyleSheet(f"font-weight: bold; color: {style_color};")
+        
+        if self.floating_window:
+            self.floating_window.update_status(display_text, style_color)
+
     def on_best_scale_found(self, image_path: str, scale: float):
         current_selected_path, _ = self.get_selected_item_path()
         if image_path and image_path == current_selected_path:
             self.current_best_scale_label.setText(f"最適スケール: {scale:.3f}倍")
             self.current_best_scale_label.setStyleSheet("color: green;")
 
-    # ★★★ 変更点: ダークモードを判別し、文字色を動的に変更するロジックを追加 ★★★
     def on_window_scale_calculated(self, scale: float):
         if scale > 0:
             self.current_best_scale_label.setText(f"計算スケール: {scale:.3f}倍")
-            # ダークモードの場合は白、ライトモードの場合は紫で表示
             color = "white" if self.is_dark_mode() else "purple"
             self.current_best_scale_label.setStyleSheet(f"color: {color};")
             self.auto_scale_widgets['center'].setValue(scale)
@@ -965,8 +1120,14 @@ class UIManager(QMainWindow):
         self.rec_area_preview_label.set_pixmap(pixmap)
         
     def update_log(self, message: str): self.log_text.append(message)
+    
     def closeEvent(self, event):
-        self.core_engine.cleanup(); self.stopMonitoringRequested.emit(); QApplication.instance().quit(); event.accept()
+        if self.floating_window:
+            self.floating_window.close()
+        self.core_engine.cleanup()
+        self.stopMonitoringRequested.emit()
+        QApplication.instance().quit()
+        event.accept()
         
     def setRecAreaDialog(self):
         dialog = RecAreaSelectionDialog(self)
@@ -975,9 +1136,59 @@ class UIManager(QMainWindow):
         dialog.exec()
 
     def adjust_initial_size(self):
-        """
-        ウィンドウの初期表示後にサイズを調整する。
-        Linuxのウィンドウマネージャの挙動に対応するため、少し遅延させて実行する。
-        """
         self.setMinimumWidth(0)
         self.resize(960, 640)
+
+    def toggle_minimal_ui_mode(self):
+        self.is_minimal_mode = not self.is_minimal_mode
+        if self.is_minimal_mode:
+            self.normal_ui_geometries['main'] = self.geometry()
+            if self.performance_monitor and self.performance_monitor.isVisible():
+                self.normal_ui_geometries['perf'] = self.performance_monitor.geometry()
+
+            self.showMinimized()
+            if self.performance_monitor:
+                self.performance_monitor.hide()
+            
+            self.floating_window = FloatingWindow()
+            self.floating_window.startMonitoringRequested.connect(self.startMonitoringRequested)
+            self.floating_window.stopMonitoringRequested.connect(self.stopMonitoringRequested)
+            self.floating_window.captureImageRequested.connect(self.captureImageRequested)
+            self.floating_window.toggleMainUIRequested.connect(self.toggle_minimal_ui_mode)
+            self.floating_window.closeRequested.connect(self.toggle_minimal_ui_mode)
+            self.floating_window.setRecAreaRequested.connect(self.setRecAreaDialog)
+            
+            self.set_status(self.status_label.text(), self.status_label.palette().color(QPalette.WindowText).name())
+            
+            self.floating_window.show()
+            self.toggle_minimal_ui_button.setText("最小UIモード停止")
+        else:
+            if self.floating_window:
+                self.floating_window.close()
+                self.floating_window = None
+            
+            self.showNormal()
+            if 'main' in self.normal_ui_geometries:
+                self.setGeometry(self.normal_ui_geometries['main'])
+            
+            if self.performance_monitor:
+                if 'perf' in self.normal_ui_geometries:
+                    self.performance_monitor.show()
+                    self.performance_monitor.setGeometry(self.normal_ui_geometries['perf'])
+            
+            self.activateWindow()
+            self.toggle_minimal_ui_button.setText("最小UIモード")
+
+    def on_selection_process_started(self):
+        if self.performance_monitor:
+            self.performance_monitor.hide()
+        if self.is_minimal_mode and self.floating_window:
+            self.floating_window.hide()
+
+    def on_selection_process_finished(self):
+        if self.is_minimal_mode:
+            if self.floating_window:
+                self.floating_window.show()
+        else:
+            if self.performance_monitor:
+                self.performance_monitor.show()

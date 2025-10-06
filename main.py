@@ -82,6 +82,9 @@ def main():
     
     performance_monitor = PerformanceMonitor(ui_manager, parent=None)
     
+    # ★★★ 変更点: UIManagerにPerformanceMonitorのインスタンスを渡す ★★★
+    ui_manager.set_performance_monitor(performance_monitor)
+    
     logger.set_ui(ui_manager, performance_monitor)
     
     core_engine = CoreEngine(
@@ -101,8 +104,11 @@ def main():
     core_engine.updateRecAreaPreview.connect(ui_manager.update_rec_area_preview)
     core_engine.fpsUpdated.connect(performance_monitor.update_fps)
     core_engine.cacheBuildFinished.connect(ui_manager.on_cache_build_finished)
-    core_engine.selectionProcessStarted.connect(performance_monitor.hide)
-    core_engine.selectionProcessFinished.connect(performance_monitor.show)
+    
+    # ★★★ 変更点: 範囲選択中のウィンドウ表示/非表示をUIManagerに一任する ★★★
+    core_engine.selectionProcessStarted.connect(ui_manager.on_selection_process_started)
+    core_engine.selectionProcessFinished.connect(ui_manager.on_selection_process_finished)
+
     core_engine.bestScaleFound.connect(ui_manager.on_best_scale_found)
     core_engine.windowScaleCalculated.connect(ui_manager.on_window_scale_calculated)
     core_engine.askToSaveWindowBaseSizeSignal.connect(ui_manager.show_prompt_to_save_base_size)
@@ -115,7 +121,6 @@ def main():
     ui_manager.captureImageRequested.connect(core_engine.capture_image_for_registration)
     ui_manager.deleteItemRequested.connect(core_engine.delete_selected_item)
     
-    # ★★★ 変更点: フォルダ設定変更のシグナルを接続 ★★★
     ui_manager.folderSettingsChanged.connect(core_engine.on_folder_settings_changed)
     
     ui_manager.orderChanged.connect(core_engine.on_order_changed)

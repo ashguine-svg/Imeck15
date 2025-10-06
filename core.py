@@ -447,10 +447,14 @@ class CoreEngine(QObject):
 
             auto_scale_settings = self.app_config.get('auto_scale', {})
             use_window_scale_base = auto_scale_settings.get('use_window_scale', True)
+            capture_scale = self.app_config.get('capture_scale_factor', 1.0)
             
-            scales = [1.0] 
+            scales = [1.0]
 
-            if use_window_scale_base:
+            if capture_scale != 1.0:
+                self.logger.log(f"全体キャプチャスケール {capture_scale:.2f} が有効です。自動スケール機能は無効化されます。")
+                scales = [capture_scale]
+            elif use_window_scale_base:
                 use_scale_search = auto_scale_settings.get('enabled', False)
                 
                 if self.current_window_scale is not None:
@@ -603,7 +607,7 @@ class CoreEngine(QObject):
 
             if self._cooldown_until > current_time:
                 remaining_cooldown = self._cooldown_until - current_time
-                time.sleep(min(remaining_cooldown, 0.1)) # ★★★ 変更点: 他の処理（バックアップ等）のためのクールダウンは維持しつつ、最大待機時間を短くする ★★★
+                time.sleep(min(remaining_cooldown, 0.1))
                 continue
 
             frame_counter += 1
@@ -630,6 +634,16 @@ class CoreEngine(QObject):
                     self.updateLog.emit("画面のキャプチャに失敗しました。")
                     time.sleep(1.0)
                     continue
+
+                capture_scale = self.app_config.get('capture_scale_factor', 1.0)
+                if capture_scale != 1.0 and screen_bgr is not None:
+                    screen_bgr = cv2.resize(
+                        screen_bgr,
+                        None,
+                        fx=capture_scale,
+                        fy=capture_scale,
+                        interpolation=cv2.INTER_AREA
+                    )
                 
                 screen_gray = cv2.cvtColor(screen_bgr, cv2.COLOR_BGR2GRAY)
                 screen_bgr_umat, screen_gray_umat = None, None
@@ -675,15 +689,10 @@ class CoreEngine(QObject):
                 self.logger.log(f"フォルダ '{Path(folder_path).name}' の優先監視を終了しました。({reason})")
             self.priority_mode_info = {}
 
-    # ★★★ 変更点: メソッド全体を書き換え ★★★
     def _process_matches_as_sequence(self, all_matches, current_time, last_match_time_map):
-        """
-        見つかったマッチの中から、クリック条件を満たす最も優先度の高いものを1つだけクリックする。
-        """
         if not all_matches:
             return False
 
-        # 1. クリック可能なマッチ（インターバルが経過しているもの）をリストアップ
         clickable_matches = []
         for match in all_matches:
             path = match['path']
@@ -692,7 +701,6 @@ class CoreEngine(QObject):
             debounce = settings.get('debounce_time', 0.0)
             
             effective_interval = interval
-            # 直前にクリックした画像と同じ場合、デバウンス時間を加算
             if self._last_clicked_path == path and debounce > 0:
                 effective_interval += debounce
             
@@ -703,22 +711,17 @@ class CoreEngine(QObject):
         if not clickable_matches:
             return False
 
-        # 2. 優先順位（インターバルが短い順 > 信頼度が高い順）でソート
         clickable_matches.sort(key=lambda m: (m['settings'].get('interval_time', 1.5), -m['confidence']))
         
-        # 3. 最も優先度の高いものを1つだけ選ぶ
         target_match = clickable_matches[0]
 
         if not self.is_monitoring:
             return False 
 
-        # 4. 選ばれた1つだけをクリックする
         self._execute_click(target_match)
         
         path = target_match['path']
         last_match_time_map[path] = time.time()
-        
-        # 5. グローバルなクールダウンは設定しない。ループは即座に次の監視サイクルに移る。
         
         return True
 
@@ -905,63 +908,78 @@ class CoreEngine(QObject):
     def _execute_click(self, match_info):
         block_input(True)
         try:
+            # 1. 必要な情報を取得
             settings = match_info['settings']
-            match_rect_in_rec_area = match_info['rect']
-            scale = match_info.get('scale', 1.0)
+            match_rect_in_rec_area = match_info['rect'] # 縮小された画像内でのマッチ座標
+            scale = match_info.get('scale', 1.0) # 自動スケールまたは全体スケールの倍率
             path = match_info['path']
+            # アプリ設定から全体キャプチャスケールを取得 (デフォルトは1.0)
+            capture_scale = self.app_config.get('capture_scale_factor', 1.0)
 
+            # 認識範囲の左上オフセット (これは元の解像度)
             rec_area_offset_x, rec_area_offset_y = (self.recognition_area[0], self.recognition_area[1]) if self.recognition_area else (0, 0)
             
-            match_abs_x = rec_area_offset_x + match_rect_in_rec_area[0]
-            match_abs_y = rec_area_offset_y + match_rect_in_rec_area[1]
-            
-            click_x_float, click_y_float = 0.0, 0.0
-            
+            # ROIが有効な場合、テンプレート画像内でのROIの左上オフセットを取得
             roi_offset_x, roi_offset_y = 0, 0
             if settings.get('roi_enabled') and settings.get('roi_rect'):
                 roi_rect = settings['roi_rect']
                 roi_offset_x = max(0, roi_rect[0])
                 roi_offset_y = max(0, roi_rect[1])
 
+            # 2. テンプレートの左上を基準とした「クリックオフセット」を計算 (スケール適用済み)
+            click_offset_x_scaled = 0.0
+            click_offset_y_scaled = 0.0
+            
             if settings.get('point_click') and settings.get('click_position'):
                 click_pos_in_template = settings['click_position']
                 
-                click_offset_in_roi_x = click_pos_in_template[0] - roi_offset_x
-                click_offset_in_roi_y = click_pos_in_template[1] - roi_offset_y
-                
-                scaled_offset_x = click_offset_in_roi_x * scale
-                scaled_offset_y = click_offset_in_roi_y * scale
-                
-                click_x_float = match_abs_x + scaled_offset_x
-                click_y_float = match_abs_y + scaled_offset_y
+                # クリック位置をROI基準のオフセットに変換し、スケールを適用
+                click_offset_x_scaled = (click_pos_in_template[0] - roi_offset_x) * scale
+                click_offset_y_scaled = (click_pos_in_template[1] - roi_offset_y) * scale
 
             elif settings.get('range_click') and settings.get('click_rect'):
                 click_rect_in_template = settings['click_rect']
-                
+
+                # 範囲の各点をROI基準のオフセットに変換し、スケールを適用
                 rect_x1_in_roi = click_rect_in_template[0] - roi_offset_x
                 rect_y1_in_roi = click_rect_in_template[1] - roi_offset_y
                 rect_x2_in_roi = click_rect_in_template[2] - roi_offset_x
                 rect_y2_in_roi = click_rect_in_template[3] - roi_offset_y
 
-                x1 = match_abs_x + (rect_x1_in_roi * scale)
-                y1 = match_abs_y + (rect_y1_in_roi * scale)
-                x2 = match_abs_x + (rect_x2_in_roi * scale)
-                y2 = match_abs_y + (rect_y2_in_roi * scale)
+                x1_offset_scaled = rect_x1_in_roi * scale
+                y1_offset_scaled = rect_y1_in_roi * scale
+                x2_offset_scaled = rect_x2_in_roi * scale
+                y2_offset_scaled = rect_y2_in_roi * scale
 
                 if settings.get('random_click', True):
-                    int_x1, int_x2 = int(min(x1, x2)), int(max(x1, x2))
-                    int_y1, int_y2 = int(min(y1, y2)), int(max(y1, y2))
-                    click_x_float = int_x1 if int_x1 >= int_x2 else random.randint(int_x1, int_x2)
-                    click_y_float = int_y1 if int_y1 >= int_y2 else random.randint(int_y1, int_y2)
+                    # スケール適用後の範囲内でランダムなオフセットを決定
+                    min_x, max_x = min(x1_offset_scaled, x2_offset_scaled), max(x1_offset_scaled, x2_offset_scaled)
+                    min_y, max_y = min(y1_offset_scaled, y2_offset_scaled), max(y1_offset_scaled, y2_offset_scaled)
+                    click_offset_x_scaled = random.uniform(min_x, max_x)
+                    click_offset_y_scaled = random.uniform(min_y, max_y)
                 else:
-                    click_x_float = (x1 + x2) / 2
-                    click_y_float = (y1 + y2) / 2
+                    # スケール適用後の範囲の中心をオフセットとする
+                    click_offset_x_scaled = (x1_offset_scaled + x2_offset_scaled) / 2
+                    click_offset_y_scaled = (y1_offset_scaled + y2_offset_scaled) / 2
             else:
-                match_width = match_rect_in_rec_area[2] - match_rect_in_rec_area[0]
-                match_height = match_rect_in_rec_area[3] - match_rect_in_rec_area[1]
-                click_x_float = match_abs_x + match_width / 2
-                click_y_float = match_abs_y + match_height / 2
+                # デフォルト：マッチした領域の中心をクリック
+                match_width_scaled = match_rect_in_rec_area[2] - match_rect_in_rec_area[0]
+                match_height_scaled = match_rect_in_rec_area[3] - match_rect_in_rec_area[1]
+                click_offset_x_scaled = match_width_scaled / 2
+                click_offset_y_scaled = match_height_scaled / 2
+
+            # 3. 最終的なクリック座標を計算
+            # (マッチ位置 + クリックオフセット) で縮小画像内のクリック位置を特定
+            click_x_in_rec_area_scaled = match_rect_in_rec_area[0] + click_offset_x_scaled
+            click_y_in_rec_area_scaled = match_rect_in_rec_area[1] + click_offset_y_scaled
             
+            # ★★★ 修正の核心部 ★★★
+            # 縮小画像内の座標を `capture_scale` で割り、元のスケールに戻す。
+            # その後、画面上の認識範囲オフセットを加算して、絶対座標を求める。
+            click_x_float = rec_area_offset_x + (click_x_in_rec_area_scaled / capture_scale)
+            click_y_float = rec_area_offset_y + (click_y_in_rec_area_scaled / capture_scale)
+            
+            # 4. 座標を整数に変換し、クリックを実行
             screen_width, screen_height = pyautogui.size()
             final_click_x = int(click_x_float)
             final_click_y = int(click_y_float)
@@ -1230,7 +1248,6 @@ class CoreEngine(QObject):
             self._showUiSignal.emit()
             self.selectionProcessFinished.emit()
 
-    # ★★★ 変更点: 誤って削除されていた handle_area_selection メソッドを復元 ★★★
     def handle_area_selection(self, coords):
         if self._is_capturing_for_registration:
             self._is_capturing_for_registration = False
@@ -1318,3 +1335,4 @@ class CoreEngine(QObject):
             remaining_time = backup_duration - elapsed_time
             return max(0, remaining_time)
         return -1.0
+
