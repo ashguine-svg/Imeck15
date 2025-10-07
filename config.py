@@ -77,20 +77,24 @@ class ConfigManager:
             "frame_skip_rate": 2,
             "grayscale_matching": False,
             "use_opencl": True,
-            # ★★★ 変更点: 全体キャプチャスケール設定を追加 ★★★
-            "capture_scale_factor": 1.0
+            "lightweight_mode": {
+                "enabled": True, # ★★★ 変更点: デフォルトでONにする ★★★
+                "preset": "標準" # 標準, パフォーマンス, ウルトラ
+            }
         }
         if not self.app_config_path.exists():
             return default_config
         try:
             with open(self.app_config_path, 'r', encoding='utf-8') as f:
                 config = json.load(f)
+                config.pop('capture_scale_factor', None)
+
                 for key, value in default_config.items():
                     if key not in config:
                         config[key] = value
                     elif isinstance(value, dict):
                          for sub_key, sub_value in value.items():
-                              if sub_key not in config[key]:
+                              if sub_key not in config.get(key, {}):
                                    config[key][sub_key] = sub_value
                 return config
         except (json.JSONDecodeError, Exception) as e:
@@ -130,9 +134,9 @@ class ConfigManager:
         setting_path = self._get_setting_path(item_path)
         if item_path.is_dir():
             default_setting = {
-                'mode': 'normal',  # 'normal', 'excluded', 'priority_timer'
-                'priority_interval': 10,  # minutes
-                'priority_timeout': 5,    # minutes
+                'mode': 'normal',
+                'priority_interval': 10,
+                'priority_timeout': 5,
             }
         else:
             default_setting = {

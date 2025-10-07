@@ -255,6 +255,11 @@ class CoreEngine(QObject):
         self._pending_window_info = None
         self._pending_scale_prompt_info = None
         self._cooldown_until = 0
+        
+        # ★★★ 変更点: 実行時に使用する設定値を保持する変数を追加 ★★★
+        self.effective_capture_scale = 1.0
+        self.effective_frame_skip_rate = 2
+        
         self.on_app_config_changed()
 
     def set_opencl_enabled(self, enabled: bool):
@@ -269,12 +274,36 @@ class CoreEngine(QObject):
             except Exception as e:
                 self.logger.log(f"OpenCLの設定変更中にエラーが発生しました: {e}")
     
+    # ★★★ 変更点: 新しい設定を読み込み、実行時の設定値を決定するロジック ★★★
     def on_app_config_changed(self):
         self.app_config = self.ui_manager.app_config
         self.capture_manager.set_capture_method(self.app_config.get('capture_method', 'dxcam'))
-        self.frame_skip_rate = self.app_config.get('frame_skip_rate', 2)
         self.set_opencl_enabled(self.app_config.get('use_opencl', True))
-        self.logger.log(f"アプリ設定変更: キャプチャ={self.capture_manager.current_method}, スキップ={self.frame_skip_rate}, OpenCL={cv2.ocl.useOpenCL() if OPENCL_AVAILABLE else 'N/A'}")
+        
+        # 軽量化モードのプリセットに基づいて実行時の設定値を決定
+        lw_conf = self.app_config.get('lightweight_mode', {})
+        is_lw_enabled = lw_conf.get('enabled', False)
+        preset = lw_conf.get('preset', '標準')
+        
+        if is_lw_enabled:
+            if preset == "標準":
+                self.effective_capture_scale = 0.5
+                self.effective_frame_skip_rate = self.app_config.get('frame_skip_rate', 2) + 5
+            elif preset == "パフォーマンス":
+                self.effective_capture_scale = 0.4
+                self.effective_frame_skip_rate = 15
+            elif preset == "ウルトラ":
+                self.effective_capture_scale = 0.3
+                self.effective_frame_skip_rate = 25
+        else:
+            self.effective_capture_scale = 1.0
+            self.effective_frame_skip_rate = self.app_config.get('frame_skip_rate', 2)
+
+        self.logger.log(f"アプリ設定変更: キャプチャ={self.capture_manager.current_method}, "
+                        f"軽量化={is_lw_enabled}({preset}), "
+                        f"実効スケール={self.effective_capture_scale:.2f}, "
+                        f"実効スキップ={self.effective_frame_skip_rate}, "
+                        f"OpenCL={cv2.ocl.useOpenCL() if OPENCL_AVAILABLE else 'N/A'}")
 
     def _show_ui_safe(self):
         if self.ui_manager:
@@ -447,32 +476,38 @@ class CoreEngine(QObject):
 
             auto_scale_settings = self.app_config.get('auto_scale', {})
             use_window_scale_base = auto_scale_settings.get('use_window_scale', True)
-            capture_scale = self.app_config.get('capture_scale_factor', 1.0)
             
-            scales = [1.0]
+            # ★★★ 変更点: 実行時のスケール値をselfから取得 ★★★
+            capture_scale = self.effective_capture_scale
 
-            if capture_scale != 1.0:
-                self.logger.log(f"全体キャプチャスケール {capture_scale:.2f} が有効です。自動スケール機能は無効化されます。")
-                scales = [capture_scale]
-            elif use_window_scale_base:
-                use_scale_search = auto_scale_settings.get('enabled', False)
+            # 基本となるスケール（ウィンドウスケールやスケール検索で決まる）
+            base_scales = [1.0]
+
+            if use_window_scale_base:
+                # UI上で軽量化モードとスケール検索は排他になっているため、capture_scaleが1.0の場合のみスケール検索を考慮
+                use_scale_search = auto_scale_settings.get('enabled', False) and capture_scale == 1.0
                 
-                if self.current_window_scale is not None:
-                    center_scale = self.current_window_scale
-                    self.logger.log(f"ウィンドウ基準スケール ({center_scale:.3f}) を中心とします。")
-                else:
-                    center_scale = auto_scale_settings.get('center', 1.0)
-                
+                center_scale = self.current_window_scale if self.current_window_scale is not None else auto_scale_settings.get('center', 1.0)
+
                 if use_scale_search:
                     range_ = auto_scale_settings.get('range', 0.2)
                     steps = auto_scale_settings.get('steps', 5)
                     if steps > 1:
-                        scales = np.linspace(center_scale - range_, center_scale + range_, steps)
-                    self.logger.log(f"スケール検索有効: {len(scales)}段階で探索 (中心: {center_scale:.3f})。")
+                        base_scales = np.linspace(center_scale - range_, center_scale + range_, steps)
+                    self.logger.log(f"スケール検索有効: {len(base_scales)}段階で探索 (中心: {center_scale:.3f})。")
                 else:
-                    scales = [center_scale]
-            else:
-                self.logger.log("ウィンドウスケール基準が無効なため、スケール1.0倍で固定します。")
+                    base_scales = [center_scale]
+            
+            # 最終的なテンプレートスケール = 基本スケール * 軽量化スケール
+            scales = [s * capture_scale for s in base_scales]
+
+            if capture_scale != 1.0:
+                self.logger.log(f"全体キャプチャスケール（軽量化モード） {capture_scale:.2f} を適用します。")
+            if use_window_scale_base and self.current_window_scale is not None:
+                self.logger.log(f"ウィンドウスケール {self.current_window_scale:.3f} を適用します。")
+
+            log_scales = ", ".join([f"{s:.3f}" for s in scales])
+            self.logger.log(f"最終的なテンプレート検索スケール: [{log_scales}]")
             
             hierarchical_list = self.config_manager.get_hierarchical_list()
             
@@ -625,7 +660,8 @@ class CoreEngine(QObject):
                 if self.is_backup_countdown_active:
                     time.sleep(1.0)
 
-                if (frame_counter % self.frame_skip_rate) != 0: 
+                # ★★★ 変更点: 実行時のフレームスキップレートを使用 ★★★
+                if (frame_counter % self.effective_frame_skip_rate) != 0: 
                     time.sleep(0.01)
                     continue
                 
@@ -634,8 +670,9 @@ class CoreEngine(QObject):
                     self.updateLog.emit("画面のキャプチャに失敗しました。")
                     time.sleep(1.0)
                     continue
-
-                capture_scale = self.app_config.get('capture_scale_factor', 1.0)
+                
+                # ★★★ 変更点: 実行時のキャプチャスケールを使用 ★★★
+                capture_scale = self.effective_capture_scale
                 if capture_scale != 1.0 and screen_bgr is not None:
                     screen_bgr = cv2.resize(
                         screen_bgr,
@@ -908,78 +945,59 @@ class CoreEngine(QObject):
     def _execute_click(self, match_info):
         block_input(True)
         try:
-            # 1. 必要な情報を取得
             settings = match_info['settings']
-            match_rect_in_rec_area = match_info['rect'] # 縮小された画像内でのマッチ座標
-            scale = match_info.get('scale', 1.0) # 自動スケールまたは全体スケールの倍率
+            match_rect_in_rec_area = match_info['rect']
+            scale = match_info.get('scale', 1.0)
             path = match_info['path']
-            # アプリ設定から全体キャプチャスケールを取得 (デフォルトは1.0)
-            capture_scale = self.app_config.get('capture_scale_factor', 1.0)
+            
+            # ★★★ 変更点: 実行時のキャプチャスケールを使用 ★★★
+            capture_scale = self.effective_capture_scale
 
-            # 認識範囲の左上オフセット (これは元の解像度)
             rec_area_offset_x, rec_area_offset_y = (self.recognition_area[0], self.recognition_area[1]) if self.recognition_area else (0, 0)
             
-            # ROIが有効な場合、テンプレート画像内でのROIの左上オフセットを取得
             roi_offset_x, roi_offset_y = 0, 0
             if settings.get('roi_enabled') and settings.get('roi_rect'):
                 roi_rect = settings['roi_rect']
                 roi_offset_x = max(0, roi_rect[0])
                 roi_offset_y = max(0, roi_rect[1])
 
-            # 2. テンプレートの左上を基準とした「クリックオフセット」を計算 (スケール適用済み)
             click_offset_x_scaled = 0.0
             click_offset_y_scaled = 0.0
             
             if settings.get('point_click') and settings.get('click_position'):
                 click_pos_in_template = settings['click_position']
-                
-                # クリック位置をROI基準のオフセットに変換し、スケールを適用
                 click_offset_x_scaled = (click_pos_in_template[0] - roi_offset_x) * scale
                 click_offset_y_scaled = (click_pos_in_template[1] - roi_offset_y) * scale
-
             elif settings.get('range_click') and settings.get('click_rect'):
                 click_rect_in_template = settings['click_rect']
-
-                # 範囲の各点をROI基準のオフセットに変換し、スケールを適用
                 rect_x1_in_roi = click_rect_in_template[0] - roi_offset_x
                 rect_y1_in_roi = click_rect_in_template[1] - roi_offset_y
                 rect_x2_in_roi = click_rect_in_template[2] - roi_offset_x
                 rect_y2_in_roi = click_rect_in_template[3] - roi_offset_y
-
                 x1_offset_scaled = rect_x1_in_roi * scale
                 y1_offset_scaled = rect_y1_in_roi * scale
                 x2_offset_scaled = rect_x2_in_roi * scale
                 y2_offset_scaled = rect_y2_in_roi * scale
-
                 if settings.get('random_click', True):
-                    # スケール適用後の範囲内でランダムなオフセットを決定
                     min_x, max_x = min(x1_offset_scaled, x2_offset_scaled), max(x1_offset_scaled, x2_offset_scaled)
                     min_y, max_y = min(y1_offset_scaled, y2_offset_scaled), max(y1_offset_scaled, y2_offset_scaled)
                     click_offset_x_scaled = random.uniform(min_x, max_x)
                     click_offset_y_scaled = random.uniform(min_y, max_y)
                 else:
-                    # スケール適用後の範囲の中心をオフセットとする
                     click_offset_x_scaled = (x1_offset_scaled + x2_offset_scaled) / 2
                     click_offset_y_scaled = (y1_offset_scaled + y2_offset_scaled) / 2
             else:
-                # デフォルト：マッチした領域の中心をクリック
                 match_width_scaled = match_rect_in_rec_area[2] - match_rect_in_rec_area[0]
                 match_height_scaled = match_rect_in_rec_area[3] - match_rect_in_rec_area[1]
                 click_offset_x_scaled = match_width_scaled / 2
                 click_offset_y_scaled = match_height_scaled / 2
 
-            # 3. 最終的なクリック座標を計算
-            # (マッチ位置 + クリックオフセット) で縮小画像内のクリック位置を特定
             click_x_in_rec_area_scaled = match_rect_in_rec_area[0] + click_offset_x_scaled
             click_y_in_rec_area_scaled = match_rect_in_rec_area[1] + click_offset_y_scaled
             
-            # ★★★ 修正の核心部 ★★★
-            # 縮小画像内の座標を `capture_scale` で割り、元のスケールに戻す。
-            # その後、画面上の認識範囲オフセットを加算して、絶対座標を求める。
             click_x_float = rec_area_offset_x + (click_x_in_rec_area_scaled / capture_scale)
             click_y_float = rec_area_offset_y + (click_y_in_rec_area_scaled / capture_scale)
             
-            # 4. 座標を整数に変換し、クリックを実行
             screen_width, screen_height = pyautogui.size()
             final_click_x = int(click_x_float)
             final_click_y = int(click_y_float)
@@ -1335,4 +1353,3 @@ class CoreEngine(QObject):
             remaining_time = backup_duration - elapsed_time
             return max(0, remaining_time)
         return -1.0
-
