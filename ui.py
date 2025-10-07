@@ -545,7 +545,7 @@ class UIManager(QMainWindow):
         fs_layout = QHBoxLayout()
         fs_layout.addWidget(QLabel("フレームスキップ:"))
         self.app_settings_widgets['frame_skip_rate'] = QSpinBox()
-        self.app_settings_widgets['frame_skip_rate'].setRange(1, 10)
+        self.app_settings_widgets['frame_skip_rate'].setRange(1, 20)
         fs_layout.addWidget(self.app_settings_widgets['frame_skip_rate'])
         fs_layout.addStretch()
         app_settings_layout.addLayout(fs_layout)
