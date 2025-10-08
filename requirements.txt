@@ -5,3 +5,7 @@ mss
 numpy
 pyautogui
 psutil
+ImageHash
+Pillow
+dxcam
+pywin32

@@ -256,7 +256,6 @@ class CoreEngine(QObject):
         self._pending_scale_prompt_info = None
         self._cooldown_until = 0
         
-        # ★★★ 変更点: 実行時に使用する設定値を保持する変数を追加 ★★★
         self.effective_capture_scale = 1.0
         self.effective_frame_skip_rate = 2
         
@@ -274,27 +273,28 @@ class CoreEngine(QObject):
             except Exception as e:
                 self.logger.log(f"OpenCLの設定変更中にエラーが発生しました: {e}")
     
-    # ★★★ 変更点: 新しい設定を読み込み、実行時の設定値を決定するロジック ★★★
     def on_app_config_changed(self):
         self.app_config = self.ui_manager.app_config
         self.capture_manager.set_capture_method(self.app_config.get('capture_method', 'dxcam'))
         self.set_opencl_enabled(self.app_config.get('use_opencl', True))
         
-        # 軽量化モードのプリセットに基づいて実行時の設定値を決定
         lw_conf = self.app_config.get('lightweight_mode', {})
         is_lw_enabled = lw_conf.get('enabled', False)
         preset = lw_conf.get('preset', '標準')
         
         if is_lw_enabled:
+            # ★★★ 変更点 ★★★
+            user_frame_skip = self.app_config.get('frame_skip_rate', 2)
+            
             if preset == "標準":
                 self.effective_capture_scale = 0.5
-                self.effective_frame_skip_rate = self.app_config.get('frame_skip_rate', 2) + 5
+                self.effective_frame_skip_rate = user_frame_skip + 5
             elif preset == "パフォーマンス":
                 self.effective_capture_scale = 0.4
-                self.effective_frame_skip_rate = 15
+                self.effective_frame_skip_rate = user_frame_skip + 20
             elif preset == "ウルトラ":
                 self.effective_capture_scale = 0.3
-                self.effective_frame_skip_rate = 25
+                self.effective_frame_skip_rate = user_frame_skip + 25
         else:
             self.effective_capture_scale = 1.0
             self.effective_frame_skip_rate = self.app_config.get('frame_skip_rate', 2)
@@ -477,14 +477,11 @@ class CoreEngine(QObject):
             auto_scale_settings = self.app_config.get('auto_scale', {})
             use_window_scale_base = auto_scale_settings.get('use_window_scale', True)
             
-            # ★★★ 変更点: 実行時のスケール値をselfから取得 ★★★
             capture_scale = self.effective_capture_scale
 
-            # 基本となるスケール（ウィンドウスケールやスケール検索で決まる）
             base_scales = [1.0]
 
             if use_window_scale_base:
-                # UI上で軽量化モードとスケール検索は排他になっているため、capture_scaleが1.0の場合のみスケール検索を考慮
                 use_scale_search = auto_scale_settings.get('enabled', False) and capture_scale == 1.0
                 
                 center_scale = self.current_window_scale if self.current_window_scale is not None else auto_scale_settings.get('center', 1.0)
@@ -498,7 +495,6 @@ class CoreEngine(QObject):
                 else:
                     base_scales = [center_scale]
             
-            # 最終的なテンプレートスケール = 基本スケール * 軽量化スケール
             scales = [s * capture_scale for s in base_scales]
 
             if capture_scale != 1.0:
@@ -660,7 +656,6 @@ class CoreEngine(QObject):
                 if self.is_backup_countdown_active:
                     time.sleep(1.0)
 
-                # ★★★ 変更点: 実行時のフレームスキップレートを使用 ★★★
                 if (frame_counter % self.effective_frame_skip_rate) != 0: 
                     time.sleep(0.01)
                     continue
@@ -671,7 +666,6 @@ class CoreEngine(QObject):
                     time.sleep(1.0)
                     continue
                 
-                # ★★★ 変更点: 実行時のキャプチャスケールを使用 ★★★
                 capture_scale = self.effective_capture_scale
                 if capture_scale != 1.0 and screen_bgr is not None:
                     screen_bgr = cv2.resize(
@@ -950,7 +944,6 @@ class CoreEngine(QObject):
             scale = match_info.get('scale', 1.0)
             path = match_info['path']
             
-            # ★★★ 変更点: 実行時のキャプチャスケールを使用 ★★★
             capture_scale = self.effective_capture_scale
 
             rec_area_offset_x, rec_area_offset_y = (self.recognition_area[0], self.recognition_area[1]) if self.recognition_area else (0, 0)
