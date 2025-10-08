@@ -541,7 +541,6 @@ class UIManager(QMainWindow):
         fs_layout = QHBoxLayout()
         fs_layout.addWidget(QLabel("フレームスキップ:"))
         self.app_settings_widgets['frame_skip_rate'] = QSpinBox()
-        # ★★★ 変更点: フレームスキップの最大値を20に変更 ★★★
         self.app_settings_widgets['frame_skip_rate'].setRange(1, 20)
         fs_layout.addWidget(self.app_settings_widgets['frame_skip_rate'])
         fs_layout.addStretch()
@@ -566,8 +565,36 @@ class UIManager(QMainWindow):
         opencl_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
         app_settings_layout.addWidget(opencl_desc_label)
         
-        # ★★★ 変更点: 軽量化モードのUIをプリセット方式に変更 ★★★
+        # ★★★ ここから変更 ★★★
+        # 新しい設定項目グループを作成
+        stability_group = QGroupBox("画面安定性チェック")
+        stability_layout = QGridLayout(stability_group)
+
+        self.app_settings_widgets['stability_check_enabled'] = QCheckBox("有効にする")
+        stability_layout.addWidget(self.app_settings_widgets['stability_check_enabled'], 0, 0)
+        
+        threshold_layout = QHBoxLayout()
+        threshold_layout.addWidget(QLabel("閾値:"))
+        self.app_settings_widgets['stability_threshold'] = QSpinBox()
+        self.app_settings_widgets['stability_threshold'].setRange(0, 20)
+        threshold_layout.addWidget(self.app_settings_widgets['stability_threshold'])
+        threshold_layout.addStretch()
+        stability_layout.addLayout(threshold_layout, 0, 1)
+
+        stability_desc_label = QLabel(
+            "画面の描画中やエフェクト発生時を検出し、安定するまでクリックを保留します。<br>"
+            "数値を大きくすると、より大きな画面変化があっても「安定」とみなすようになります。"
+        )
+        stability_desc_label.setWordWrap(True)
+        stability_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
+        stability_layout.addWidget(stability_desc_label, 1, 0, 1, 2)
+        
+        # 軽量化モードの「前」に追加
+        app_settings_layout.addWidget(stability_group)
+
+        # 軽量化モードのUI
         lw_mode_group = QGroupBox("軽量化モード")
+        # ★★★ ここまで変更 ★★★
         lw_mode_layout = QVBoxLayout(lw_mode_group)
 
         self.app_settings_widgets['lightweight_mode_enabled'] = QCheckBox("軽量化モードを有効にする")
@@ -583,8 +610,8 @@ class UIManager(QMainWindow):
 
         cs_desc_label = QLabel(
             "<b>標準 (Standard):</b> デフォルト設定 (スケール:0.5倍, スキップ:+5)<br>"
-            "<b>パフォーマンス (Performance):</b> 標準より高いパフォーマンスを発揮します (スケール:0.4倍, スキップ:15)<br>"
-            "<b>ウルトラ (Ultra):</b> 最大限の軽量化を試みますが、環境によっては動作しない可能性があります (スケール:0.3倍, スキップ:25)<br>"
+            "<b>パフォーマンス (Performance):</b> 標準より高いパフォーマンスを発揮します (スケール:0.4倍, スキップ:+20)<br>"
+            "<b>ウルトラ (Ultra):</b> 最大限の軽量化を試みますが、環境によっては動作しない可能性があります (スケール:0.3倍, スキップ:+25)<br>"
             "<br><b>注意:</b> 軽量化モードを有効にすると、自動スケール機能は無効になります。"
         )
         cs_desc_label.setWordWrap(True)
@@ -592,7 +619,6 @@ class UIManager(QMainWindow):
         lw_mode_layout.addWidget(cs_desc_label)
         
         app_settings_layout.addWidget(lw_mode_group)
-        # ★★★ 変更ここまで ★★★
         
         app_settings_scroll_area.setWidget(app_settings_widget)
         self.preview_tabs.addTab(app_settings_scroll_area, "アプリ設定")
@@ -724,7 +750,6 @@ class UIManager(QMainWindow):
         text_color = palette.color(QPalette.ColorRole.WindowText)
         return window_color.lightness() < text_color.lightness()
 
-    # ★★★ 変更点: 新しい設定項目をUIにロードする処理を追加 ★★★
     def load_app_settings_to_ui(self):
         # 自動スケール設定
         as_conf = self.app_config.get('auto_scale', {})
@@ -740,6 +765,13 @@ class UIManager(QMainWindow):
         self.app_settings_widgets['grayscale_matching'].setChecked(self.app_config.get('grayscale_matching', False))
         self.app_settings_widgets['use_opencl'].setChecked(self.app_config.get('use_opencl', True))
         
+        # ★★★ 追加 ★★★
+        # 画面安定性チェック設定
+        stability_conf = self.app_config.get('screen_stability_check', {})
+        self.app_settings_widgets['stability_check_enabled'].setChecked(stability_conf.get('enabled', True))
+        self.app_settings_widgets['stability_threshold'].setValue(stability_conf.get('threshold', 5))
+        # ★★★ ここまで ★★★
+
         # 軽量化モード設定
         lw_conf = self.app_config.get('lightweight_mode', {})
         self.app_settings_widgets['lightweight_mode_enabled'].setChecked(lw_conf.get('enabled', False))
@@ -748,17 +780,13 @@ class UIManager(QMainWindow):
         self.update_auto_scale_info()
         self.update_dependent_widgets_state()
 
-    # ★★★ 変更点: UI要素の有効/無効を切り替えるロジックを更新 ★★★
     def update_dependent_widgets_state(self):
         is_lw_mode_enabled = self.app_settings_widgets['lightweight_mode_enabled'].isChecked()
         
-        # 軽量化モードが有効な場合、自動スケールグループは無効
         self.auto_scale_group.setEnabled(not is_lw_mode_enabled)
         
-        # 軽量化モードのプリセット選択コンボボックスの状態を更新
         self.app_settings_widgets['lightweight_mode_preset'].setEnabled(is_lw_mode_enabled)
         
-        # フレームスキップ設定の有効/無効を更新
         preset = self.app_settings_widgets['lightweight_mode_preset'].currentText()
         is_fs_user_configurable = not (is_lw_mode_enabled and preset in ["パフォーマンス", "ウルトラ"])
         self.app_settings_widgets['frame_skip_rate'].setEnabled(is_fs_user_configurable)
@@ -784,7 +812,6 @@ class UIManager(QMainWindow):
             self.auto_scale_info_label.setText("無効")
             self.auto_scale_info_label.setStyleSheet("color: gray;")
 
-    # ★★★ 変更点: 設定変更時の処理を更新 ★★★
     def on_app_settings_changed(self):
         self.app_config['auto_scale'] = self.get_auto_scale_settings()
         self.app_config['capture_method'] = 'dxcam' if self.app_settings_widgets['capture_method'].isChecked() else 'mss'
@@ -792,6 +819,13 @@ class UIManager(QMainWindow):
         self.app_config['grayscale_matching'] = self.app_settings_widgets['grayscale_matching'].isChecked()
         self.app_config['use_opencl'] = self.app_settings_widgets['use_opencl'].isChecked()
         
+        # ★★★ 追加 ★★★
+        self.app_config['screen_stability_check'] = {
+            "enabled": self.app_settings_widgets['stability_check_enabled'].isChecked(),
+            "threshold": self.app_settings_widgets['stability_threshold'].value()
+        }
+        # ★★★ ここまで ★★★
+
         self.app_config['lightweight_mode'] = {
             "enabled": self.app_settings_widgets['lightweight_mode_enabled'].isChecked(),
             "preset": self.app_settings_widgets['lightweight_mode_preset'].currentText()
@@ -822,7 +856,6 @@ class UIManager(QMainWindow):
         self.item_settings_widgets['point_click'].toggled.connect(self.on_point_click_toggled)
         self.item_settings_widgets['range_click'].toggled.connect(self.on_range_click_toggled)
         
-        # ★★★ 変更点: 新しいウィジェットのシグナルを接続 ★★★
         for widget in list(self.auto_scale_widgets.values()):
             if isinstance(widget, QDoubleSpinBox): widget.valueChanged.connect(self.on_app_settings_changed)
             elif isinstance(widget, QSpinBox): widget.valueChanged.connect(self.on_app_settings_changed)
@@ -856,6 +889,7 @@ class UIManager(QMainWindow):
             self.logger.log(f"画像フォルダを開けませんでした: {e}")
             QMessageBox.warning(self, "エラー", f"フォルダを開けませんでした:\n{e}")
 
+    # ... (以降のコードは変更ありません) ...
     def on_point_click_toggled(self, checked):
         if checked:
             range_cb = self.item_settings_widgets['range_click']

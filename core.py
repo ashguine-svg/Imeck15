@@ -16,6 +16,10 @@ from pynput import mouse, keyboard
 from concurrent.futures import ThreadPoolExecutor
 from threading import Timer
 
+from collections import deque
+from PIL import Image
+import imagehash
+
 import shutil
 import subprocess
 if sys.platform == 'win32':
@@ -68,6 +72,18 @@ try:
         OPENCL_STATUS_MESSAGE = "[INFO] OpenCL is not available."
 except Exception as e:
     OPENCL_STATUS_MESSAGE = f"[WARN] Could not configure OpenCL: {e}"
+
+
+def calculate_phash(image):
+    """OpenCVの画像(Numpy配列)からpHashを計算する"""
+    if image is None:
+        return None
+    try:
+        # OpenCVのBGR形式からPILで扱えるRGB形式に変換してImageオブジェクトを作成
+        pil_image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        return imagehash.phash(pil_image)
+    except Exception:
+        return None
 
 
 class SelectionOverlay(QWidget):
@@ -259,6 +275,8 @@ class CoreEngine(QObject):
         self.effective_capture_scale = 1.0
         self.effective_frame_skip_rate = 2
         
+        self.screen_stability_hashes = deque(maxlen=3)
+        
         self.on_app_config_changed()
 
     def set_opencl_enabled(self, enabled: bool):
@@ -283,7 +301,6 @@ class CoreEngine(QObject):
         preset = lw_conf.get('preset', '標準')
         
         if is_lw_enabled:
-            # ★★★ 変更点 ★★★
             user_frame_skip = self.app_config.get('frame_skip_rate', 2)
             
             if preset == "標準":
@@ -608,6 +625,8 @@ class CoreEngine(QObject):
             self._last_clicked_path = None
             
             self.priority_mode_info = {}
+            
+            self.screen_stability_hashes.clear()
 
             self.ui_manager.set_tree_enabled(False)
             self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
@@ -676,6 +695,12 @@ class CoreEngine(QObject):
                         interpolation=cv2.INTER_AREA
                     )
                 
+                h, w, _ = screen_bgr.shape
+                center_x, center_y = w // 2, h // 2
+                roi_size = 64 
+                center_roi = screen_bgr[center_y - roi_size:center_y + roi_size, center_x - roi_size:center_x + roi_size]
+                self.screen_stability_hashes.append(calculate_phash(center_roi))
+
                 screen_gray = cv2.cvtColor(screen_bgr, cv2.COLOR_BGR2GRAY)
                 screen_bgr_umat, screen_gray_umat = None, None
                 if cv2.ocl.useOpenCL():
@@ -746,6 +771,26 @@ class CoreEngine(QObject):
         
         target_match = clickable_matches[0]
 
+        stability_conf = self.app_config.get('screen_stability_check', {})
+        is_stability_check_enabled = stability_conf.get('enabled', True)
+
+        if is_stability_check_enabled:
+            is_stable = False
+            if len(self.screen_stability_hashes) == self.screen_stability_hashes.maxlen:
+                latest_hash = self.screen_stability_hashes[-1]
+                if latest_hash is not None:
+                    STABILITY_THRESHOLD = stability_conf.get('threshold', 5)
+                    all_hashes_are_similar = all(
+                        (latest_hash - h) <= STABILITY_THRESHOLD 
+                        for h in self.screen_stability_hashes if h is not None
+                    )
+                    if all_hashes_are_similar:
+                        is_stable = True
+            
+            if not is_stable:
+                self.updateLog.emit("画面が不安定なためクリックを保留します。")
+                return False
+        
         if not self.is_monitoring:
             return False 
 
@@ -814,10 +859,9 @@ class CoreEngine(QObject):
         active_normal_cache = filter_cache(self.normal_template_cache)
         normal_matches = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, active_normal_cache)
         
-        was_clicked = self._process_matches_as_sequence(normal_matches, current_time, last_match_time_map)
-
-        if was_clicked:
-            self.updateLog.emit("通常画像をクリックしたため、バックアップカウントダウンをリセットします。")
+        if normal_matches:
+            self._process_matches_as_sequence(normal_matches, current_time, last_match_time_map)
+            self.updateLog.emit("通常画像を検出したため、バックアップカウントダウンをキャンセルします。")
             self.is_backup_countdown_active = False
             self.active_backup_info = None
             self.backup_countdown_start_time = 0
@@ -937,6 +981,20 @@ class CoreEngine(QObject):
         return results
 
     def _execute_click(self, match_info):
+        if sys.platform == 'win32' and self.target_hwnd:
+            try:
+                current_foreground_hwnd = win32gui.GetForegroundWindow()
+                if self.target_hwnd != current_foreground_hwnd:
+                    if win32gui.IsIconic(self.target_hwnd):
+                        win32gui.ShowWindow(self.target_hwnd, win32con.SW_RESTORE)
+                    
+                    win32gui.SetForegroundWindow(self.target_hwnd)
+                    
+                    time.sleep(0.2)
+                    self.updateLog.emit(f"ウィンドウ '{win32gui.GetWindowText(self.target_hwnd)}' をアクティブ化しました。")
+            except Exception as e:
+                self.updateLog.emit(f"ウィンドウのアクティブ化に失敗しました: {e}")
+
         block_input(True)
         try:
             settings = match_info['settings']
@@ -995,9 +1053,13 @@ class CoreEngine(QObject):
             final_click_x = int(click_x_float)
             final_click_y = int(click_y_float)
             
-            if not (0 <= final_click_x < screen_width and 0 <= final_click_y < screen_height):
-                self.updateLog.emit(f"警告: 計算されたクリック座標 ({final_click_x}, {final_click_y}) が画面外です。クリックを中止しました。")
+            # ★★★ ここから変更 ★★★
+            # PyAutoGUIのフェールセーフ(画面の四隅にマウスが移動するとエラー)を回避するため、
+            # クリック座標が画面の縁(0や最大値)にならないようにチェックを厳格化します。
+            if not (1 <= final_click_x < screen_width - 1 and 1 <= final_click_y < screen_height - 1):
+                self.updateLog.emit(f"警告: 計算されたクリック座標 ({final_click_x}, {final_click_y}) が画面の端すぎるためクリックを中止しました。")
                 return
+            # ★★★ ここまで変更 ★★★
             
             pyautogui.click(final_click_x, final_click_y)
             self._click_count += 1
