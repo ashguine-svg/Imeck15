@@ -79,7 +79,6 @@ def calculate_phash(image):
     if image is None:
         return None
     try:
-        # OpenCVのBGR形式からPILで扱えるRGB形式に変換してImageオブジェクトを作成
         pil_image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
         return imagehash.phash(pil_image)
     except Exception:
@@ -276,6 +275,7 @@ class CoreEngine(QObject):
         self.effective_frame_skip_rate = 2
         
         self.screen_stability_hashes = deque(maxlen=3)
+        self.latest_frame_for_hash = None
         
         self.on_app_config_changed()
 
@@ -695,11 +695,7 @@ class CoreEngine(QObject):
                         interpolation=cv2.INTER_AREA
                     )
                 
-                h, w, _ = screen_bgr.shape
-                center_x, center_y = w // 2, h // 2
-                roi_size = 64 
-                center_roi = screen_bgr[center_y - roi_size:center_y + roi_size, center_x - roi_size:center_x + roi_size]
-                self.screen_stability_hashes.append(calculate_phash(center_roi))
+                self.latest_frame_for_hash = screen_bgr.copy()
 
                 screen_gray = cv2.cvtColor(screen_bgr, cv2.COLOR_BGR2GRAY)
                 screen_bgr_umat, screen_gray_umat = None, None
@@ -720,7 +716,34 @@ class CoreEngine(QObject):
             except Exception as e:
                 self.updateLog.emit(f"監視ループでエラーが発生しました: {e}")
                 time.sleep(1.0)
-    
+
+    def check_screen_stability(self) -> bool:
+        """クリック直前に呼び出し、画面が安定しているかを判定する"""
+        if not hasattr(self, 'latest_frame_for_hash') or self.latest_frame_for_hash is None:
+            return False
+
+        h, w, _ = self.latest_frame_for_hash.shape
+        center_x, center_y = w // 2, h // 2
+        roi_size = 64
+        center_roi = self.latest_frame_for_hash[center_y - roi_size:center_y + roi_size, center_x - roi_size:center_x + roi_size]
+        
+        current_hash = calculate_phash(center_roi)
+        if current_hash is None:
+            return False
+            
+        self.screen_stability_hashes.append(current_hash)
+
+        if len(self.screen_stability_hashes) < self.screen_stability_hashes.maxlen:
+            return False
+
+        stability_conf = self.app_config.get('screen_stability_check', {})
+        threshold = stability_conf.get('threshold', 5)
+        
+        latest_hash = self.screen_stability_hashes[-1]
+        is_stable = all((latest_hash - h) <= threshold for h in self.screen_stability_hashes)
+        
+        return is_stable
+
     def _check_and_activate_priority_mode(self):
         current_time = time.time()
         for path, activation_time in self.priority_timers.items():
@@ -775,19 +798,7 @@ class CoreEngine(QObject):
         is_stability_check_enabled = stability_conf.get('enabled', True)
 
         if is_stability_check_enabled:
-            is_stable = False
-            if len(self.screen_stability_hashes) == self.screen_stability_hashes.maxlen:
-                latest_hash = self.screen_stability_hashes[-1]
-                if latest_hash is not None:
-                    STABILITY_THRESHOLD = stability_conf.get('threshold', 5)
-                    all_hashes_are_similar = all(
-                        (latest_hash - h) <= STABILITY_THRESHOLD 
-                        for h in self.screen_stability_hashes if h is not None
-                    )
-                    if all_hashes_are_similar:
-                        is_stable = True
-            
-            if not is_stable:
+            if not self.check_screen_stability():
                 self.updateLog.emit("画面が不安定なためクリックを保留します。")
                 return False
         
@@ -1053,13 +1064,9 @@ class CoreEngine(QObject):
             final_click_x = int(click_x_float)
             final_click_y = int(click_y_float)
             
-            # ★★★ ここから変更 ★★★
-            # PyAutoGUIのフェールセーフ(画面の四隅にマウスが移動するとエラー)を回避するため、
-            # クリック座標が画面の縁(0や最大値)にならないようにチェックを厳格化します。
             if not (1 <= final_click_x < screen_width - 1 and 1 <= final_click_y < screen_height - 1):
                 self.updateLog.emit(f"警告: 計算されたクリック座標 ({final_click_x}, {final_click_y}) が画面の端すぎるためクリックを中止しました。")
                 return
-            # ★★★ ここまで変更 ★★★
             
             pyautogui.click(final_click_x, final_click_y)
             self._click_count += 1
