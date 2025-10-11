@@ -190,10 +190,7 @@ def _match_template_task(screen_image, template_data, screen_shape, template_sha
         return {
             'path': path, 'settings': settings, 'location': max_loc,
             'confidence': max_val, 'scale': scale,
-            'rect': (max_loc[0], max_loc[1], max_loc[0] + t_w, max_loc[1] + t_h),
-            'folder_path': template_data.get('folder_path'),
-            'folder_mode': template_data.get('folder_mode'),
-            'folder_settings': template_data.get('folder_settings')
+            'rect': (max_loc[0], max_loc[1], max_loc[0] + t_w, max_loc[1] + t_h)
         }
     return None
 
@@ -248,9 +245,8 @@ class CoreEngine(QObject):
         self.target_hwnd = None
         
         self.priority_mode_info = {}
-        self.rec_priority_mode_info = {}
         self.priority_timers = {}
-        self.all_priority_children = {}
+        self.folder_children_map = {}
         
         cpu_cores = os.cpu_count() or 8
         worker_threads = min(max(1, cpu_cores // 4), 2)
@@ -333,25 +329,19 @@ class CoreEngine(QObject):
 
     def _on_global_click(self, x, y, button, pressed):
         if button == mouse.Button.right and pressed:
-            if self.is_monitoring:
-                self.logger.log("右クリック検出: 監視を停止します。")
-                self.stopMonitoringRequested.emit()
+            current_time = time.time()
+            if current_time - self.last_right_click_time < self.DOUBLE_CLICK_INTERVAL:
+                if self.right_click_timer is not None:
+                    self.right_click_timer.cancel(); self.right_click_timer = None
+                self.logger.log("右ダブルクリック検出: 監視を開始します。")
+                self.startMonitoringRequested.emit()
             else:
-                current_time = time.time()
-                if current_time - self.last_right_click_time < self.DOUBLE_CLICK_INTERVAL:
-                    if self.right_click_timer is not None:
-                        self.right_click_timer.cancel(); self.right_click_timer = None
-                    self.logger.log("右ダブルクリック検出: 監視を開始します。")
-                    self.startMonitoringRequested.emit()
-                else:
-                    pass
-                self.last_right_click_time = current_time
+                self.right_click_timer = Timer(self.DOUBLE_CLICK_INTERVAL, self._handle_single_right_click)
+                self.right_click_timer.start()
+            self.last_right_click_time = current_time
 
     def _handle_single_right_click(self):
-        if not self.is_monitoring:
-            pass
-        else:
-            self.logger.log("右クリック検出: 監視を停止します。"); self.stopMonitoringRequested.emit()
+        self.logger.log("右クリック検出: 監視を停止します。"); self.stopMonitoringRequested.emit()
 
     def cleanup(self):
         self.stop_monitoring()
@@ -499,7 +489,7 @@ class CoreEngine(QObject):
             self.normal_template_cache.clear()
             self.backup_template_cache.clear()
             self.priority_timers.clear()
-            self.all_priority_children.clear()
+            self.folder_children_map.clear()
 
             auto_scale_settings = self.app_config.get('auto_scale', {})
             use_window_scale_base = auto_scale_settings.get('use_window_scale', True)
@@ -540,6 +530,9 @@ class CoreEngine(QObject):
                     folder_settings = item_data['settings']
                     folder_mode = folder_settings.get('mode', 'normal')
 
+                    children_paths = {child['path'] for child in item_data.get('children', [])}
+                    self.folder_children_map[folder_path] = children_paths
+
                     if folder_mode == 'priority_timer':
                         interval_seconds = folder_settings.get('priority_interval', 10) * 60
                         if not self.is_monitoring:
@@ -547,26 +540,33 @@ class CoreEngine(QObject):
                         elif folder_path not in self.priority_timers:
                              self.priority_timers[folder_path] = time.time() + interval_seconds
                         
-                        children_paths = {child['path'] for child in item_data.get('children', [])}
-                        self.all_priority_children[folder_path] = children_paths
-
                     for child_data in item_data.get('children', []):
-                        self._process_item_for_cache(child_data, scales, folder_path, folder_mode, folder_settings)
+                        self._process_item_for_cache(child_data, scales, folder_path, folder_mode)
 
                 elif item_data['type'] == 'image':
-                    self._process_item_for_cache(item_data, scales, None, 'normal', {})
+                    self._process_item_for_cache(item_data, scales, None, 'normal')
             
             self.logger.log(f"テンプレートキャッシュ構築完了。通常: {len(self.normal_template_cache)}件, バックアップ: {len(self.backup_template_cache)}件")
             self.logger.log(f"タイマー付き優先フォルダ: {len(self.priority_timers)}件")
 
-    def _process_item_for_cache(self, item_data, scales, folder_path, folder_mode, folder_settings):
+    def _process_item_for_cache(self, item_data, scales, folder_path, folder_mode):
         try:
             path = item_data['path']
+            settings = self.config_manager.load_item_setting(Path(path))
+
+            # ★★★ 修正点: クリック設定の有無をチェック ★★★
+            has_point_click = settings.get('point_click') and settings.get('click_position')
+            has_range_click = settings.get('range_click') and settings.get('click_rect')
+
+            if not (has_point_click or has_range_click):
+                # self.logger.log(f"情報: '{Path(path).name}' はクリック設定がないため検索対象外です。")
+                return # クリック設定がなければキャッシュに追加しない
+            # ★★★ 修正ここまで ★★★
+            
             with open(path, 'rb') as f: file_bytes = np.fromfile(f, np.uint8)
             original_image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
             if original_image is not None:
-                settings = self.config_manager.load_item_setting(Path(path))
                 image_to_process = original_image
                 
                 if settings.get('roi_enabled', False):
@@ -576,7 +576,7 @@ class CoreEngine(QObject):
                         x1, y1, x2, y2 = max(0, roi_rect[0]), max(0, roi_rect[1]), min(w, roi_rect[2]), min(h, roi_rect[3])
                         if x1 < x2 and y1 < y2:
                             image_to_process = original_image[y1:y2, x1:x2]
-                            self.logger.log(f"'{Path(path).name}' にROIを適用しました。")
+                            # self.logger.log(f"'{Path(path).name}' にROIを適用しました。") # ログが多すぎるためコメントアウト
                         else:
                             self.logger.log(f"警告: '{Path(path).name}' のROI領域が無効なため、フル画像を使用します。")
                     else:
@@ -612,7 +612,6 @@ class CoreEngine(QObject):
                     'settings': settings, 'path': path, 'scaled_templates': scaled_templates,
                     'best_scale': None if len(scales) > 1 else scales[0],
                     'folder_path': folder_path, 'folder_mode': folder_mode,
-                    'folder_settings': folder_settings
                 }
                 
                 if settings.get('backup_click', False):
@@ -636,7 +635,6 @@ class CoreEngine(QObject):
             self._last_clicked_path = None
             
             self.priority_mode_info = {}
-            self.rec_priority_mode_info = {}
             
             self.screen_stability_hashes.clear()
 
@@ -681,6 +679,12 @@ class CoreEngine(QObject):
                 frame_counter = 0
             
             try:
+                if not self.priority_mode_info:
+                    self._check_and_activate_timer_priority_mode()
+
+                if self.is_backup_countdown_active:
+                    time.sleep(1.0)
+
                 if (frame_counter % self.effective_frame_skip_rate) != 0: 
                     time.sleep(0.01)
                     continue
@@ -712,14 +716,11 @@ class CoreEngine(QObject):
                     except Exception as e:
                         self.logger.log(f"スクリーンショットのUMat変換に失敗: {e}")
 
-                if self.rec_priority_mode_info:
-                    self._handle_rec_priority_state(current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, last_match_time_map)
-                elif self.priority_mode_info:
+                if self.priority_mode_info:
                     self._handle_priority_state(current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, last_match_time_map)
                 elif self.is_backup_countdown_active:
                     self._handle_countdown_state(current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, last_match_time_map)
                 else:
-                    self._check_and_activate_priority_mode()
                     self._handle_idle_state(current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, last_match_time_map)
 
             except Exception as e:
@@ -753,44 +754,46 @@ class CoreEngine(QObject):
         
         return is_stable
 
-    def _check_and_activate_priority_mode(self):
+    def _check_and_activate_timer_priority_mode(self):
         current_time = time.time()
         for path, activation_time in self.priority_timers.items():
             if current_time >= activation_time:
-                self._start_priority_mode(path)
+                self._start_timer_priority_mode(path)
                 break 
 
-    def _start_priority_mode(self, folder_path):
+    def _start_timer_priority_mode(self, folder_path):
         folder_settings = self.config_manager.load_item_setting(Path(folder_path))
         timeout_seconds = folder_settings.get('priority_timeout', 5) * 60
         self.priority_mode_info = {
+            'type': 'timer',
             'folder_path': folder_path,
             'timeout_time': time.time() + timeout_seconds,
-            'matched_children': set()
         }
-        self.logger.log(f"フォルダ '{Path(folder_path).name}' の優先監視を開始しました。(解除時間: {timeout_seconds/60:.1f}分)")
+        self.logger.log(f"フォルダ '{Path(folder_path).name}' のタイマー優先監視を開始しました。(解除時間: {timeout_seconds/60:.1f}分)")
+
+    def _start_image_priority_mode(self, folder_path):
+        folder_settings = self.config_manager.load_item_setting(Path(folder_path))
+        timeout_seconds = folder_settings.get('priority_image_timeout', 10)
+        required_children = self.folder_children_map.get(folder_path, set())
+
+        self.priority_mode_info = {
+            'type': 'image',
+            'folder_path': folder_path,
+            'timeout_duration': timeout_seconds,
+            'no_match_since_time': time.time(),
+            'required_children': required_children,
+            'clicked_children': set(),
+        }
+        self.logger.log(f"フォルダ '{Path(folder_path).name}' の画像認識型優先監視を開始しました。")
 
     def _stop_priority_mode(self, reason: str):
         if self.priority_mode_info:
             folder_path = self.priority_mode_info.get('folder_path')
+            mode_type = self.priority_mode_info.get('type', '不明')
             if folder_path:
-                self.logger.log(f"フォルダ '{Path(folder_path).name}' の優先監視を終了しました。({reason})")
+                self.logger.log(f"フォルダ '{Path(folder_path).name}' の優先監視({mode_type})を終了しました。({reason})")
             self.priority_mode_info = {}
-    
-    def _start_rec_priority_mode(self, folder_path, folder_settings):
-        if not self.rec_priority_mode_info:
-            self.rec_priority_mode_info = {
-                'folder_path': folder_path,
-                'settings': folder_settings,
-                'last_match_time': time.time()
-            }
-            self.logger.log(f"フォルダ '{Path(folder_path).name}' の画像認識による優先監視を開始しました。")
-
-    def _stop_rec_priority_mode(self, reason: str):
-        if self.rec_priority_mode_info:
-            folder_path = self.rec_priority_mode_info.get('folder_path')
-            self.logger.log(f"フォルダ '{Path(folder_path).name}' の優先監視を終了しました。({reason})")
-            self.rec_priority_mode_info = {}
+            self._last_clicked_path = None # 優先モード終了時にリセット
 
     def _process_matches_as_sequence(self, all_matches, current_time, last_match_time_map):
         if not all_matches:
@@ -836,28 +839,14 @@ class CoreEngine(QObject):
         
         return True
 
-    def _handle_rec_priority_state(self, current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, last_match_time_map):
-        folder_path = self.rec_priority_mode_info['folder_path']
-        settings = self.rec_priority_mode_info['settings']
-        timeout_seconds = settings.get('recognition_priority_timeout', 10)
-        
-        def filter_by_folder(cache):
-            return {p: d for p, d in cache.items() if d.get('folder_path') == folder_path}
-
-        priority_normal_cache = filter_by_folder(self.normal_template_cache)
-        
-        all_matches = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, priority_normal_cache)
-
-        if all_matches:
-            self.rec_priority_mode_info['last_match_time'] = current_time
-            clicked = self._process_matches_as_sequence(all_matches, current_time, last_match_time_map)
-            if clicked:
-                self._stop_rec_priority_mode("画像クリック")
-        else:
-            if current_time - self.rec_priority_mode_info['last_match_time'] > timeout_seconds:
-                self._stop_rec_priority_mode("タイムアウト")
-
     def _handle_priority_state(self, current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, last_match_time_map):
+        mode_type = self.priority_mode_info.get('type')
+        if mode_type == 'image':
+            self._handle_image_priority_state(current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, last_match_time_map)
+        else: # 'timer' or legacy
+            self._handle_timer_priority_state(current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, last_match_time_map)
+
+    def _handle_timer_priority_state(self, current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, last_match_time_map):
         if current_time >= self.priority_mode_info['timeout_time']:
             self._stop_priority_mode("タイムアウト")
             return
@@ -880,6 +869,37 @@ class CoreEngine(QObject):
             interval_seconds = folder_settings.get('priority_interval', 10) * 60
             self.priority_timers[folder_path] = time.time() + interval_seconds
 
+    def _handle_image_priority_state(self, current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, last_match_time_map):
+        folder_path = self.priority_mode_info['folder_path']
+        
+        def filter_by_folder(cache):
+            return {p: d for p, d in cache.items() if d.get('folder_path') == folder_path}
+
+        priority_normal_cache = filter_by_folder(self.normal_template_cache)
+        priority_backup_cache = filter_by_folder(self.backup_template_cache)
+
+        all_matches = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, priority_normal_cache)
+        all_matches.extend(self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, priority_backup_cache))
+
+        if all_matches:
+            self.priority_mode_info['no_match_since_time'] = current_time
+            clicked = self._process_matches_as_sequence(all_matches, current_time, last_match_time_map)
+            
+            if clicked and self._last_clicked_path:
+                self.priority_mode_info['clicked_children'].add(self._last_clicked_path)
+
+                required = self.priority_mode_info['required_children']
+                clicked_set = self.priority_mode_info['clicked_children']
+                
+                if clicked_set.issuperset(required):
+                    self._stop_priority_mode("完了")
+                    return
+        else:
+            elapsed_no_match_time = current_time - self.priority_mode_info['no_match_since_time']
+            if elapsed_no_match_time > self.priority_mode_info['timeout_duration']:
+                self._stop_priority_mode("タイムアウト")
+                return
+
     def _handle_idle_state(self, current_time, screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, last_match_time_map):
         def filter_cache(cache):
             return {
@@ -890,6 +910,14 @@ class CoreEngine(QObject):
         active_normal_cache = filter_cache(self.normal_template_cache)
         normal_matches = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, active_normal_cache)
         
+        if normal_matches:
+            for match in normal_matches:
+                path = match['path']
+                cache_item = self.normal_template_cache.get(path)
+                if cache_item and cache_item.get('folder_mode') == 'priority_image':
+                    self._start_image_priority_mode(cache_item['folder_path'])
+                    return
+
         was_clicked = self._process_matches_as_sequence(normal_matches, current_time, last_match_time_map)
         if was_clicked:
             return
@@ -996,11 +1024,7 @@ class CoreEngine(QObject):
                             template_to_use = t['gray'] if use_grayscale else t['image']
                         
                         template_shape = t['shape']
-                        task_data = {
-                            'path': path, 'settings': data['settings'], 'template': template_to_use, 'scale': t['scale'],
-                            'folder_path': data.get('folder_path'), 'folder_mode': data.get('folder_mode'),
-                            'folder_settings': data.get('folder_settings')
-                        }
+                        task_data = {'path': path, 'settings': data['settings'], 'template': template_to_use, 'scale': t['scale']}
                         match = _match_template_task(screen_to_use, task_data, screen_shape, template_shape)
                         if match:
                             results.append(match)
@@ -1015,11 +1039,7 @@ class CoreEngine(QObject):
                     for t in templates_to_search:
                         template_to_use = t['gray'] if use_grayscale else t['image']
                         template_shape = t['shape']
-                        task_data = {
-                            'path': path, 'settings': data['settings'], 'template': template_to_use, 'scale': t['scale'],
-                            'folder_path': data.get('folder_path'), 'folder_mode': data.get('folder_mode'),
-                            'folder_settings': data.get('folder_settings')
-                        }
+                        task_data = {'path': path, 'settings': data['settings'], 'template': template_to_use, 'scale': t['scale']}
                         futures.append(self.thread_pool.submit(_match_template_task, screen_to_use, task_data, screen_shape, template_shape))
                 
                 for f in futures:
@@ -1129,13 +1149,6 @@ class CoreEngine(QObject):
             if 'scale' in match_info:
                 log_msg += f" scale:{match_info['scale']:.3f}"
             self.updateLog.emit(log_msg)
-
-            folder_mode = match_info.get('folder_mode')
-            if folder_mode == 'recognition_priority' and not self.rec_priority_mode_info:
-                folder_path = match_info.get('folder_path')
-                folder_settings = match_info.get('folder_settings')
-                if folder_path and folder_settings:
-                    self._start_rec_priority_mode(folder_path, folder_settings)
 
         except Exception as e:
             self.updateLog.emit(f"クリック実行中にエラーが発生しました: {e}")

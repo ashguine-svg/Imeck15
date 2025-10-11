@@ -139,9 +139,9 @@ class ConfigManager:
         if item_path.is_dir():
             default_setting = {
                 'mode': 'normal',
+                'priority_image_timeout': 10,
                 'priority_interval': 10,
                 'priority_timeout': 5,
-                'recognition_priority_timeout': 10,
             }
         else:
             default_setting = {
