@@ -81,12 +81,10 @@ class ConfigManager:
                 "enabled": True,
                 "preset": "標準"
             },
-            # ★★★ 追加 ★★★
             "screen_stability_check": {
                 "enabled": True,
                 "threshold": 8
             }
-            # ★★★ ここまで ★★★
         }
         if not self.app_config_path.exists():
             return default_config
@@ -114,7 +112,6 @@ class ConfigManager:
         except Exception as e:
             print(f"アプリケーション設定の保存エラー: {e}")
 
-    # ... (以降のコードは変更ありません) ...
     def load_window_scales(self) -> dict:
         if not self.window_scales_path.exists():
             return {}
@@ -144,6 +141,7 @@ class ConfigManager:
                 'mode': 'normal',
                 'priority_interval': 10,
                 'priority_timeout': 5,
+                'recognition_priority_timeout': 10,
             }
         else:
             default_setting = {

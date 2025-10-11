@@ -191,18 +191,45 @@ class FolderSettingsDialog(QDialog):
         mode_layout = QVBoxLayout()
         self.radio_normal = QRadioButton("通常 (監視対象)")
         self.radio_excluded = QRadioButton("検索停止 (監視対象外)")
+        self.radio_rec_priority = QRadioButton("画像認識による優先")
         self.radio_priority = QRadioButton("タイマー付き優先")
         
         self.mode_group = QButtonGroup(self)
         self.mode_group.addButton(self.radio_normal, 0)
         self.mode_group.addButton(self.radio_excluded, 1)
+        self.mode_group.addButton(self.radio_rec_priority, 3)
         self.mode_group.addButton(self.radio_priority, 2)
         
         mode_layout.addWidget(self.radio_normal)
         mode_layout.addWidget(self.radio_excluded)
+        mode_layout.addWidget(self.radio_rec_priority)
         mode_layout.addWidget(self.radio_priority)
         mode_box.setLayout(mode_layout)
         self.layout.addWidget(mode_box)
+
+        self.rec_priority_box = QGroupBox("画像認識による優先 の詳細設定")
+        rec_priority_layout = QGridLayout()
+        rec_priority_layout.addWidget(QLabel("認識不可後の優先解除時間:"), 0, 0)
+        self.rec_priority_timeout_spin = QSpinBox()
+        self.rec_priority_timeout_spin.setRange(1, 999)
+        self.rec_priority_timeout_spin.setSuffix(" 秒")
+        rec_priority_layout.addWidget(self.rec_priority_timeout_spin, 0, 1)
+        self.rec_priority_box.setLayout(rec_priority_layout)
+        self.layout.addWidget(self.rec_priority_box)
+
+        rec_priority_tooltip_text = (
+            "<b>画像認識による優先モードの詳細:</b><br>"
+            "このフォルダ内の画像が認識されると、他のフォルダを無視してこのフォルダ内のみを優先的に検索します。<br>"
+            "優先モードは、以下のいずれかの条件で解除されます。<br>"
+            "<ul>"
+            "<li>優先モード中に、このフォルダ内の画像が1回以上クリックされた。</li>"
+            "<li>最後に画像を認識してから<b>『認識不可後の優先解除時間』</b>が経過した。</li>"
+            "</ul>"
+        )
+        self.radio_rec_priority.setToolTip(rec_priority_tooltip_text)
+        self.rec_priority_box.setToolTip(rec_priority_tooltip_text)
+        self.radio_rec_priority.setToolTipDuration(-1)
+        self.rec_priority_box.setToolTipDuration(-1)
 
         self.timer_box = QGroupBox("タイマー付き優先 の詳細設定")
         timer_layout = QGridLayout()
@@ -219,8 +246,8 @@ class FolderSettingsDialog(QDialog):
         timer_layout.addWidget(self.timeout_spin, 1, 1)
         self.timer_box.setLayout(timer_layout)
         self.layout.addWidget(self.timer_box)
-
-        self.radio_priority.toggled.connect(self.timer_box.setEnabled)
+        
+        self.mode_group.buttonToggled.connect(self.update_options_enabled_state)
         
         tooltip_text = (
             "<b>タイマー付き優先モードの詳細:</b><br>"
@@ -244,18 +271,26 @@ class FolderSettingsDialog(QDialog):
 
         self.load_settings(current_settings)
 
+    def update_options_enabled_state(self):
+        checked_id = self.mode_group.checkedId()
+        self.timer_box.setEnabled(checked_id == 2)
+        self.rec_priority_box.setEnabled(checked_id == 3)
+
     def load_settings(self, settings):
         mode = settings.get('mode', 'normal')
         if mode == 'excluded':
             self.radio_excluded.setChecked(True)
         elif mode == 'priority_timer':
             self.radio_priority.setChecked(True)
+        elif mode == 'recognition_priority':
+            self.radio_rec_priority.setChecked(True)
         else:
             self.radio_normal.setChecked(True)
         
         self.interval_spin.setValue(settings.get('priority_interval', 10))
         self.timeout_spin.setValue(settings.get('priority_timeout', 5))
-        self.timer_box.setEnabled(mode == 'priority_timer')
+        self.rec_priority_timeout_spin.setValue(settings.get('recognition_priority_timeout', 10))
+        self.update_options_enabled_state()
 
     def get_settings(self):
         mode_id = self.mode_group.checkedId()
@@ -264,11 +299,14 @@ class FolderSettingsDialog(QDialog):
             mode = 'excluded'
         elif mode_id == 2:
             mode = 'priority_timer'
+        elif mode_id == 3:
+            mode = 'recognition_priority'
             
         return {
             'mode': mode,
             'priority_interval': self.interval_spin.value(),
-            'priority_timeout': self.timeout_spin.value()
+            'priority_timeout': self.timeout_spin.value(),
+            'recognition_priority_timeout': self.rec_priority_timeout_spin.value()
         }
 
 class FloatingWindow(QDialog):
@@ -328,14 +366,12 @@ class FloatingWindow(QDialog):
         layout.addSpacerItem(QSpacerItem(10, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
         layout.addWidget(self.close_button)
 
-        # ★★★ ここから変更 ★★★
         self.start_button.setToolTip("監視開始")
         self.stop_button.setToolTip("監視停止")
         self.capture_button.setToolTip("画像キャプチャ")
         self.set_rec_area_button.setToolTip("認識範囲を設定")
         self.toggle_ui_button.setToolTip("メインUIを表示/非表示")
         self.close_button.setToolTip("最小UIモードを終了")
-        # ★★★ ここまで変更 ★★★
 
         self.start_button.clicked.connect(self.startMonitoringRequested)
         self.stop_button.clicked.connect(self.stopMonitoringRequested)
@@ -944,6 +980,9 @@ class UIManager(QMainWindow):
                 elif mode == 'excluded':
                     brush = QBrush(Qt.red)
                     icon_color = Qt.red
+                elif mode == 'recognition_priority':
+                    brush = QBrush(QColor("blue"))
+                    icon_color = QColor("blue")
                 elif mode == 'priority_timer':
                     brush = QBrush(Qt.darkGreen)
                     icon_color = Qt.green
