@@ -58,12 +58,23 @@ class InteractivePreviewLabel(QLabel):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumSize(1, 1); self.setMouseTracking(True)
-        self.drawing_mode = None; self.is_drawing = False; self.start_pos = QPoint()
-        self.end_pos = QPoint(); self._pixmap = QPixmap(); self.click_settings = {}
+        self.setMinimumSize(1, 1)
+        self.setMouseTracking(True)
+        self.drawing_mode = None
+        self.is_drawing = False
+        self.start_pos = QPoint()
+        self.end_pos = QPoint()
+        self._pixmap = QPixmap()
+        self.click_settings = {}
+        
+        # 描画計算をキャッシュするためのメンバ変数
+        self.pixmap_display_rect = QRectF()
+        self.scale_x = 1.0
+        self.scale_y = 1.0
 
     def set_pixmap(self, pixmap):
         self._pixmap = pixmap if pixmap and not pixmap.isNull() else QPixmap()
+        self._update_geometry_cache()
         self.update()
 
     def set_drawing_data(self, settings):
@@ -71,45 +82,68 @@ class InteractivePreviewLabel(QLabel):
         self.update()
 
     def set_drawing_mode(self, mode):
-        self.drawing_mode = mode; self.setCursor(Qt.CrossCursor if mode else Qt.ArrowCursor)
+        self.drawing_mode = mode
+        self.setCursor(Qt.CrossCursor if mode else Qt.ArrowCursor)
 
-    def _get_pixmap_rect(self):
-        if self._pixmap.isNull(): return QRectF()
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._update_geometry_cache()
+
+    def _update_geometry_cache(self):
+        """プレビュー表示のための座標やスケールを計算し、キャッシュする。"""
+        if self._pixmap.isNull() or self.width() == 0 or self.height() == 0 or self._pixmap.height() == 0:
+            self.pixmap_display_rect = QRectF()
+            self.scale_x, self.scale_y = 1.0, 1.0
+            return
+
         pixmap_ratio = self._pixmap.width() / self._pixmap.height()
         label_ratio = self.width() / self.height()
+
         if pixmap_ratio > label_ratio:
-            width = self.width(); height = width / pixmap_ratio
+            width, height = self.width(), self.width() / pixmap_ratio
             x, y = 0, (self.height() - height) / 2
         else:
-            height = self.height(); width = height * pixmap_ratio
+            height, width = self.height(), self.height() * pixmap_ratio
             x, y = (self.width() - width) / 2, 0
-        return QRectF(x, y, width, height)
+        
+        self.pixmap_display_rect = QRectF(x, y, width, height)
+
+        if self._pixmap.width() > 0 and self._pixmap.height() > 0:
+            self.scale_x = self.pixmap_display_rect.width() / self._pixmap.width()
+            self.scale_y = self.pixmap_display_rect.height() / self._pixmap.height()
+        else:
+            self.scale_x, self.scale_y = 1.0, 1.0
 
     def _map_widget_to_image_coords(self, widget_pos):
-        if self._pixmap.isNull(): return None
-        pixmap_rect = self._get_pixmap_rect()
-        if not pixmap_rect.contains(widget_pos): return None
+        if self._pixmap.isNull() or not self.pixmap_display_rect.contains(widget_pos):
+            return None
         
-        relative_x = (widget_pos.x() - pixmap_rect.x()) / pixmap_rect.width()
-        relative_y = (widget_pos.y() - pixmap_rect.y()) / pixmap_rect.height()
+        relative_x = (widget_pos.x() - self.pixmap_display_rect.x()) / self.pixmap_display_rect.width()
+        relative_y = (widget_pos.y() - self.pixmap_display_rect.y()) / self.pixmap_display_rect.height()
         
-        img_x = relative_x * self._pixmap.width(); img_y = relative_y * self._pixmap.height()
+        img_x, img_y = relative_x * self._pixmap.width(), relative_y * self._pixmap.height()
         return QPoint(int(img_x), int(img_y))
 
     def mousePressEvent(self, event):
         if self.drawing_mode and event.button() == Qt.LeftButton:
             img_pos = self._map_widget_to_image_coords(event.pos())
-            if img_pos: self.is_drawing = True; self.start_pos, self.end_pos = img_pos, img_pos; self.update()
+            if img_pos:
+                self.is_drawing = True
+                self.start_pos, self.end_pos = img_pos, img_pos
+                self.update()
 
     def mouseMoveEvent(self, event):
         if self.is_drawing:
             img_pos = self._map_widget_to_image_coords(event.pos())
-            if img_pos: self.end_pos = img_pos; self.update()
+            if img_pos:
+                self.end_pos = img_pos
+                self.update()
 
     def mouseReleaseEvent(self, event):
         if self.is_drawing and event.button() == Qt.LeftButton:
             self.is_drawing = False
-            if self.drawing_mode == 'point': self.settingChanged.emit({'click_position': [self.end_pos.x(), self.end_pos.y()]})
+            if self.drawing_mode == 'point':
+                self.settingChanged.emit({'click_position': [self.end_pos.x(), self.end_pos.y()]})
             elif self.drawing_mode == 'range':
                 rect = QRect(self.start_pos, self.end_pos).normalized()
                 self.settingChanged.emit({'click_rect': [rect.left(), rect.top(), rect.right(), rect.bottom()]})
@@ -121,52 +155,39 @@ class InteractivePreviewLabel(QLabel):
         if self._pixmap.isNull():
             return
             
-        pixmap_rect = self._get_pixmap_rect()
-        painter.drawPixmap(pixmap_rect.toRect(), self._pixmap)
+        painter.drawPixmap(self.pixmap_display_rect.toRect(), self._pixmap)
         
         if self._pixmap.width() == 0 or self._pixmap.height() == 0:
             return
             
-        scale_x = pixmap_rect.width() / self._pixmap.width()
-        scale_y = pixmap_rect.height() / self._pixmap.height()
-
         def to_widget_coords(img_pos):
-            x = pixmap_rect.x() + img_pos[0] * scale_x
-            y = pixmap_rect.y() + img_pos[1] * scale_y
+            x = self.pixmap_display_rect.x() + img_pos[0] * self.scale_x
+            y = self.pixmap_display_rect.y() + img_pos[1] * self.scale_y
             return QPointF(x, y)
             
         if self.click_settings.get('roi_enabled') and self.click_settings.get('roi_rect'):
             roi = self.click_settings['roi_rect']
-            p1 = to_widget_coords((roi[0], roi[1]))
-            p2 = to_widget_coords((roi[2], roi[3]))
-            painter.setPen(QPen(QColor(0, 255, 0), 1))
-            painter.setBrush(QColor(0, 255, 0, 40))
+            p1, p2 = to_widget_coords((roi[0], roi[1])), to_widget_coords((roi[2], roi[3]))
+            painter.setPen(QPen(QColor(0, 255, 0), 1)); painter.setBrush(QColor(0, 255, 0, 40))
             painter.drawRect(QRectF(p1, p2))
             
         if self.is_drawing:
-            p1 = to_widget_coords((self.start_pos.x(), self.start_pos.y()))
-            p2 = to_widget_coords((self.end_pos.x(), self.end_pos.y()))
+            p1, p2 = to_widget_coords((self.start_pos.x(), self.start_pos.y())), to_widget_coords((self.end_pos.x(), self.end_pos.y()))
             if self.drawing_mode == 'point':
-                painter.setPen(QPen(QColor(255, 0, 0), 3))
-                painter.setBrush(QColor(255, 0, 0))
+                painter.setPen(QPen(QColor(255, 0, 0), 3)); painter.setBrush(QColor(255, 0, 0))
                 painter.drawEllipse(p2, 3, 3)
             elif self.drawing_mode == 'range':
-                painter.setPen(QPen(QColor(0, 0, 255), 2))
-                painter.setBrush(Qt.NoBrush)
+                painter.setPen(QPen(QColor(0, 0, 255), 2)); painter.setBrush(Qt.NoBrush)
                 painter.drawRect(QRectF(p1, p2))
         else:
             if self.click_settings.get('point_click') and self.click_settings.get('click_position'):
-                pos = self.click_settings['click_position']
-                p = to_widget_coords(pos)
-                painter.setPen(QPen(QColor(255, 0, 0), 3))
-                painter.setBrush(QColor(255, 0, 0))
+                p = to_widget_coords(self.click_settings['click_position'])
+                painter.setPen(QPen(QColor(255, 0, 0), 3)); painter.setBrush(QColor(255, 0, 0))
                 painter.drawEllipse(p, 3, 3)
             elif self.click_settings.get('range_click') and self.click_settings.get('click_rect'):
                 rect = self.click_settings['click_rect']
-                p1 = to_widget_coords((rect[0], rect[1]))
-                p2 = to_widget_coords((rect[2], rect[3]))
-                painter.setPen(QPen(QColor(0, 0, 255), 2))
-                painter.setBrush(Qt.NoBrush)
+                p1, p2 = to_widget_coords((rect[0], rect[1])), to_widget_coords((rect[2], rect[3]))
+                painter.setPen(QPen(QColor(0, 0, 255), 2)); painter.setBrush(Qt.NoBrush)
                 painter.drawRect(QRectF(p1, p2))
 
 class RecAreaSelectionDialog(QDialog):
@@ -1199,18 +1220,26 @@ class UIManager(QMainWindow):
         if cv_image is None or cv_image.size == 0:
             if not (self.get_selected_item_path()[0] and Path(self.get_selected_item_path()[0]).is_dir()):
                 self.preview_label.setText("画像を選択してください")
-                self.preview_label.set_pixmap(None)
+            self.preview_label.set_pixmap(None)
             return
             
-        h, w = cv_image.shape[:2]; q_image = QImage(cv_image.data, w, h, 3 * w, QImage.Format.Format_BGR888)
+        rgb_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
+        h, w, ch = rgb_image.shape
+        bytes_per_line = ch * w
+        q_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
         pixmap = QPixmap.fromImage(q_image)
         self.preview_label.set_pixmap(pixmap)
         
     def update_rec_area_preview(self, cv_image: np.ndarray):
         if cv_image is None or cv_image.size == 0:
-            self.rec_area_preview_label.set_pixmap(None); self.rec_area_preview_label.setText("認識範囲プレビュー"); return
-        h, w = cv_image.shape[:2]
-        q_image = QImage(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB).data, w, h, 3 * w, QImage.Format.Format_RGB888)
+            self.rec_area_preview_label.set_pixmap(None)
+            self.rec_area_preview_label.setText("認識範囲プレビュー")
+            return
+        
+        rgb_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
+        h, w, ch = rgb_image.shape
+        bytes_per_line = ch * w
+        q_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
         pixmap = QPixmap.fromImage(q_image)
         self.rec_area_preview_label.set_pixmap(pixmap)
         
@@ -1287,3 +1316,75 @@ class UIManager(QMainWindow):
         else:
             if self.performance_monitor:
                 self.performance_monitor.show()
+class InitializationDialog(QDialog):
+    """
+    Linux環境でのUIフリーズ問題を回避するため、起動時に一時的に表示されるモーダルダイアログ。
+    このダイアログの表示中に、UI操作をシミュレートしてOpenCLの再初期化を行う。
+    """
+    def __init__(self, core_engine, logger, parent=None):
+        super().__init__(parent)
+        self.core_engine = core_engine
+        self.logger = logger
+        # parentはUIManagerのインスタンスであると想定
+
+        self.setWindowTitle("初期化中")
+        self.setModal(True)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        
+        layout = QVBoxLayout(self)
+        label = QLabel("最終初期化を実行中...")
+        label.setStyleSheet("color: white; font-size: 14px; font-weight: bold; background-color: transparent;")
+        layout.addWidget(label, 0, Qt.AlignmentFlag.AlignCenter)
+        
+        self.setStyleSheet("background-color: rgba(0, 0, 0, 180); border-radius: 10px; padding: 10px;")
+        
+        # ダイアログが表示された直後に処理を開始するためのタイマー
+        QTimer.singleShot(50, self.apply_workaround_and_close)
+
+    def apply_workaround_and_close(self):
+        """
+        UI上のOpenCLチェックボックスのON/OFFをシミュレートし、ダイアログを閉じる。
+        """
+        if sys.platform == 'win32':
+            # Windowsではこの処理は不要
+            QTimer.singleShot(50, self.accept)
+            return
+
+        try:
+            ui_manager = self.parent()
+            if not ui_manager:
+                self.logger.log("Linux UIフリーズ対策エラー: UIManagerが見つかりません。")
+                QTimer.singleShot(50, self.accept)
+                return
+
+            opencl_checkbox = ui_manager.app_settings_widgets.get('use_opencl')
+            if not opencl_checkbox or not opencl_checkbox.isEnabled():
+                self.logger.log("Linux UIフリーズ対策: OpenCLチェックボックスが無効なためスキップします。")
+                QTimer.singleShot(50, self.accept)
+                return
+
+            self.logger.log("Linux UIフリーズ対策: UI操作をシミュレートしてOpenCLを再初期化します。")
+            
+            # 1. ユーザーの元の設定を記憶
+            original_state_checked = opencl_checkbox.isChecked()
+            
+            # 2. プログラムがチェックボックスの状態を反転させる（1回目のクリック）
+            #    これにより、on_app_settings_changedから始まる一連のイベントがトリガーされる
+            opencl_checkbox.setChecked(not original_state_checked)
+            
+            # 3. Qtのイベントループを強制的に処理させ、UIの変更を即座に反映させる
+            QApplication.processEvents()
+
+            # 4. プログラムがチェックボックスを元の状態に戻す（2回目のクリック）
+            opencl_checkbox.setChecked(original_state_checked)
+            QApplication.processEvents()
+
+            final_state = "有効" if original_state_checked else "無効"
+            self.logger.log(f"UI操作のシミュレート完了。OpenCLの状態を「{final_state}」に復元しました。")
+
+        except Exception as e:
+            self.logger.log(f"Linux UIフリーズ対策の実行中にエラーが発生しました: {e}")
+        
+        # 処理が一瞬で終わってもユーザーが認識できるよう、少し待ってからダイアログを閉じる
+        QTimer.singleShot(250, self.accept)

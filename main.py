@@ -16,7 +16,7 @@ except NameError:
     sys.path.insert(0, os.getcwd())
 
 from PySide6.QtWidgets import QApplication, QMessageBox
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Signal, QTimer
 
 from ui import UIManager
 from core import CoreEngine
@@ -82,7 +82,6 @@ def main():
     
     performance_monitor = PerformanceMonitor(ui_manager, parent=None)
     
-    # ★★★ 変更点: UIManagerにPerformanceMonitorのインスタンスを渡す ★★★
     ui_manager.set_performance_monitor(performance_monitor)
     
     logger.set_ui(ui_manager, performance_monitor)
@@ -105,7 +104,6 @@ def main():
     core_engine.fpsUpdated.connect(performance_monitor.update_fps)
     core_engine.cacheBuildFinished.connect(ui_manager.on_cache_build_finished)
     
-    # ★★★ 変更点: 範囲選択中のウィンドウ表示/非表示をUIManagerに一任する ★★★
     core_engine.selectionProcessStarted.connect(ui_manager.on_selection_process_started)
     core_engine.selectionProcessFinished.connect(ui_manager.on_selection_process_finished)
 
@@ -136,11 +134,32 @@ def main():
     performance_monitor.connect_signals()
     
     ui_manager.set_tree_enabled(False)
+    capture_manager.prime_mss()
     future = core_engine.thread_pool.submit(core_engine._build_template_cache)
     future.add_done_callback(core_engine._on_cache_build_done)
     
     ui_manager.show()
+
+    # ★★★ ここからが修正部分 ★★★
+    if sys.platform != 'win32':
+        # Linux環境でのみ、UI表示後に初期化ダイアログを表示して対策を実行
+        def run_initialization_dialog():
+            try:
+                # InitializationDialog は ui.py に追加されている前提
+                from ui import InitializationDialog
+                dialog = InitializationDialog(core_engine, logger, ui_manager)
+                dialog.exec()
+            except ImportError:
+                logger.log("エラー: InitializationDialog が ui.py に見つかりません。")
+            except Exception as e:
+                logger.log(f"初期化ダイアログの実行中にエラー: {e}")
+        
+        # UIの表示とイベントループの開始を待ってから実行
+        QTimer.singleShot(200, run_initialization_dialog)
+    # ★★★ 修正部分ここまで ★★★
+
     sys.exit(app.exec())
+
 
 if __name__ == "__main__":
     main()

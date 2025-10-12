@@ -7,6 +7,11 @@ import numpy as np
 import threading
 from PySide6.QtCore import QObject
 
+try:
+    OPENCL_AVAILABLE = cv2.ocl.haveOpenCL()
+except Exception:
+    OPENCL_AVAILABLE = False
+
 DXCAM_AVAILABLE = False
 if sys.platform == 'win32':
     try:
@@ -29,8 +34,8 @@ class CaptureManager(QObject):
     """
     def __init__(self):
         super().__init__()
-        self.mss_thread_local = threading.local()
         
+        self.mss_thread_local = threading.local()
         self.dxcam_sct = None
         self.is_dxcam_ready = False
         
@@ -63,6 +68,20 @@ class CaptureManager(QObject):
         
         self.current_method = 'dxcam' if self.is_dxcam_ready else 'mss'
 
+    def prime_mss(self):
+        """
+        Main threadでMSSの初期化を試み、Linuxでの潜在的なデッドロックを回避する。
+        """
+        if self.current_method == 'mss' and sys.platform != 'win32':
+            try:
+                print("[INFO] Priming MSS instance on the main thread...")
+                # 1x1ピクセルのキャプチャを試みることで、X11への接続を強制する
+                with mss.mss() as sct:
+                    sct.grab({"top": 0, "left": 0, "width": 1, "height": 1})
+                print("[INFO] MSS priming successful.")
+            except Exception as e:
+                print(f"[WARN] Failed to prime MSS instance on the main thread: {e}")
+
     def set_capture_method(self, method: str):
         requested_method = 'dxcam' if (method == 'dxcam' and DXCAM_AVAILABLE) else 'mss'
         
@@ -79,14 +98,6 @@ class CaptureManager(QObject):
             finally:
                 self.dxcam_sct = None
                 self.is_dxcam_ready = False
-
-        if self.current_method == 'mss' and hasattr(self.mss_thread_local, 'sct'):
-            print("[INFO] Releasing existing MSS instance...")
-            try:
-                self.mss_thread_local.sct.close()
-            except Exception:
-                pass
-            del self.mss_thread_local.sct
 
         self.current_method = requested_method
         
@@ -150,10 +161,15 @@ class CaptureManager(QObject):
                         "width": region[2] - region[0], "height": region[3] - region[1],
                     }
                     if monitor["width"] <= 0 or monitor["height"] <= 0:
+                        print("[WARN] MSS capture requested with invalid region size.")
                         return None
                 else:
-                    monitor = sct.monitors[1]
-                
+                    if len(sct.monitors) > 1:
+                        monitor = sct.monitors[1]
+                    else:
+                        print("[ERROR] MSS could not find a primary monitor.")
+                        return None
+
                 sct_img = sct.grab(monitor)
                 img_bgra = np.array(sct_img)
                 return cv2.cvtColor(img_bgra, cv2.COLOR_BGRA2BGR)
@@ -165,9 +181,6 @@ class CaptureManager(QObject):
                 if self.dxcam_error_count >= self.DXCAM_ERROR_THRESHOLD:
                     print("[WARN] DXCam encountered a critical error. Switching to MSS for this session.")
                     self.set_capture_method('mss')
-            
-            if self.current_method == 'mss' and hasattr(self.mss_thread_local, 'sct'):
-                del self.mss_thread_local.sct
             return None
             
     def cleanup(self):
@@ -177,10 +190,3 @@ class CaptureManager(QObject):
                 print("[INFO] DXCam resources released.")
             except Exception as e:
                 print(f"[WARN] Error releasing DXCam resources: {e}")
-        
-        if hasattr(self.mss_thread_local, 'sct'):
-            try:
-                self.mss_thread_local.sct.close()
-                print("[INFO] MSS resources released.")
-            except Exception as e:
-                print(f"[WARN] Error releasing MSS resources: {e}")
