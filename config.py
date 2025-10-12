@@ -84,7 +84,12 @@ class ConfigManager:
             "screen_stability_check": {
                 "enabled": True,
                 "threshold": 8
+            },
+            # ★★★ ここからが修正部分 ★★★
+            "eco_mode": {
+                "enabled": True
             }
+            # ★★★ 修正部分ここまで ★★★
         }
         if not self.app_config_path.exists():
             return default_config

@@ -382,12 +382,14 @@ class FloatingWindow(QDialog):
         layout.addSpacerItem(QSpacerItem(10, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
         layout.addWidget(self.close_button)
 
+        # ★★★ ここからが修正部分 ★★★
         self.start_button.setToolTip("監視開始")
         self.stop_button.setToolTip("監視停止")
         self.capture_button.setToolTip("画像キャプチャ")
         self.set_rec_area_button.setToolTip("認識範囲を設定")
         self.toggle_ui_button.setToolTip("メインUIを表示/非表示")
         self.close_button.setToolTip("最小UIモードを終了")
+        # ★★★ 修正部分ここまで ★★★
 
         self.start_button.clicked.connect(self.startMonitoringRequested)
         self.stop_button.clicked.connect(self.stopMonitoringRequested)
@@ -590,6 +592,13 @@ class UIManager(QMainWindow):
         dxcam_desc_label.setWordWrap(True)
         dxcam_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
         app_settings_layout.addWidget(dxcam_desc_label)
+        
+        self.app_settings_widgets['eco_mode_enabled'] = QCheckBox("省エネモード")
+        app_settings_layout.addWidget(self.app_settings_widgets['eco_mode_enabled'])
+        eco_desc_label = QLabel("クリック後、5秒間マッチする画像がない場合にCPU負荷を低減するため、監視を1秒に1回の低頻度モードに移行します。")
+        eco_desc_label.setWordWrap(True)
+        eco_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
+        app_settings_layout.addWidget(eco_desc_label)
         
         fs_layout = QHBoxLayout()
         fs_layout.addWidget(QLabel("フレームスキップ:"))
@@ -811,6 +820,9 @@ class UIManager(QMainWindow):
         self.app_settings_widgets['grayscale_matching'].setChecked(self.app_config.get('grayscale_matching', False))
         self.app_settings_widgets['use_opencl'].setChecked(self.app_config.get('use_opencl', True))
         
+        eco_conf = self.app_config.get('eco_mode', {})
+        self.app_settings_widgets['eco_mode_enabled'].setChecked(eco_conf.get('enabled', False))
+
         stability_conf = self.app_config.get('screen_stability_check', {})
         self.app_settings_widgets['stability_check_enabled'].setChecked(stability_conf.get('enabled', True))
         self.app_settings_widgets['stability_threshold'].setValue(stability_conf.get('threshold', 5))
@@ -862,6 +874,10 @@ class UIManager(QMainWindow):
         self.app_config['frame_skip_rate'] = self.app_settings_widgets['frame_skip_rate'].value()
         self.app_config['grayscale_matching'] = self.app_settings_widgets['grayscale_matching'].isChecked()
         self.app_config['use_opencl'] = self.app_settings_widgets['use_opencl'].isChecked()
+        
+        self.app_config['eco_mode'] = {
+            "enabled": self.app_settings_widgets['eco_mode_enabled'].isChecked()
+        }
         
         self.app_config['screen_stability_check'] = {
             "enabled": self.app_settings_widgets['stability_check_enabled'].isChecked(),

@@ -277,12 +277,17 @@ class CoreEngine(QObject):
         self.screen_stability_hashes = deque(maxlen=3)
         self.latest_frame_for_hash = None
         
+        # 省エネモード関連の変数
+        self.last_successful_click_time = 0
+        self.is_eco_cooldown_active = False
+        self.ECO_MODE_DELAY = 5.0
+        
         self.on_app_config_changed()
 
         # ログの連続出力を抑制するための変数
         self._last_log_message = ""
         self._last_log_time = 0
-        self._log_spam_filter = {"画面が不安定なためクリックを保留します。"}
+        self._log_spam_filter = {"画面が不安定なためクリックを保留します。", "省エネモード待機中..."}
 
     def _log(self, message: str, force: bool = False):
         """ログメッセージをフィルタリングして出力する"""
@@ -665,6 +670,10 @@ class CoreEngine(QObject):
             
             self.screen_stability_hashes.clear()
 
+            # 省エネモード関連の変数をリセット
+            self.last_successful_click_time = 0
+            self.is_eco_cooldown_active = False
+
             self.ui_manager.set_tree_enabled(False)
             self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
             self._monitor_thread = threading.Thread(target=self._monitoring_loop, daemon=True)
@@ -709,10 +718,22 @@ class CoreEngine(QObject):
                 if not self.priority_mode_info:
                     self._check_and_activate_timer_priority_mode()
 
-                if self.is_backup_countdown_active:
+                # --- 省エネモードの判定と待機処理 ---
+                is_eco_mode_enabled = self.app_config.get('eco_mode', {}).get('enabled', False)
+                in_idle_state = not self.priority_mode_info and not self.is_backup_countdown_active
+                
+                self.is_eco_cooldown_active = False
+                if is_eco_mode_enabled and self.last_successful_click_time > 0 and in_idle_state:
+                    if current_time - self.last_successful_click_time > self.ECO_MODE_DELAY:
+                        self.is_eco_cooldown_active = True
+                
+                # --- 待機処理の統合 ---
+                if self.is_eco_cooldown_active:
+                    self._log("省エネモード待機中...")
                     time.sleep(1.0)
-
-                if (frame_counter % self.effective_frame_skip_rate) != 0: 
+                elif self.is_backup_countdown_active:
+                    time.sleep(1.0)
+                elif (frame_counter % self.effective_frame_skip_rate) != 0: 
                     time.sleep(0.01)
                     continue
                 
@@ -826,6 +847,8 @@ class CoreEngine(QObject):
 
     def _process_matches_as_sequence(self, all_matches, current_time, last_match_time_map):
         if not all_matches:
+            # マッチがない場合、last_successful_click_timeは更新されないので、
+            # 省エネモードのタイマーは進み続ける
             return False
 
         clickable_matches = []
@@ -1170,11 +1193,11 @@ class CoreEngine(QObject):
                 self._log(f"警告: 計算されたクリック座標 ({final_click_x}, {final_click_y}) が画面の端すぎるためクリックを中止しました。", force=True)
                 return
             
-            # ★★★ ここからが修正部分 ★★★
             try:
                 pyautogui.click(final_click_x, final_click_y)
                 self._click_count += 1
                 self._last_clicked_path = path
+                self.last_successful_click_time = time.time() # 省エネモードタイマーをリセット
                 
                 log_msg = f"クリック: {Path(path).name} @({final_click_x}, {final_click_y}) conf:{match_info['confidence']:.2f}"
                 if 'scale' in match_info:
@@ -1183,7 +1206,6 @@ class CoreEngine(QObject):
 
             except pyautogui.FailSafeException:
                 self._log("PyAutoGUIのフェイルセーフが作動しました。ユーザーがマウスを画面の隅に移動したか、座標計算に問題がある可能性があります。", force=True)
-            # ★★★ 修正部分ここまで ★★★
 
         except Exception as e:
             self._log(f"クリック実行中にエラーが発生しました: {e}", force=True)
