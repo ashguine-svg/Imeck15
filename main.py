@@ -23,6 +23,9 @@ from core import CoreEngine
 from capture import CaptureManager
 from config import ConfigManager
 from monitor import PerformanceMonitor
+# ★★★ ここからが修正部分 ★★★
+from dialogs import InitializationDialog
+# ★★★ 修正部分ここまで ★★★
 
 LOCK_PORT = 54321
 _lock_socket = None
@@ -140,23 +143,22 @@ def main():
     
     ui_manager.show()
 
-    # ★★★ ここからが修正部分 ★★★
     if sys.platform != 'win32':
         # Linux環境でのみ、UI表示後に初期化ダイアログを表示して対策を実行
         def run_initialization_dialog():
             try:
-                # InitializationDialog は ui.py に追加されている前提
-                from ui import InitializationDialog
+                # ★★★ ここからが修正部分 ★★★
+                # InitializationDialog は dialogs.py に移動したため、ここからインポート
                 dialog = InitializationDialog(core_engine, logger, ui_manager)
+                # ★★★ 修正部分ここまで ★★★
                 dialog.exec()
             except ImportError:
-                logger.log("エラー: InitializationDialog が ui.py に見つかりません。")
+                logger.log("エラー: InitializationDialog が見つかりません。")
             except Exception as e:
                 logger.log(f"初期化ダイアログの実行中にエラー: {e}")
         
         # UIの表示とイベントループの開始を待ってから実行
         QTimer.singleShot(200, run_initialization_dialog)
-    # ★★★ 修正部分ここまで ★★★
 
     sys.exit(app.exec())
 

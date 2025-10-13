@@ -15,6 +15,7 @@ class PerformanceMonitor(QDialog):
     """
     
     toggleMonitoringRequested = Signal()
+    performanceUpdated = Signal(float, float) # ★★★ 追加: CPUとFPSを通知するシグナル ★★★
     
     def __init__(self, ui_manager, parent=None):
         super().__init__(parent)
@@ -95,6 +96,9 @@ class PerformanceMonitor(QDialog):
             perf_text = (f"CPU: {cpu_percent:.1f}%  メモリ: {mem_used:.1f}MB  FPS: {self.current_fps:.1f}  "
                          f"クリック: {clicks}  稼働: {hours:02d}:{minutes:02d}:{seconds:02d}")
             self.perf_label.setText(perf_text)
+
+            # ★★★ 追加: CPUとFPSの情報をシグナルで送信 ★★★
+            self.performanceUpdated.emit(cpu_percent, self.current_fps)
 
             if self.ui_manager and self.ui_manager.core_engine:
                 countdown = self.ui_manager.core_engine.get_backup_click_countdown()
