@@ -4,6 +4,9 @@
 
 このガイドでは、Imeck15をダウンロードし、お使いのPCで実行するまでの手順を初心者の方にも分かりやすく解説します。
 
+*Pythonではなくexe/binが必要な方は [Releaeses](https://github.com/ashguine-svg/Imeck15#:~:text=Releases) より、あなたのOS用のものをDownloadしてください。
+Pythonからネイティブ言語にコンパイルしたものがお使いになれます。
+
   - **Windows**
   - **Linux (MX Linux)**
 
