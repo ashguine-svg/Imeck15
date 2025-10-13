@@ -463,7 +463,6 @@ class CoreEngine(QObject):
                     self.fpsUpdated.emit(frame_counter / delta_time)
                     fps_last_time, frame_counter = current_time, 0
                 
-                # ★★★ 以下、大幅に簡略化 ★★★
                 if isinstance(self.state, IdleState):
                     self._check_and_activate_timer_priority_mode()
 
@@ -505,7 +504,6 @@ class CoreEngine(QObject):
                 if self.state:
                     screen_data = (screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat)
                     self.state.handle(current_time, screen_data, last_match_time_map)
-                # ★★★ 簡略化ここまで ★★★
 
             except Exception as e:
                 self._log(f"監視ループでエラーが発生しました: {e}", force=True)
@@ -651,26 +649,35 @@ class CoreEngine(QObject):
             self._last_clicked_path = result.get('path')
             self.last_successful_click_time = time.time()
 
+    # ★★★ ここからが修正箇所 ★★★
     def set_recognition_area(self, method: str):
         self.selectionProcessStarted.emit()
         self.ui_manager.hide()
-        if self.performance_monitor: self.performance_monitor.hide()
+        if self.performance_monitor:
+            self.performance_monitor.hide()
 
         if method == "rectangle":
             self.target_hwnd = None
             self.current_window_scale = None
             self.windowScaleCalculated.emit(0.0)
             self.logger.log("認識範囲を四角指定に設定しました。スケールは計算されません。")
+            
+            # SelectionOverlayのインスタンスを作成
             self.selection_overlay = SelectionOverlay()
+            
+            # 選択完了・キャンセルのシグナルをCoreEngineのスロットに接続する
             self.selection_overlay.selectionComplete.connect(self._areaSelectedForProcessing.emit)
             self.selection_overlay.selectionCancelled.connect(self._on_selection_cancelled)
+            
             self.selection_overlay.showFullScreen()
+
         elif method == "window":
             self.logger.log("ウィンドウを選択してください... (ESCキーでキャンセル)")
             self.window_selection_listener = WindowSelectionListener(self._handle_window_click_for_selection)
             self.window_selection_listener.start()
             self.keyboard_selection_listener = keyboard.Listener(on_press=self._on_key_press_for_selection)
             self.keyboard_selection_listener.start()
+    # ★★★ 修正はここまで ★★★
             
     def _on_selection_cancelled(self):
         self.logger.log("範囲選択がキャンセルされました。")
@@ -713,6 +720,8 @@ class CoreEngine(QObject):
                 self.logger.log(f"ウィンドウ領域の計算結果が無効です: ({left},{top},{right},{bottom})。処理を中断します。")
                 self.target_hwnd = None; self._on_selection_cancelled(); return
             
+            # pyautogui のインポートが必要なため、ここでインポート
+            import pyautogui
             rect = (max(0, left), max(0, top), min(pyautogui.size().width, right), min(pyautogui.size().height, bottom))
             
             if self._is_capturing_for_registration:
@@ -744,6 +753,8 @@ class CoreEngine(QObject):
             if right <= left or bottom <= top:
                 self.logger.log(f"ウィンドウ領域の計算結果が無効です: ({left},{top},{right},{bottom})。処理を中断します。"); self._on_selection_cancelled(); return
 
+            # pyautogui のインポートが必要なため、ここでインポート
+            import pyautogui
             rect = (max(0, left), max(0, top), min(pyautogui.size().width, right), min(pyautogui.size().height, bottom))
             
             if self._is_capturing_for_registration:
