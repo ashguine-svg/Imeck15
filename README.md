@@ -7,8 +7,6 @@
 
   - **Windows**
   - **Linux (MX Linux)**
-  *Pythonではなくexe/binが必要な方は[Releases](https://github.com/ashguine-svg/Imeck15/releases)より、あなたのOS用のものをDownloadしてください。
-*ページ一番下にPythonからネイティブ言語にコンパイルしものがお使いになれます
 
 お使いのOSに合わせて、それぞれの手順に従ってください。
 
