@@ -165,7 +165,7 @@ class CoreEngine(QObject):
            message in self._log_spam_filter and \
            current_time - self._last_log_time < 3.0:
             return
-        self.updateLog.emit(message)
+        # ★★★ 変更箇所: シグナル発行をやめ、直接loggerを呼び出す ★★★
         self._last_log_message, self._last_log_time = message, current_time
 
     def set_opencl_enabled(self, enabled: bool):

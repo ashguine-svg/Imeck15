@@ -1,7 +1,7 @@
 # floating_window.py
 
 from PySide6.QtWidgets import (
-    QDialog, QPushButton, QHBoxLayout, QLabel, QSpacerItem, QSizePolicy, QApplication
+    QDialog, QPushButton, QHBoxLayout, QLabel, QSpacerItem, QSizePolicy, QApplication, QStyle
 )
 from PySide6.QtGui import QPainter, QColor, QFontMetrics
 from PySide6.QtCore import Qt, Signal, QPoint
@@ -30,9 +30,18 @@ class FloatingWindow(QDialog):
 
         self.offset = None
 
+        # ★★★ ここからが修正箇所 ★★★
+        # OSからタイトルバーの高さを取得
+        title_bar_height = self.style().pixelMetric(QStyle.PM_TitleBarHeight)
+        
+        # ウィンドウ自体の高さをタイトルバーの高さに固定
+        self.setFixedHeight(title_bar_height)
+        
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(5, 5, 5, 5)
-        layout.setSpacing(5)
+        # レイアウトの余白を調整して高さいっぱいにウィジェットを配置
+        margin = 2
+        layout.setContentsMargins(margin * 2, margin, margin * 2, margin)
+        layout.setSpacing(4)
 
         self.start_button = QPushButton("▶")
         self.stop_button = QPushButton("■")
@@ -41,14 +50,19 @@ class FloatingWindow(QDialog):
         self.toggle_ui_button = QPushButton("⇔")
         self.close_button = QPushButton("×")
         
-        for btn in [self.start_button, self.stop_button, self.capture_button, self.set_rec_area_button, self.toggle_ui_button, self.close_button]:
-            btn.setFixedSize(24, 24)
-            font = btn.font()
-            font.setPointSize(10)
-            btn.setFont(font)
-            btn.setStyleSheet("QPushButton { border-radius: 12px; background-color: rgba(200, 200, 200, 150); color: black; } QPushButton:hover { background-color: rgba(220, 220, 220, 200); }")
+        # ボタンの高さをタイトルバーの高さに合わせて調整
+        button_height = title_bar_height - (margin * 2)
         
-        self.close_button.setStyleSheet("QPushButton { border-radius: 12px; background-color: rgba(231, 76, 60, 180); color: white; font-weight: bold; } QPushButton:hover { background-color: rgba(231, 76, 60, 230); }")
+        for btn in [self.start_button, self.stop_button, self.capture_button, self.set_rec_area_button, self.toggle_ui_button, self.close_button]:
+            btn.setFixedSize(button_height, button_height) # 幅も高さに合わせる
+            font = btn.font()
+            # フォントサイズも高さに合わせて調整
+            font.setPointSize(int(button_height * 0.45))
+            btn.setFont(font)
+            # 角丸の半径も調整
+            btn.setStyleSheet(f"QPushButton {{ border-radius: {int(button_height / 2)}px; background-color: rgba(200, 200, 200, 150); color: black; }} QPushButton:hover {{ background-color: rgba(220, 220, 220, 200); }}")
+        
+        self.close_button.setStyleSheet(f"QPushButton {{ border-radius: {int(button_height / 2)}px; background-color: rgba(231, 76, 60, 180); color: white; font-weight: bold; }} QPushButton:hover {{ background-color: rgba(231, 76, 60, 230); }}")
 
         self.perf_label = QLabel("---% ---fps")
         font = self.perf_label.font()
@@ -56,18 +70,17 @@ class FloatingWindow(QDialog):
         self.perf_label.setFont(font)
         self.perf_label.setStyleSheet("color: #FFA500; background-color: transparent;")
 
-        # ★★★ 追加: ラベルの横幅を固定してUIの伸縮を防ぐ ★★★
         font_metrics = QFontMetrics(self.perf_label.font())
-        # "100% 99fps" のような最も長い可能性のある文字列の幅を計算
-        max_width = font_metrics.horizontalAdvance("100% 99fps") + 5 # 少し余白を追加
+        max_width = font_metrics.horizontalAdvance("100% 99fps") + 5
         self.perf_label.setFixedWidth(max_width)
-        self.perf_label.setAlignment(Qt.AlignCenter) # 中央揃えにすると見栄えが良い
+        self.perf_label.setAlignment(Qt.AlignCenter)
 
         self.status_label = QLabel("待機中")
         font = self.status_label.font()
         font.setBold(True)
         self.status_label.setFont(font)
         self.status_label.setStyleSheet("color: #90EE90; background-color: transparent;")
+        # ★★★ 修正はここまで ★★★
 
         layout.addWidget(self.start_button)
         layout.addWidget(self.stop_button)
@@ -105,7 +118,9 @@ class FloatingWindow(QDialog):
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setPen(Qt.NoPen)
         painter.setBrush(QColor(50, 50, 50, 200))
-        painter.drawRoundedRect(self.rect(), 15.0, 15.0)
+        # 角丸の半径をウィンドウの高さの半分に設定
+        radius = self.height() / 2.0
+        painter.drawRoundedRect(self.rect(), radius, radius)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:

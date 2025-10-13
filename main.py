@@ -101,7 +101,6 @@ def main():
     
     core_engine.updateStatus.connect(ui_manager.set_status)
     core_engine.updateStatus.connect(performance_monitor.update_monitoring_status)
-    core_engine.updateLog.connect(logger.log)
     core_engine.updatePreview.connect(ui_manager.update_image_preview)
     core_engine.updateRecAreaPreview.connect(ui_manager.update_rec_area_preview)
     core_engine.fpsUpdated.connect(performance_monitor.update_fps)
