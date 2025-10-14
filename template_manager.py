@@ -169,4 +169,6 @@ class TemplateManager:
                 normal_cache[path] = cache_entry
 
         except Exception as e:
-            self.logger.log(f"キャッシュ作成失敗: {item_data.get('name')}, {e}", force=True)
+            # ★★★ ここからが修正部分 ★★★
+            self.logger.log(f"キャッシュ作成失敗: {item_data.get('name')}, {e}")
+            # ★★★ 修正部分ここまで ★★★

@@ -4,14 +4,15 @@ import sys
 import time
 import pyautogui
 import random
+from pathlib import Path
 
 if sys.platform == 'win32':
     try:
         import ctypes
         import win32gui
         import win32con
-        import win32process  # この行を追加
-        import win32api      # この行を追加
+        import win32process
+        import win32api
         block_input_func = ctypes.windll.user32.BlockInput
         block_input_func.argtypes = [ctypes.wintypes.BOOL]
         block_input_func.restype = ctypes.wintypes.BOOL
@@ -87,7 +88,9 @@ class ActionManager:
                  self.logger.log(f"ウィンドウ '{win32gui.GetWindowText(target_hwnd)}' のアクティブ化を試みましたが、失敗した可能性があります。")
 
         except Exception as e:
-            self.logger.log(f"ウィンドウのアクティブ化中にエラーが発生しました: {e}", force=True)
+            # ★★★ ここからが修正部分 ★★★
+            self.logger.log(f"ウィンドウのアクティブ化中にエラーが発生しました: {e}")
+            # ★★★ 修正部分ここまで ★★★
 
     def execute_click(self, match_info, recognition_area, target_hwnd, effective_capture_scale):
         """
@@ -110,7 +113,7 @@ class ActionManager:
             settings = match_info['settings']
             match_rect_in_rec_area = match_info['rect']
             scale = match_info.get('scale', 1.0)
-            path = match_info['path']
+            path = Path(match_info['path'])
             
             rec_area_offset_x, rec_area_offset_y = (recognition_area[0], recognition_area[1]) if recognition_area else (0, 0)
             
@@ -162,8 +165,10 @@ class ActionManager:
             final_click_y = int(click_y_float)
             
             if not (1 <= final_click_x < screen_width - 1 and 1 <= final_click_y < screen_height - 1):
-                self.logger.log(f"警告: 計算されたクリック座標 ({final_click_x}, {final_click_y}) が画面の端すぎるためクリックを中止しました。", force=True)
-                return {'success': False, 'path': path}
+                # ★★★ ここからが修正部分 ★★★
+                self.logger.log(f"警告: 計算されたクリック座標 ({final_click_x}, {final_click_y}) が画面の端すぎるためクリックを中止しました。")
+                # ★★★ 修正部分ここまで ★★★
+                return {'success': False, 'path': str(path)}
             
             try:
                 pyautogui.click(final_click_x, final_click_y)
@@ -172,14 +177,18 @@ class ActionManager:
                 if 'scale' in match_info:
                     log_msg += f" scale:{match_info['scale']:.3f}"
                 self.logger.log(log_msg)
-                return {'success': True, 'path': path}
+                return {'success': True, 'path': str(path)}
 
             except pyautogui.FailSafeException:
-                self.logger.log("PyAutoGUIのフェイルセーフが作動しました。ユーザーがマウスを画面の隅に移動したか、座標計算に問題がある可能性があります。", force=True)
-                return {'success': False, 'path': path}
+                # ★★★ ここからが修正部分 ★★★
+                self.logger.log("PyAutoGUIのフェイルセーフが作動しました。ユーザーがマウスを画面の隅に移動したか、座標計算に問題がある可能性があります。")
+                # ★★★ 修正部分ここまで ★★★
+                return {'success': False, 'path': str(path)}
 
         except Exception as e:
-            self.logger.log(f"クリック実行中にエラーが発生しました: {e}", force=True)
+            # ★★★ ここからが修正部分 ★★★
+            self.logger.log(f"クリック実行中にエラーが発生しました: {e}")
+            # ★★★ 修正部分ここまで ★★★
             return {'success': False, 'path': match_info.get('path', 'Unknown')}
         finally:
             block_input(False)

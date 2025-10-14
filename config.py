@@ -85,11 +85,9 @@ class ConfigManager:
                 "enabled": True,
                 "threshold": 8
             },
-            # ★★★ ここからが修正部分 ★★★
             "eco_mode": {
                 "enabled": True
             }
-            # ★★★ 修正部分ここまで ★★★
         }
         if not self.app_config_path.exists():
             return default_config
@@ -149,12 +147,25 @@ class ConfigManager:
                 'priority_timeout': 5,
             }
         else:
+            # ★★★ ここからが修正部分 ★★★
             default_setting = {
-                'image_path': str(item_path), 'click_position': None, 'click_rect': None, 'roi_rect': None,
-                'roi_enabled': False, 'point_click': True, 'range_click': False,
-                'random_click': False, 'interval_time': 1.5, 'backup_click': False,
-                'backup_time': 300.0, 'threshold': 0.8, 'debounce_time': 0.0
+                'image_path': str(item_path),
+                'click_position': None,
+                'click_rect': None,
+                'roi_enabled': False,
+                'roi_mode': 'fixed',  # 'fixed' または 'variable'
+                'roi_rect': None,  # 固定ROI(200x200)の計算結果用
+                'roi_rect_variable': None, # 可変ROIのユーザー指定座標
+                'point_click': True,
+                'range_click': False,
+                'random_click': False,
+                'interval_time': 1.5,
+                'backup_click': False,
+                'backup_time': 300.0,
+                'threshold': 0.8,
+                'debounce_time': 0.0
             }
+            # ★★★ 修正部分ここまで ★★★
         
         if not setting_path.exists():
             return default_setting

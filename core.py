@@ -165,7 +165,7 @@ class CoreEngine(QObject):
            message in self._log_spam_filter and \
            current_time - self._last_log_time < 3.0:
             return
-        # ★★★ 変更箇所: シグナル発行をやめ、直接loggerを呼び出す ★★★
+        self.logger.log(message)
         self._last_log_message, self._last_log_time = message, current_time
 
     def set_opencl_enabled(self, enabled: bool):
@@ -308,25 +308,58 @@ class CoreEngine(QObject):
 
     def on_image_settings_changed(self, settings: dict):
         if self.current_image_settings: self.current_image_settings.update(settings); self._recalculate_and_update()
+    
+    # ★★★ ここにメソッドを追加 ★★★
+    def on_roi_settings_changed(self, roi_data: dict):
+        """プレビューUIから可変ROIの座標が変更されたときに呼び出される"""
+        if self.current_image_settings:
+            # 'roi_rect_variable' キーで座標を受け取る
+            self.current_image_settings.update(roi_data)
+            self._recalculate_and_update()
+
     def on_preview_click_settings_changed(self, click_data: dict):
         if self.current_image_settings: self.current_image_settings.update(click_data); self._recalculate_and_update()
 
     def _recalculate_and_update(self, request_save=True):
         if self.current_image_mat is not None and self.current_image_settings:
             h, w = self.current_image_mat.shape[:2]
+            # ★★★ ここからが修正部分 ★★★
+            # 常にcalculate_roi_rectを呼び出し、設定に基づいて正しい矩形を計算させる
             self.current_image_settings['roi_rect'] = self.calculate_roi_rect((w, h), self.current_image_settings)
+            # ★★★ 修正部分ここまで ★★★
         self.updatePreview.emit(self.current_image_mat, self.current_image_settings)
         if request_save: self.ui_manager.request_save()
 
+    # ★★★ ここからが修正部分 ★★★
     def calculate_roi_rect(self, image_size, settings):
-        if not settings.get('roi_enabled', False): return None
+        """
+        ROI設定に基づいて、テンプレート画像から切り出すべきROI矩形を計算する。
+        - 固定モード: クリック座標を中心に200x200の矩形を計算。
+        - 可変モード: ユーザーが指定した矩形 `roi_rect_variable` をそのまま返す。
+        """
+        if not settings.get('roi_enabled', False):
+            return None
+
+        roi_mode = settings.get('roi_mode', 'fixed')
+
+        if roi_mode == 'variable':
+            # 可変モードの場合は、ユーザーが設定した矩形を返す
+            return settings.get('roi_rect_variable')
+        
+        # 以下は固定モード('fixed')のロジック
         center_x, center_y = -1, -1
-        if settings.get('point_click') and settings.get('click_position'): center_x, center_y = settings['click_position']
+        if settings.get('point_click') and settings.get('click_position'):
+            center_x, center_y = settings['click_position']
         elif settings.get('range_click') and settings.get('click_rect'):
-            rect = settings['click_rect']; center_x, center_y = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
-        if center_x == -1: return None
+            rect = settings['click_rect']
+            center_x, center_y = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
+        
+        if center_x == -1:
+            return None
+            
         roi_w, roi_h = 200, 200
-        return (int(center_x-roi_w/2), int(center_y-roi_h/2), int(center_x+roi_w/2), int(center_y+roi_h/2))
+        return (int(center_x - roi_w/2), int(center_y - roi_h/2), int(center_x + roi_w/2), int(center_y + roi_h/2))
+    # ★★★ 修正部分ここまで ★★★
 
     def save_current_settings(self):
         if self.current_image_path and self.current_image_settings:
@@ -408,13 +441,11 @@ class CoreEngine(QObject):
             
         self.screen_stability_hashes.append(current_hash)
         
-        # ハッシュの履歴が十分に溜まっていない場合は、不安定とみなす
         if len(self.screen_stability_hashes) < self.screen_stability_hashes.maxlen:
             return False
             
         threshold = self.app_config.get('screen_stability_check', {}).get('threshold', 8)
         
-        # 最も古いハッシュと最新のハッシュを比較し、差が閾値以下なら安定と判断
         return (self.screen_stability_hashes[-1] - self.screen_stability_hashes[0]) <= threshold
         
     def _check_and_activate_timer_priority_mode(self):
@@ -431,7 +462,6 @@ class CoreEngine(QObject):
             self.updateStatus.emit("画面不安定", "orange")
             return False
         else:
-            # 画面が安定している場合、ステータスを「監視中」に戻す
             self.updateStatus.emit("監視中...", "blue")
         
         if not self.is_monitoring: return False 
@@ -491,9 +521,9 @@ class CoreEngine(QObject):
         self.selectionProcessStarted.emit()
         self.ui_manager.hide()
         if self.performance_monitor: self.performance_monitor.hide()
-        # ★★★ ここからが修正箇所 ★★★
+        # ★★★ ここからが修正部分 ★★★
         self._stop_global_mouse_listener()
-        # ★★★ 修正はここまで ★★★
+        # ★★★ 修正部分ここまで ★★★
         if method == "rectangle":
             self.target_hwnd, self.current_window_scale = None, None
             self.windowScaleCalculated.emit(0.0)
@@ -517,9 +547,9 @@ class CoreEngine(QObject):
         if self.keyboard_selection_listener: self.keyboard_selection_listener.stop(); self.keyboard_selection_listener = None
         self.selectionProcessFinished.emit()
         self._show_ui_safe()
-        # ★★★ ここからが修正箇所 ★★★
+        # ★★★ ここからが修正部分 ★★★
         self._start_global_mouse_listener()
-        # ★★★ 修正はここまで ★★★
+        # ★★★ 修正部分ここまで ★★★
 
     def _on_key_press_for_selection(self, key):
         if key == keyboard.Key.esc:
@@ -535,9 +565,9 @@ class CoreEngine(QObject):
         if self.keyboard_selection_listener: self.keyboard_selection_listener.stop(); self.keyboard_selection_listener = None
         if sys.platform == 'win32': self._handle_window_click_for_selection_windows(x, y)
         else: self._handle_window_click_for_selection_linux(x, y)
-        # ★★★ ここからが修正箇所 ★★★
+        # ★★★ ここからが修正部分 ★★★
         self._start_global_mouse_listener()
-        # ★★★ 修正はここまで ★★★
+        # ★★★ 修正部分ここまで ★★★
 
     def _handle_window_click_for_selection_windows(self, x, y):
         try:
@@ -550,9 +580,10 @@ class CoreEngine(QObject):
             right, bottom = left + client_rect_win[2], top + client_rect_win[3]
             if right <= left or bottom <= top:
                 self.logger.log(f"ウィンドウ領域の計算結果が無効です: ({left},{top},{right},{bottom})。"); self._on_selection_cancelled(); return
-            # ★★★ ここからが修正箇所 ★★★
+            
+            # 画面全体のサイズを取得するためにpyautoguiをインポート
             import pyautogui
-            # ★★★ 修正はここまで ★★★
+            
             rect = (max(0, left), max(0, top), min(pyautogui.size().width, right), min(pyautogui.size().height, bottom))
             if self._is_capturing_for_registration: self._areaSelectedForProcessing.emit(rect); self.selectionProcessFinished.emit(); return
             title = win32gui.GetWindowText(hwnd)
@@ -574,9 +605,10 @@ class CoreEngine(QObject):
             left, top, w, h = int(info['Absolute upper-left X']), int(info['Absolute upper-left Y']), int(info['Width']), int(info['Height'])
             title = info['xwininfo'].split('"')[1] if '"' in info.get('xwininfo', '') else f"Window (ID: {window_id})"
             if w <= 0 or h <= 0: self.logger.log(f"ウィンドウ領域の計算結果が無効です。"); self._on_selection_cancelled(); return
-            # ★★★ ここからが修正箇所 ★★★
+            
+            # 画面全体のサイズを取得するためにpyautoguiをインポート
             import pyautogui
-            # ★★★ 修正はここまで ★★★
+            
             rect = (max(0, left), max(0, top), min(pyautogui.size().width, left+w), min(pyautogui.size().height, top+h))
             if self._is_capturing_for_registration: self._areaSelectedForProcessing.emit(rect); self.selectionProcessFinished.emit(); return
             self._pending_window_info = {"title": title, "dims": {'width': w, 'height': h}, "rect": rect }
@@ -630,9 +662,9 @@ class CoreEngine(QObject):
             self._update_rec_area_preview()
             self.selectionProcessFinished.emit(); self.ui_manager.show()
         if hasattr(self, 'selection_overlay'): self.selection_overlay = None
-        # ★★★ ここからが修正箇所 ★★★
+        # ★★★ ここからが修正部分 ★★★
         self._start_global_mouse_listener()
-        # ★★★ 修正はここまで ★★★
+        # ★★★ 修正部分ここまで ★★★
         
     def _get_filename_from_user(self):
         if sys.platform == 'win32': return QInputDialog.getText(self.ui_manager, "ファイル名を入力", "保存するファイル名を入力してください:")

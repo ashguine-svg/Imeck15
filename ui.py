@@ -373,39 +373,85 @@ class UIManager(QMainWindow):
         
         right_layout.addWidget(self.preview_tabs, 2)
 
-        item_settings_group = QGroupBox("画像ごとの設定"); item_settings_layout = QGridLayout(item_settings_group)
-        item_settings_layout.addWidget(QLabel("認識精度:"), 0, 0)
-        self.item_settings_widgets['threshold'] = QDoubleSpinBox(); self.item_settings_widgets['threshold'].setRange(0.5, 1.0); self.item_settings_widgets['threshold'].setSingleStep(0.01); self.item_settings_widgets['threshold'].setValue(0.8)
-        item_settings_layout.addWidget(self.item_settings_widgets['threshold'], 0, 1)
-        self.item_settings_widgets['roi_enabled'] = QCheckBox("ROI有効")
-        self.item_settings_widgets['roi_enabled'].setToolTip(
-            "ROI (Region of Interest) を有効にすると、設定したクリック座標を中心とした\n"
-            "200x200ピクセルの範囲のみを探索対象とします。\n"
-            "これにより、画面全体を探索するよりも高速にマッチングが行え、処理負荷を軽減できます。"
-        )
-        item_settings_layout.addWidget(self.item_settings_widgets['roi_enabled'], 0, 2)
-        
-        item_settings_layout.addWidget(QLabel("バックアップクリック:"), 1, 0)
-        backup_layout = QHBoxLayout(); self.item_settings_widgets['backup_click'] = QCheckBox("有効"); backup_layout.addWidget(self.item_settings_widgets['backup_click'])
-        self.item_settings_widgets['backup_time'] = QDoubleSpinBox(); self.item_settings_widgets['backup_time'].setRange(1.0, 600.0); self.item_settings_widgets['backup_time'].setSingleStep(1.0); self.item_settings_widgets['backup_time'].setValue(300.0)
-        backup_layout.addWidget(self.item_settings_widgets['backup_time']); item_settings_layout.addLayout(backup_layout, 1, 1, 1, 2)
-        
-        item_settings_layout.addWidget(QLabel("インターバル(秒):"), 2, 0)
-        self.item_settings_widgets['interval_time'] = QDoubleSpinBox(); self.item_settings_widgets['interval_time'].setRange(0.1, 10.0); self.item_settings_widgets['interval_time'].setSingleStep(0.1); self.item_settings_widgets['interval_time'].setValue(1.5)
-        item_settings_layout.addWidget(self.item_settings_widgets['interval_time'], 2, 1)
+        # ★★★ ここからが修正部分 (レイアウト変更) ★★★
+        item_settings_group = QGroupBox("画像ごとの設定")
+        item_settings_layout = QGridLayout(item_settings_group)
+        item_settings_layout.setColumnStretch(1, 1)
+        item_settings_layout.setColumnStretch(3, 1)
 
-        item_settings_layout.addWidget(QLabel("デバウンス(秒):"), 3, 0)
-        self.item_settings_widgets['debounce_time'] = QDoubleSpinBox(); self.item_settings_widgets['debounce_time'].setRange(0.0, 10.0); self.item_settings_widgets['debounce_time'].setSingleStep(0.1); self.item_settings_widgets['debounce_time'].setValue(0.0)
+        item_settings_layout.addWidget(QLabel("認識精度:"), 0, 0)
+        self.item_settings_widgets['threshold'] = QDoubleSpinBox()
+        self.item_settings_widgets['threshold'].setRange(0.5, 1.0)
+        self.item_settings_widgets['threshold'].setSingleStep(0.01)
+        self.item_settings_widgets['threshold'].setValue(0.8)
+        item_settings_layout.addWidget(self.item_settings_widgets['threshold'], 0, 1)
+
+        item_settings_layout.addWidget(QLabel("インターバル(秒):"), 0, 2)
+        self.item_settings_widgets['interval_time'] = QDoubleSpinBox()
+        self.item_settings_widgets['interval_time'].setRange(0.1, 10.0)
+        self.item_settings_widgets['interval_time'].setSingleStep(0.1)
+        self.item_settings_widgets['interval_time'].setValue(1.5)
+        item_settings_layout.addWidget(self.item_settings_widgets['interval_time'], 0, 3)
+
+        self.item_settings_widgets['backup_click'] = QCheckBox("バックアップクリック")
+        item_settings_layout.addWidget(self.item_settings_widgets['backup_click'], 1, 0)
+        self.item_settings_widgets['backup_time'] = QDoubleSpinBox()
+        self.item_settings_widgets['backup_time'].setRange(1.0, 600.0)
+        self.item_settings_widgets['backup_time'].setSingleStep(1.0)
+        self.item_settings_widgets['backup_time'].setValue(300.0)
+        item_settings_layout.addWidget(self.item_settings_widgets['backup_time'], 1, 1)
+        
+        item_settings_layout.addWidget(QLabel("デバウンス(秒):"), 1, 2)
+        self.item_settings_widgets['debounce_time'] = QDoubleSpinBox()
+        self.item_settings_widgets['debounce_time'].setRange(0.0, 10.0)
+        self.item_settings_widgets['debounce_time'].setSingleStep(0.1)
+        self.item_settings_widgets['debounce_time'].setValue(0.0)
         self.item_settings_widgets['debounce_time'].setToolTip(
             "連続で同じ画像がマッチした際、2回目のクリックタイミングを「インターバル＋デバウンス時間」に延長します。\n"
             "これにより、インターバルがより長い他の画像が先にクリックされる機会を作ることができます。"
         )
-        item_settings_layout.addWidget(self.item_settings_widgets['debounce_time'], 3, 1)
+        item_settings_layout.addWidget(self.item_settings_widgets['debounce_time'], 1, 3)
+
+        # --- クリック種別設定 ---
+        click_type_layout = QHBoxLayout()
+        self.item_settings_widgets['point_click'] = QCheckBox("1点クリック")
+        self.item_settings_widgets['range_click'] = QCheckBox("範囲クリック")
+        self.item_settings_widgets['random_click'] = QCheckBox("範囲内ランダム")
+        click_type_layout.addWidget(self.item_settings_widgets['point_click'])
+        click_type_layout.addWidget(self.item_settings_widgets['range_click'])
+        click_type_layout.addWidget(self.item_settings_widgets['random_click'])
+        item_settings_layout.addLayout(click_type_layout, 2, 0, 1, 4)
+
+        # --- ROI設定 ---
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        item_settings_layout.addWidget(separator, 3, 0, 1, 4)
         
-        click_type_layout = QHBoxLayout(); self.item_settings_widgets['point_click'] = QCheckBox("1点クリック"); self.item_settings_widgets['range_click'] = QCheckBox("範囲クリック"); self.item_settings_widgets['random_click'] = QCheckBox("範囲内ランダム")
-        click_type_layout.addWidget(self.item_settings_widgets['point_click']); click_type_layout.addWidget(self.item_settings_widgets['range_click']); click_type_layout.addWidget(self.item_settings_widgets['random_click'])
-        item_settings_layout.addLayout(click_type_layout, 4, 0, 1, 3)
+        self.item_settings_widgets['roi_enabled'] = QCheckBox("ROI有効")
+        self.item_settings_widgets['roi_enabled'].setToolTip(
+            "ROI (Region of Interest) を有効にすると、指定した範囲のみを探索対象とします。\n"
+            "これにより、画面全体を探索するよりも高速にマッチングが行え、処理負荷を軽減できます。\n\n"
+            "・固定: クリック座標を中心に200x200ピクセルの範囲を自動設定します。\n"
+            "・可変: プレビュー上でドラッグして、探索範囲を自由に設定できます。"
+        )
+        item_settings_layout.addWidget(self.item_settings_widgets['roi_enabled'], 4, 0)
+        
+        roi_mode_layout = QHBoxLayout()
+        self.item_settings_widgets['roi_mode_fixed'] = QRadioButton("固定")
+        self.item_settings_widgets['roi_mode_variable'] = QRadioButton("可変")
+        self.roi_mode_group = QButtonGroup(self)
+        self.roi_mode_group.addButton(self.item_settings_widgets['roi_mode_fixed'])
+        self.roi_mode_group.addButton(self.item_settings_widgets['roi_mode_variable'])
+        roi_mode_layout.addWidget(self.item_settings_widgets['roi_mode_fixed'])
+        roi_mode_layout.addWidget(self.item_settings_widgets['roi_mode_variable'])
+        item_settings_layout.addLayout(roi_mode_layout, 4, 1)
+
+        self.item_settings_widgets['set_roi_variable_button'] = QPushButton("ROI範囲設定")
+        item_settings_layout.addWidget(self.item_settings_widgets['set_roi_variable_button'], 4, 2, 1, 2)
+        
         right_layout.addWidget(item_settings_group, 1)
+        # ★★★ 修正部分ここまで ★★★
 
         content_layout.addWidget(right_frame, 2)
         main_layout.addWidget(content_frame)
@@ -519,6 +565,9 @@ class UIManager(QMainWindow):
         for widget in self.item_settings_widgets.values():
             if isinstance(widget, QDoubleSpinBox): widget.valueChanged.connect(self.on_item_settings_changed)
             elif isinstance(widget, QCheckBox): widget.stateChanged.connect(self.on_item_settings_changed)
+            # ★★★ ここに接続コードを追加 ★★★
+            elif isinstance(widget, QRadioButton): widget.toggled.connect(self.on_item_settings_changed)
+            elif isinstance(widget, QPushButton): widget.clicked.connect(self.on_set_variable_roi_clicked)
         
         self.item_settings_widgets['point_click'].toggled.connect(self.on_point_click_toggled)
         self.item_settings_widgets['range_click'].toggled.connect(self.on_range_click_toggled)
@@ -536,11 +585,17 @@ class UIManager(QMainWindow):
             elif isinstance(widget, QComboBox):
                 widget.currentTextChanged.connect(self.on_app_settings_changed)
 
-
         self.preview_label.settingChanged.connect(self.core_engine.on_preview_click_settings_changed)
+        # ★★★ ここに接続コードを追加 ★★★
+        self.preview_label.roiSettingChanged.connect(self.core_engine.on_roi_settings_changed)
         self.save_timer.timeout.connect(self.core_engine.save_current_settings)
         self.appConfigChanged.connect(self.core_engine.on_app_config_changed)
         
+    # ★★★ ここにメソッドを追加 ★★★
+    def on_set_variable_roi_clicked(self):
+        """「ROI範囲設定」ボタンが押されたときに、プレビューをROI描画モードにする"""
+        self.preview_label.set_drawing_mode('roi_variable')
+
     def open_image_folder(self):
         folder_path = str(self.config_manager.base_dir)
         try:
@@ -724,44 +779,86 @@ class UIManager(QMainWindow):
                         child_order.append(Path(child_path_str).name)
                 self.config_manager.save_image_order(child_order, folder_path=path)
         self.orderChanged.emit()
-        
+    
+    # ★★★ ここからが修正部分 ★★★
     def get_current_item_settings(self):
         settings = {}
         for key, widget in self.item_settings_widgets.items():
-            if isinstance(widget, QDoubleSpinBox): settings[key] = widget.value()
-            elif isinstance(widget, QCheckBox): settings[key] = widget.isChecked()
+            if isinstance(widget, QDoubleSpinBox):
+                settings[key] = widget.value()
+            elif isinstance(widget, QCheckBox):
+                settings[key] = widget.isChecked()
+        
+        if self.item_settings_widgets['roi_mode_fixed'].isChecked():
+            settings['roi_mode'] = 'fixed'
+        elif self.item_settings_widgets['roi_mode_variable'].isChecked():
+            settings['roi_mode'] = 'variable'
+
         return settings
         
     def set_settings_from_data(self, settings_data):
         is_folder = Path(self.get_selected_item_path()[0] or "").is_dir()
         
-        for widget in self.item_settings_widgets.values():
+        all_widgets = list(self.item_settings_widgets.values()) + \
+                      [self.item_settings_widgets['roi_mode_fixed'], self.item_settings_widgets['roi_mode_variable']]
+
+        for widget in all_widgets:
             widget.setEnabled(not is_folder)
 
         if not settings_data or is_folder:
-            for widget in self.item_settings_widgets.values():
+            for widget in all_widgets:
                 widget.blockSignals(True)
                 if isinstance(widget, QDoubleSpinBox): widget.setValue(0)
                 elif isinstance(widget, QCheckBox): widget.setChecked(False)
-                widget.blockSignals(False)
+                elif isinstance(widget, QRadioButton): widget.setAutoExclusive(False); widget.setChecked(False); widget.setAutoExclusive(True)
             self.preview_label.set_drawing_data(None)
             if is_folder:
                 self.preview_label.setText("フォルダを選択中")
                 self.preview_label.set_pixmap(None)
+            for widget in all_widgets: widget.blockSignals(False)
+            self._update_roi_widgets_state()
             return
         
         self.preview_label.set_drawing_data(settings_data)
         for key, value in settings_data.items():
             if key in self.item_settings_widgets:
-                widget = self.item_settings_widgets[key]; widget.blockSignals(True)
-                if isinstance(widget, (QDoubleSpinBox, QSpinBox)): widget.setValue(value if value is not None else 0)
-                elif isinstance(widget, QCheckBox): widget.setChecked(bool(value))
+                widget = self.item_settings_widgets[key]
+                widget.blockSignals(True)
+                if isinstance(widget, (QDoubleSpinBox, QSpinBox)):
+                    widget.setValue(value if value is not None else 0)
+                elif isinstance(widget, QCheckBox):
+                    widget.setChecked(bool(value))
                 widget.blockSignals(False)
+        
+        # ROIモードのラジオボタンを設定
+        roi_mode = settings_data.get('roi_mode', 'fixed')
+        self.item_settings_widgets['roi_mode_fixed'].blockSignals(True)
+        self.item_settings_widgets['roi_mode_variable'].blockSignals(True)
+        if roi_mode == 'variable':
+            self.item_settings_widgets['roi_mode_variable'].setChecked(True)
+        else:
+            self.item_settings_widgets['roi_mode_fixed'].setChecked(True)
+        self.item_settings_widgets['roi_mode_fixed'].blockSignals(False)
+        self.item_settings_widgets['roi_mode_variable'].blockSignals(False)
+            
         self.update_drawing_mode(settings_data)
+        self._update_roi_widgets_state()
 
     def on_item_settings_changed(self):
-        settings = self.get_current_item_settings(); self.imageSettingsChanged.emit(settings)
-        
+        settings = self.get_current_item_settings()
+        self.imageSettingsChanged.emit(settings)
+        self._update_roi_widgets_state()
+
+    def _update_roi_widgets_state(self):
+        """ROI関連ウィジェットの有効/無効状態を更新する"""
+        is_roi_enabled = self.item_settings_widgets['roi_enabled'].isChecked()
+        is_variable_mode = self.item_settings_widgets['roi_mode_variable'].isChecked()
+
+        self.item_settings_widgets['roi_mode_fixed'].setEnabled(is_roi_enabled)
+        self.item_settings_widgets['roi_mode_variable'].setEnabled(is_roi_enabled)
+        self.item_settings_widgets['set_roi_variable_button'].setEnabled(is_roi_enabled and is_variable_mode)
+    # ★★★ 修正部分ここまで ★★★
+
     def update_drawing_mode(self, settings):
         mode = None
         if settings and settings.get('point_click'): mode = 'point'
@@ -907,7 +1004,6 @@ class UIManager(QMainWindow):
             self.floating_window.closeRequested.connect(self.toggle_minimal_ui_mode)
             self.floating_window.setRecAreaRequested.connect(self.setRecAreaDialog)
             
-            # ★★★ ここに接続コードを追加 ★★★
             if self.performance_monitor:
                 self.performance_monitor.performanceUpdated.connect(self.floating_window.update_performance)
 
