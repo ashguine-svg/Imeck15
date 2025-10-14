@@ -30,7 +30,6 @@ class FloatingWindow(QDialog):
 
         self.offset = None
 
-        # ★★★ ここからが修正箇所 ★★★
         # OSからタイトルバーの高さを取得
         title_bar_height = self.style().pixelMetric(QStyle.PM_TitleBarHeight)
         
@@ -80,7 +79,6 @@ class FloatingWindow(QDialog):
         font.setBold(True)
         self.status_label.setFont(font)
         self.status_label.setStyleSheet("color: #90EE90; background-color: transparent;")
-        # ★★★ 修正はここまで ★★★
 
         layout.addWidget(self.start_button)
         layout.addWidget(self.stop_button)
@@ -140,7 +138,9 @@ class FloatingWindow(QDialog):
         
         screen_rect = QApplication.primaryScreen().availableGeometry()
         pos = self.pos()
-        snap_margin = 5
+        # ★★★ ここからが修正箇所 ★★★
+        snap_margin = 10 # 5pxから10pxに変更
+        # ★★★ 修正はここまで ★★★
         
         new_pos = QPoint(pos.x(), pos.y())
         moved = False
