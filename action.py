@@ -10,6 +10,8 @@ if sys.platform == 'win32':
         import ctypes
         import win32gui
         import win32con
+        import win32process  # この行を追加
+        import win32api      # この行を追加
         block_input_func = ctypes.windll.user32.BlockInput
         block_input_func.argtypes = [ctypes.wintypes.BOOL]
         block_input_func.restype = ctypes.wintypes.BOOL
@@ -48,22 +50,44 @@ class ActionManager:
     def _activate_window(self, target_hwnd):
         """
         指定されたウィンドウをフォアグラウンドにし、アクティブ化を試みます。
+        タスクバーが点滅する問題を回避するための高度な手法を使用します。
         """
         if not (sys.platform == 'win32' and target_hwnd):
             return
 
+        # ターゲットが既にフォアグラウンドなら何もしない
+        if win32gui.GetForegroundWindow() == target_hwnd:
+            return
+
         try:
-            current_foreground_hwnd = win32gui.GetForegroundWindow()
-            if target_hwnd != current_foreground_hwnd:
+            # 現在フォアグラウンドのウィンドウのスレッドIDを取得
+            foreground_thread_id, _ = win32process.GetWindowThreadProcessId(win32gui.GetForegroundWindow())
+            # 自分自身のスレッドIDを取得
+            current_thread_id = win32api.GetCurrentThreadId()
+
+            # フォアグラウンドスレッドの入力処理にアタッチする
+            win32process.AttachThreadInput(foreground_thread_id, current_thread_id, True)
+
+            try:
+                # 最小化されている場合は通常の状態に戻す
                 if win32gui.IsIconic(target_hwnd):
-                    win32gui.ShowWindow(target_hwnd, win32con.SW_RESTORE)
+                    win32gui.ShowWindow(target_hwnd, win32con.SW_NORMAL)
                 
+                # ウィンドウをフォアグラウンドに設定する
                 win32gui.SetForegroundWindow(target_hwnd)
-                
-                time.sleep(0.2)
+            finally:
+                # 処理が終わったら、必ずデタッチする
+                win32process.AttachThreadInput(foreground_thread_id, current_thread_id, False)
+
+            time.sleep(0.2) # ウィンドウが切り替わるのを少し待つ
+            
+            if win32gui.GetForegroundWindow() == target_hwnd:
                 self.logger.log(f"ウィンドウ '{win32gui.GetWindowText(target_hwnd)}' をアクティブ化しました。")
+            else:
+                 self.logger.log(f"ウィンドウ '{win32gui.GetWindowText(target_hwnd)}' のアクティブ化を試みましたが、失敗した可能性があります。")
+
         except Exception as e:
-            self.logger.log(f"ウィンドウのアクティブ化に失敗しました: {e}", force=True)
+            self.logger.log(f"ウィンドウのアクティブ化中にエラーが発生しました: {e}", force=True)
 
     def execute_click(self, match_info, recognition_area, target_hwnd, effective_capture_scale):
         """

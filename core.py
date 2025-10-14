@@ -396,15 +396,27 @@ class CoreEngine(QObject):
             finally: time.sleep(0.01)
 
     def check_screen_stability(self) -> bool:
-        if not hasattr(self, 'latest_frame_for_hash') or self.latest_frame_for_hash is None: return False
-        h, w, _ = self.latest_frame_for_hash.shape; roi = self.latest_frame_for_hash[h//2-32:h//2+32, w//2-32:w//2+32]
+        if not hasattr(self, 'latest_frame_for_hash') or self.latest_frame_for_hash is None:
+            return False
+            
+        h, w, _ = self.latest_frame_for_hash.shape
+        roi = self.latest_frame_for_hash[h//2-32:h//2+32, w//2-32:w//2+32]
         current_hash = calculate_phash(roi)
-        if current_hash is None: return False
+        
+        if current_hash is None:
+            return False
+            
         self.screen_stability_hashes.append(current_hash)
-        if len(self.screen_stability_hashes) < self.screen_stability_hashes.maxlen: return False
-        threshold = self.app_config.get('screen_stability_check', {}).get('threshold', 5)
-        return all((self.screen_stability_hashes[-1] - h) <= threshold for h in self.screen_stability_hashes)
-
+        
+        # ハッシュの履歴が十分に溜まっていない場合は、不安定とみなす
+        if len(self.screen_stability_hashes) < self.screen_stability_hashes.maxlen:
+            return False
+            
+        threshold = self.app_config.get('screen_stability_check', {}).get('threshold', 8)
+        
+        # 最も古いハッシュと最新のハッシュを比較し、差が閾値以下なら安定と判断
+        return (self.screen_stability_hashes[-1] - self.screen_stability_hashes[0]) <= threshold
+        
     def _check_and_activate_timer_priority_mode(self):
         for path, activation_time in self.priority_timers.items():
             if time.time() >= activation_time: self.transition_to_timer_priority(path); break 
@@ -415,7 +427,13 @@ class CoreEngine(QObject):
         if not clickable: return False
         target = min(clickable, key=lambda m: (m['settings'].get('interval_time', 1.5), -m['confidence']))
         if self.app_config.get('screen_stability_check',{}).get('enabled',True) and not self.check_screen_stability():
-            self._log("画面が不安定なためクリックを保留します。"); return False
+            self._log("画面が不安定なためクリックを保留します。")
+            self.updateStatus.emit("画面不安定", "orange")
+            return False
+        else:
+            # 画面が安定している場合、ステータスを「監視中」に戻す
+            self.updateStatus.emit("監視中...", "blue")
+        
         if not self.is_monitoring: return False 
         self._execute_click(target); last_match_time_map[target['path']] = time.time()
         return True
