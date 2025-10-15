@@ -120,17 +120,29 @@ class TemplateManager:
 
             image_to_process = original_image
             
+            # ★★★ ここからが修正部分 ★★★
             if settings.get('roi_enabled', False):
                 h, w = original_image.shape[:2]
-                roi_rect = settings.get('roi_rect') 
-                if roi_rect:
-                    x1, y1, x2, y2 = max(0, roi_rect[0]), max(0, roi_rect[1]), min(w, roi_rect[2]), min(h, roi_rect[3])
+                
+                roi_mode = settings.get('roi_mode', 'fixed')
+                rect_to_use = None
+                
+                if roi_mode == 'variable':
+                    # 可変モードの場合は 'roi_rect_variable' を使用する
+                    rect_to_use = settings.get('roi_rect_variable')
+                else: # 'fixed' またはデフォルトの場合
+                    # 固定モードの場合は 'roi_rect' を使用する
+                    rect_to_use = settings.get('roi_rect')
+                
+                if rect_to_use:
+                    x1, y1, x2, y2 = max(0, rect_to_use[0]), max(0, rect_to_use[1]), min(w, rect_to_use[2]), min(h, rect_to_use[3])
                     if x1 < x2 and y1 < y2:
                         image_to_process = original_image[y1:y2, x1:x2]
                     else:
                         self.logger.log(f"警告: '{Path(path).name}' のROI領域が無効なため、フル画像を使用します。")
                 else:
-                    self.logger.log(f"警告: '{Path(path).name}' のROIが有効ですが、領域が未設定です。クリック位置を設定してください。")
+                    self.logger.log(f"警告: '{Path(path).name}' のROIが有効ですが、領域が未設定です。")
+            # ★★★ 修正部分ここまで ★★★
             
             use_opencl = OPENCL_AVAILABLE and cv2.ocl.useOpenCL()
 
@@ -169,6 +181,4 @@ class TemplateManager:
                 normal_cache[path] = cache_entry
 
         except Exception as e:
-            # ★★★ ここからが修正部分 ★★★
             self.logger.log(f"キャッシュ作成失敗: {item_data.get('name')}, {e}")
-            # ★★★ 修正部分ここまで ★★★

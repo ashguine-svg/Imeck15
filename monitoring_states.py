@@ -1,4 +1,4 @@
-# monitoring_states.py
+# monitoring_states.py (最終修正版)
 
 import time
 from pathlib import Path
@@ -8,7 +8,7 @@ class State:
     def __init__(self, context):
         self.context = context
 
-    def handle(self, current_time, screen_data, last_match_time_map):
+    def handle(self, current_time, screen_data, last_match_time_map, pre_matches=None):
         """この状態で実行されるべき処理"""
         raise NotImplementedError
 
@@ -17,22 +17,21 @@ class State:
 
 class IdleState(State):
     """通常監視の状態"""
-    def handle(self, current_time, screen_data, last_match_time_map):
+    def handle(self, current_time, screen_data, last_match_time_map, pre_matches=None):
         context = self.context
         
-        def filter_cache(cache):
-            return {
-                p: d for p, d in cache.items() 
-                if d.get('folder_mode') not in ['excluded', 'priority_timer']
-            }
+        # core.py でマッチング済みのため、pre_matches を使用する
+        all_matches = pre_matches if pre_matches is not None else []
         
-        active_normal_cache = filter_cache(context.normal_template_cache)
-        normal_matches = context._find_best_match(*screen_data, active_normal_cache)
-        
+        # pre_matches は既に Eco Modeの除外対象外のフィルタリングがされている
+        normal_matches = [m for m in all_matches if m['path'] in context.normal_template_cache]
+        backup_trigger_matches = [m for m in all_matches if m['path'] in context.backup_template_cache]
+
         if normal_matches:
             for match in normal_matches:
                 path = match['path']
                 cache_item = context.normal_template_cache.get(path)
+                # 優先画像検出による状態遷移 (Eco Mode解除後に実行される)
                 if cache_item and cache_item.get('folder_mode') == 'priority_image':
                     context.transition_to_image_priority(cache_item['folder_path'])
                     return
@@ -41,8 +40,7 @@ class IdleState(State):
         if was_clicked:
             return
 
-        active_backup_cache = filter_cache(context.backup_template_cache)
-        backup_trigger_matches = context._find_best_match(*screen_data, active_backup_cache)
+        # バックアップトリガー検出による状態遷移 (Eco Mode解除後に実行される)
         if backup_trigger_matches:
             best_backup_trigger = max(backup_trigger_matches, key=lambda m: m['confidence'])
             context.transition_to_countdown(best_backup_trigger)
@@ -66,18 +64,21 @@ class PriorityState(State):
         else:
             self.context.logger.log(f"フォルダ '{folder_name}' の画像認識型優先監視を開始しました。")
 
-    def handle(self, current_time, screen_data, last_match_time_map):
+    def handle(self, current_time, screen_data, last_match_time_map, pre_matches=None):
         if current_time >= self.timeout_time:
             self.context.logger.log(f"フォルダ '{Path(self.folder_path).name}' の優先監視を終了しました。(タイムアウト)")
             self.context.transition_to(IdleState(self.context))
             return
 
         def filter_by_folder(cache):
+            # 現在の優先フォルダ内のアイテムのみを抽出
             return {p: d for p, d in cache.items() if d.get('folder_path') == self.folder_path}
 
         priority_normal_cache = filter_by_folder(self.context.normal_template_cache)
         priority_backup_cache = filter_by_folder(self.context.backup_template_cache)
         
+        # pre_matchesではなく、優先キャッシュに対してマッチングを再実行
+        # (core._monitoring_loopでpre_matchesはIdleStateの除外対象外のみが返されるため)
         all_matches = self.context._find_best_match(*screen_data, priority_normal_cache)
         all_matches.extend(self.context._find_best_match(*screen_data, priority_backup_cache))
         
@@ -117,14 +118,11 @@ class CountdownState(State):
         path = trigger_match['path']
         self.context.logger.log(f"バックアップ画像 '{Path(path).name}' を検出。{self.duration:.1f}秒のカウントダウンを開始します。")
 
-    def handle(self, current_time, screen_data, last_match_time_map):
+    def handle(self, current_time, screen_data, last_match_time_map, pre_matches=None):
         context = self.context
         
-        def filter_cache(cache):
-            return {p: d for p, d in cache.items() if d.get('folder_mode') not in ['excluded', 'priority_timer']}
-        
-        active_normal_cache = filter_cache(context.normal_template_cache)
-        normal_matches = context._find_best_match(*screen_data, active_normal_cache)
+        # core.py でマッチング済みのため、pre_matches を使用する
+        normal_matches = [m for m in (pre_matches if pre_matches is not None else []) if m['path'] in context.normal_template_cache]
         
         if normal_matches:
             context._process_matches_as_sequence(normal_matches, current_time, last_match_time_map)

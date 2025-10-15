@@ -24,16 +24,14 @@ from pathlib import Path
 from capture import DXCAM_AVAILABLE
 from floating_window import FloatingWindow
 from dialogs import RecAreaSelectionDialog, FolderSettingsDialog
-# ★★★ ここにインポート文を追加 ★★★
 from custom_widgets import ScaledPixmapLabel, InteractivePreviewLabel
+from preview_mode_manager import PreviewModeManager
 
 
 try:
     OPENCL_AVAILABLE = cv2.ocl.haveOpenCL()
 except:
     OPENCL_AVAILABLE = False
-
-# ★★★ ScaledPixmapLabel と InteractivePreviewLabel のクラス定義をここから削除 ★★★
 
 class UIManager(QMainWindow):
     startMonitoringRequested = Signal(); stopMonitoringRequested = Signal(); openPerformanceMonitorRequested = Signal()
@@ -67,12 +65,25 @@ class UIManager(QMainWindow):
         self.setup_ui()
         self.load_app_settings_to_ui()
 
+        self.preview_mode_manager = PreviewModeManager(
+            roi_button=self.item_settings_widgets['set_roi_variable_button'],
+            point_cb=self.item_settings_widgets['point_click'],
+            range_cb=self.item_settings_widgets['range_click'],
+            random_cb=self.item_settings_widgets['random_click']
+        )
+        
+        # ★★★ 修正箇所 ★★★
+        # __init__ 内での connect_signals の呼び出しを削除します。
+        # このメソッドの呼び出しは、core_engine が設定された後、main.py の責務となります。
+        # self.connect_signals() 
+
         QTimer.singleShot(100, self.adjust_initial_size)
     
     def set_performance_monitor(self, monitor):
         self.performance_monitor = monitor
         
     def setup_ui(self):
+        # (このメソッドは変更ありません)
         central_widget = QWidget(); self.setCentralWidget(central_widget); main_layout = QVBoxLayout(central_widget)
         header_frame = QFrame(); header_layout = QHBoxLayout(header_frame)
         self.monitor_button = QPushButton("監視開始"); self.monitor_button.setFixedSize(100, 30)
@@ -373,7 +384,6 @@ class UIManager(QMainWindow):
         
         right_layout.addWidget(self.preview_tabs, 2)
 
-        # ★★★ ここからが修正部分 (レイアウト変更) ★★★
         item_settings_group = QGroupBox("画像ごとの設定")
         item_settings_layout = QGridLayout(item_settings_group)
         item_settings_layout.setColumnStretch(1, 1)
@@ -412,7 +422,6 @@ class UIManager(QMainWindow):
         )
         item_settings_layout.addWidget(self.item_settings_widgets['debounce_time'], 1, 3)
 
-        # --- クリック種別設定 ---
         click_type_layout = QHBoxLayout()
         self.item_settings_widgets['point_click'] = QCheckBox("1点クリック")
         self.item_settings_widgets['range_click'] = QCheckBox("範囲クリック")
@@ -422,7 +431,6 @@ class UIManager(QMainWindow):
         click_type_layout.addWidget(self.item_settings_widgets['random_click'])
         item_settings_layout.addLayout(click_type_layout, 2, 0, 1, 4)
 
-        # --- ROI設定 ---
         separator = QFrame()
         separator.setFrameShape(QFrame.Shape.HLine)
         separator.setFrameShadow(QFrame.Shadow.Sunken)
@@ -448,10 +456,10 @@ class UIManager(QMainWindow):
         item_settings_layout.addLayout(roi_mode_layout, 4, 1)
 
         self.item_settings_widgets['set_roi_variable_button'] = QPushButton("ROI範囲設定")
+        self.item_settings_widgets['set_roi_variable_button'].setCheckable(True)
         item_settings_layout.addWidget(self.item_settings_widgets['set_roi_variable_button'], 4, 2, 1, 2)
         
         right_layout.addWidget(item_settings_group, 1)
-        # ★★★ 修正部分ここまで ★★★
 
         content_layout.addWidget(right_frame, 2)
         main_layout.addWidget(content_frame)
@@ -550,14 +558,20 @@ class UIManager(QMainWindow):
         self.appConfigChanged.emit()
 
     def connect_signals(self):
+        # どのスロットが接続されているか追跡するためのフラグ
+        if not hasattr(self, '_signals_connected'):
+            self._signals_connected = True
+        else:
+            # 既に接続済みの場合は、重複して接続しない
+            return
+            
         self.monitor_button.clicked.connect(self.toggle_monitoring)
         self.perf_monitor_button.clicked.connect(self.openPerformanceMonitorRequested.emit)
         self.image_tree.itemSelectionChanged.connect(self.on_image_tree_selection_changed)
         self.image_tree.itemClicked.connect(self.on_tree_item_clicked)
         
         self.set_rec_area_button_main_ui.clicked.connect(self.setRecAreaDialog)
-        self.clear_rec_area_button_main_ui.clicked.connect(self.core_engine.clear_recognition_area)
-        
+
         self.toggle_minimal_ui_button.clicked.connect(self.toggle_minimal_ui_mode)
         
         self.open_image_folder_button.clicked.connect(self.open_image_folder)
@@ -565,12 +579,7 @@ class UIManager(QMainWindow):
         for widget in self.item_settings_widgets.values():
             if isinstance(widget, QDoubleSpinBox): widget.valueChanged.connect(self.on_item_settings_changed)
             elif isinstance(widget, QCheckBox): widget.stateChanged.connect(self.on_item_settings_changed)
-            # ★★★ ここに接続コードを追加 ★★★
             elif isinstance(widget, QRadioButton): widget.toggled.connect(self.on_item_settings_changed)
-            elif isinstance(widget, QPushButton): widget.clicked.connect(self.on_set_variable_roi_clicked)
-        
-        self.item_settings_widgets['point_click'].toggled.connect(self.on_point_click_toggled)
-        self.item_settings_widgets['range_click'].toggled.connect(self.on_range_click_toggled)
         
         for widget in list(self.auto_scale_widgets.values()):
             if isinstance(widget, QDoubleSpinBox): widget.valueChanged.connect(self.on_app_settings_changed)
@@ -585,17 +594,15 @@ class UIManager(QMainWindow):
             elif isinstance(widget, QComboBox):
                 widget.currentTextChanged.connect(self.on_app_settings_changed)
 
-        self.preview_label.settingChanged.connect(self.core_engine.on_preview_click_settings_changed)
-        # ★★★ ここに接続コードを追加 ★★★
-        self.preview_label.roiSettingChanged.connect(self.core_engine.on_roi_settings_changed)
-        self.save_timer.timeout.connect(self.core_engine.save_current_settings)
-        self.appConfigChanged.connect(self.core_engine.on_app_config_changed)
+        self.preview_mode_manager.modeChanged.connect(self.preview_label.set_drawing_mode)
         
-    # ★★★ ここにメソッドを追加 ★★★
-    def on_set_variable_roi_clicked(self):
-        """「ROI範囲設定」ボタンが押されたときに、プレビューをROI描画モードにする"""
-        self.preview_label.set_drawing_mode('roi_variable')
-
+        if self.core_engine:
+            self.clear_rec_area_button_main_ui.clicked.connect(self.core_engine.clear_recognition_area)
+            self.preview_label.settingChanged.connect(self.core_engine.on_preview_click_settings_changed)
+            self.preview_label.roiSettingChanged.connect(self.core_engine.on_roi_settings_changed)
+            self.save_timer.timeout.connect(self.core_engine.save_current_settings)
+            self.appConfigChanged.connect(self.core_engine.on_app_config_changed)
+        
     def open_image_folder(self):
         folder_path = str(self.config_manager.base_dir)
         try:
@@ -610,20 +617,6 @@ class UIManager(QMainWindow):
             self.logger.log(f"画像フォルダを開けませんでした: {e}")
             QMessageBox.warning(self, "エラー", f"フォルダを開けませんでした:\n{e}")
 
-    def on_point_click_toggled(self, checked):
-        if checked:
-            range_cb = self.item_settings_widgets['range_click']
-            range_cb.blockSignals(True)
-            range_cb.setChecked(False)
-            range_cb.blockSignals(False)
-
-    def on_range_click_toggled(self, checked):
-        if checked:
-            point_cb = self.item_settings_widgets['point_click']
-            point_cb.blockSignals(True)
-            point_cb.setChecked(False)
-            point_cb.blockSignals(False)
-            
     def create_colored_icon(self, color, size=16):
         pixmap = QPixmap(size, size)
         pixmap.fill(Qt.transparent)
@@ -737,7 +730,8 @@ class UIManager(QMainWindow):
         self.current_best_scale_label.setStyleSheet("color: gray;")
         
         path, name = self.get_selected_item_path()
-        self.core_engine.load_image_and_settings(path)
+        if self.core_engine:
+            self.core_engine.load_image_and_settings(path)
         
     def move_item_up(self):
         if self.is_processing_tree_change: return
@@ -780,7 +774,6 @@ class UIManager(QMainWindow):
                 self.config_manager.save_image_order(child_order, folder_path=path)
         self.orderChanged.emit()
     
-    # ★★★ ここからが修正部分 ★★★
     def get_current_item_settings(self):
         settings = {}
         for key, widget in self.item_settings_widgets.items():
@@ -816,6 +809,8 @@ class UIManager(QMainWindow):
                 self.preview_label.setText("フォルダを選択中")
                 self.preview_label.set_pixmap(None)
             for widget in all_widgets: widget.blockSignals(False)
+            
+            self.preview_mode_manager.sync_from_settings_data(settings_data)
             self._update_roi_widgets_state()
             return
         
@@ -830,7 +825,6 @@ class UIManager(QMainWindow):
                     widget.setChecked(bool(value))
                 widget.blockSignals(False)
         
-        # ROIモードのラジオボタンを設定
         roi_mode = settings_data.get('roi_mode', 'fixed')
         self.item_settings_widgets['roi_mode_fixed'].blockSignals(True)
         self.item_settings_widgets['roi_mode_variable'].blockSignals(True)
@@ -841,7 +835,7 @@ class UIManager(QMainWindow):
         self.item_settings_widgets['roi_mode_fixed'].blockSignals(False)
         self.item_settings_widgets['roi_mode_variable'].blockSignals(False)
             
-        self.update_drawing_mode(settings_data)
+        self.preview_mode_manager.sync_from_settings_data(settings_data)
         self._update_roi_widgets_state()
 
     def on_item_settings_changed(self):
@@ -850,22 +844,17 @@ class UIManager(QMainWindow):
         self._update_roi_widgets_state()
 
     def _update_roi_widgets_state(self):
-        """ROI関連ウィジェットの有効/無効状態を更新する"""
         is_roi_enabled = self.item_settings_widgets['roi_enabled'].isChecked()
         is_variable_mode = self.item_settings_widgets['roi_mode_variable'].isChecked()
 
         self.item_settings_widgets['roi_mode_fixed'].setEnabled(is_roi_enabled)
         self.item_settings_widgets['roi_mode_variable'].setEnabled(is_roi_enabled)
         self.item_settings_widgets['set_roi_variable_button'].setEnabled(is_roi_enabled and is_variable_mode)
-    # ★★★ 修正部分ここまで ★★★
 
-    def update_drawing_mode(self, settings):
-        mode = None
-        if settings and settings.get('point_click'): mode = 'point'
-        elif settings and settings.get('range_click'): mode = 'range'
-        self.preview_label.set_drawing_mode(mode)
+    def request_save(self): 
+        if self.core_engine:
+            self.save_timer.start()
 
-    def request_save(self): self.save_timer.start()
     def toggle_monitoring(self):
         if self.monitor_button.text() == "監視開始": self.startMonitoringRequested.emit()
         else: self.stopMonitoringRequested.emit()
@@ -970,7 +959,8 @@ class UIManager(QMainWindow):
     def closeEvent(self, event):
         if self.floating_window:
             self.floating_window.close()
-        self.core_engine.cleanup()
+        if self.core_engine:
+            self.core_engine.cleanup()
         self.stopMonitoringRequested.emit()
         QApplication.instance().quit()
         event.accept()

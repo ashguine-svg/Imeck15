@@ -1,4 +1,4 @@
-# core.py
+# core.py (デバッグログ削除版)
 
 import sys
 import threading
@@ -26,7 +26,7 @@ else:
     win32gui = None
 
 
-from capture import CaptureManager, DXCAM_AVAILABLE
+from capture import CaptureManager
 from config import ConfigManager
 from selection import SelectionOverlay, WindowSelectionListener
 from matcher import _match_template_task, calculate_phash
@@ -63,6 +63,7 @@ class CoreEngine(QObject):
     windowScaleCalculated = Signal(float)
     askToSaveWindowBaseSizeSignal = Signal(str)
     askToApplyWindowScaleSignal = Signal(float)
+    clickCountUpdated = Signal(int)
 
 
     def __init__(self, ui_manager, capture_manager, config_manager, logger, performance_monitor):
@@ -124,6 +125,10 @@ class CoreEngine(QObject):
         self.effective_capture_scale = 1.0
         self.effective_frame_skip_rate = 2
         
+        # 省エネモード用の設定
+        self.ECO_MODE_SKIP_RATE = 50 
+        self.ECO_CHECK_INTERVAL = 1.0 # Eco Mode時の実行間隔 (1秒)
+        
         self.screen_stability_hashes = deque(maxlen=3)
         self.latest_frame_for_hash = None
         
@@ -136,6 +141,8 @@ class CoreEngine(QObject):
         self._last_log_message = ""
         self._last_log_time = 0
         self._log_spam_filter = {"画面が不安定なためクリックを保留します。", "省エネモード待機中..."}
+        
+        self._last_eco_check_time = 0 # Eco Modeチェック時刻を保持する変数を追加
 
     def transition_to(self, new_state):
         self.state = new_state
@@ -160,6 +167,7 @@ class CoreEngine(QObject):
 
     def _log(self, message: str, force: bool = False):
         current_time = time.time()
+        # force引数を渡すことで、ログスパムフィルターをオーバーライドする
         if not force and \
            message == self._last_log_message and \
            message in self._log_spam_filter and \
@@ -199,16 +207,36 @@ class CoreEngine(QObject):
         self.logger.log(f"アプリ設定変更: キャプチャ={self.capture_manager.current_method}, 軽量化={is_lw_enabled}({preset}), 実効スケール={self.effective_capture_scale:.2f}, 実効スキップ={self.effective_frame_skip_rate}, OpenCL={cv2.ocl.useOpenCL() if OPENCL_AVAILABLE else 'N/A'}")
 
     def _show_ui_safe(self):
-        if self.ui_manager: self.ui_manager.show(); self.ui_manager.activateWindow()
+        if self.ui_manager:
+            self.ui_manager.show()
+            self.ui_manager.raise_()
+            try:
+                self.ui_manager.activateWindow()
+            except Exception as e:
+                if 'SetForegroundWindow' in str(e):
+                    self.logger.log(f"警告: ウィンドウの最前面化に失敗しました。これはOSの仕様によるもので、通常は問題ありません。")
+                else:
+                    self.logger.log(f"警告: ウィンドウのアクティブ化中に予期せぬエラーが発生しました: {e}")
 
     def _start_global_mouse_listener(self):
-        if self.mouse_listener is None or not self.mouse_listener.is_alive():
-            self.mouse_listener = mouse.Listener(on_click=self._on_global_click)
-            self.mouse_listener.start()
+        """マウスリスナーを確実に開始する"""
+        if self.mouse_listener is None:
+            try:
+                self.mouse_listener = mouse.Listener(on_click=self._on_global_click)
+                self.mouse_listener.start()
+            except Exception as e:
+                self.logger.log(f"エラー: グローバルマウスリスナーの開始に失敗しました: {e}")
+                self.mouse_listener = None
 
     def _stop_global_mouse_listener(self):
+        """マウスリスナーを確実に停止・クリーンアップする"""
         if self.mouse_listener and self.mouse_listener.is_alive():
-            self.mouse_listener.stop(); self.mouse_listener = None
+            try:
+                self.mouse_listener.stop()
+            except Exception as e:
+                self.logger.log(f"警告: マウスリスナーの停止中にエラーが発生しました: {e}")
+        self.mouse_listener = None
+
 
     def _on_global_click(self, x, y, button, pressed):
         if button == mouse.Button.right and pressed:
@@ -309,7 +337,6 @@ class CoreEngine(QObject):
     def on_image_settings_changed(self, settings: dict):
         if self.current_image_settings: self.current_image_settings.update(settings); self._recalculate_and_update()
     
-    # ★★★ ここにメソッドを追加 ★★★
     def on_roi_settings_changed(self, roi_data: dict):
         """プレビューUIから可変ROIの座標が変更されたときに呼び出される"""
         if self.current_image_settings:
@@ -323,14 +350,11 @@ class CoreEngine(QObject):
     def _recalculate_and_update(self, request_save=True):
         if self.current_image_mat is not None and self.current_image_settings:
             h, w = self.current_image_mat.shape[:2]
-            # ★★★ ここからが修正部分 ★★★
             # 常にcalculate_roi_rectを呼び出し、設定に基づいて正しい矩形を計算させる
             self.current_image_settings['roi_rect'] = self.calculate_roi_rect((w, h), self.current_image_settings)
-            # ★★★ 修正部分ここまで ★★★
         self.updatePreview.emit(self.current_image_mat, self.current_image_settings)
         if request_save: self.ui_manager.request_save()
 
-    # ★★★ ここからが修正部分 ★★★
     def calculate_roi_rect(self, image_size, settings):
         """
         ROI設定に基づいて、テンプレート画像から切り出すべきROI矩形を計算する。
@@ -343,7 +367,7 @@ class CoreEngine(QObject):
         roi_mode = settings.get('roi_mode', 'fixed')
 
         if roi_mode == 'variable':
-            # 可変モードの場合は、ユーザーが設定した矩形を返す
+            # 可変モードの場合は、ユーザーが指定した矩形を返す
             return settings.get('roi_rect_variable')
         
         # 以下は固定モード('fixed')のロジック
@@ -359,7 +383,6 @@ class CoreEngine(QObject):
             
         roi_w, roi_h = 200, 200
         return (int(center_x - roi_w/2), int(center_y - roi_h/2), int(center_x + roi_w/2), int(center_y + roi_h/2))
-    # ★★★ 修正部分ここまで ★★★
 
     def save_current_settings(self):
         if self.current_image_path and self.current_image_settings:
@@ -388,6 +411,7 @@ class CoreEngine(QObject):
             self.is_monitoring = True; self.state = IdleState(self)
             self._click_count, self._cooldown_until, self._last_clicked_path = 0, 0, None
             self.screen_stability_hashes.clear(); self.last_successful_click_time, self.is_eco_cooldown_active = 0, False
+            self._last_eco_check_time = time.time() # Eco Modeチェック時刻を初期化
             self.ui_manager.set_tree_enabled(False)
             self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
             self._monitor_thread = threading.Thread(target=self._monitoring_loop, daemon=True)
@@ -404,36 +428,139 @@ class CoreEngine(QObject):
     
     def _monitoring_loop(self):
         last_match_time_map, fps_last_time, frame_counter = {}, time.time(), 0
+        
         while self.is_monitoring:
             try:
                 current_time = time.time()
-                if self._cooldown_until > current_time: time.sleep(min(self._cooldown_until - current_time, 0.1)); continue
+                # self.logger.log(f"[DEBUG] Loop Start. Time: {current_time:.3f}, State: {self.state.get_name() if self.state else 'None'}") # ★★★ 削除
+                
+                if self._cooldown_until > current_time:
+                    # self.logger.log(f"[DEBUG] Cooldown Skip. Until: {self._cooldown_until:.3f}") # ★★★ 削除
+                    time.sleep(min(self._cooldown_until - current_time, 0.1)); continue
+                
+                # FPS計算 (このロジックはフレームのスキップとは独立して継続)
                 frame_counter += 1
                 if (delta_time := current_time - fps_last_time) >= 1.0:
                     self.fpsUpdated.emit(frame_counter / delta_time); fps_last_time, frame_counter = current_time, 0
+                
                 if isinstance(self.state, IdleState): self._check_and_activate_timer_priority_mode()
-                self.is_eco_cooldown_active = self.app_config.get('eco_mode',{}).get('enabled',False) and self.last_successful_click_time > 0 and isinstance(self.state,IdleState) and (current_time-self.last_successful_click_time > self.ECO_MODE_DELAY)
-                if self.is_eco_cooldown_active: self._log("省エネモード待機中..."); time.sleep(1.0); continue
-                elif isinstance(self.state, CountdownState): time.sleep(1.0)
-                elif (frame_counter % self.effective_frame_skip_rate) != 0: time.sleep(0.01); continue
+                
+                is_eco_enabled = self.app_config.get('eco_mode',{}).get('enabled',False)
+                is_eco_eligible = is_eco_enabled and self.last_successful_click_time > 0 and isinstance(self.state,IdleState) and (current_time-self.last_successful_click_time > self.ECO_MODE_DELAY)
+                
+                self.is_eco_cooldown_active = is_eco_eligible
+                
+                skip_capture_and_handle = False
+                
+                # --- State-specific LOW FPS/SKIP Logic ---
+                
+                # 1. CountdownState Check (User wants 1 FPS)
+                if isinstance(self.state, CountdownState): 
+                    self._log(f"バックアップカウントダウン中: {self.state.get_remaining_time():.0f}秒...")
+                    # self.logger.log(f"[DEBUG] Countdown State: Enforcing 1.0s sleep.") # ★★★ 削除
+                    time.sleep(1.0)
+                    
+                # 2. Eco Mode Check (Must skip capture/handle if not yet time)
+                elif self.is_eco_cooldown_active:
+                    self._log("省エネモード待機中...")
+                    # self.logger.log(f"[DEBUG] Eco Mode Active. Last Check: {self._last_eco_check_time:.3f}") # ★★★ 削除
+                    
+                    if current_time - self._last_eco_check_time < self.ECO_CHECK_INTERVAL:
+                        sleep_time = self.ECO_CHECK_INTERVAL - (current_time - self._last_eco_check_time)
+                        if sleep_time > 0:
+                            # self.logger.log(f"[DEBUG] Eco Mode Wait: Sleeping for {sleep_time:.3f}s.") # ★★★ 削除
+                            time.sleep(sleep_time)
+                        # else:
+                            # self.logger.log(f"[DEBUG] Eco Mode Wait: Sleep time zero/negative.") # ★★★ 削除
+                             
+                        skip_capture_and_handle = True # Skip capture/handle, wait for next second
+                        
+                    else:
+                        self._last_eco_check_time = current_time
+                        # self.logger.log(f"[DEBUG] Eco Mode Execute: Proceeding to Capture. New Last Check: {self._last_eco_check_time:.3f}") # ★★★ 削除
+                        # Do NOT skip capture/handle, proceed to check for match
+                
+                # 3. Normal State Frame Skip
+                elif (frame_counter % self.effective_frame_skip_rate) != 0: 
+                    time.sleep(0.01)
+                    skip_capture_and_handle = True
+
+                if skip_capture_and_handle:
+                    # self.logger.log(f"[DEBUG] Skipping Capture and Handle.") # ★★★ 削除
+                    continue # Go to next loop iteration, skipping capture/handle
+
+                # --- Capture/Handle Block ---
+                
+                # self.logger.log(f"[DEBUG] Starting Capture at {time.time():.3f}") # ★★★ 削除
+                
+                # 認識処理に進む
                 screen_bgr = self.capture_manager.capture_frame(region=self.recognition_area)
                 if screen_bgr is None: self._log("画面のキャプチャに失敗しました。"); time.sleep(1.0); continue
+                
+                # self.logger.log(f"[DEBUG] Capture Success. Proceeding to Match and Handle.") # ★★★ 削除
+                
                 if self.effective_capture_scale != 1.0: screen_bgr = cv2.resize(screen_bgr, None, fx=self.effective_capture_scale, fy=self.effective_capture_scale, interpolation=cv2.INTER_AREA)
                 self.latest_frame_for_hash, screen_gray = screen_bgr.copy(), cv2.cvtColor(screen_bgr, cv2.COLOR_BGR2GRAY)
                 screen_bgr_umat, screen_gray_umat = None, None
                 if cv2.ocl.useOpenCL():
                     try: screen_bgr_umat, screen_gray_umat = cv2.UMat(screen_bgr), cv2.UMat(screen_gray)
                     except Exception as e: self.logger.log(f"スクリーンショットのUMat変換に失敗: {e}")
-                if self.state: self.state.handle(current_time, (screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat), last_match_time_map)
-            except Exception as e: self._log(f"監視ループでエラーが発生しました: {e}", force=True); time.sleep(1.0)
-            finally: time.sleep(0.01)
+                
+                if self.state:
+                    # state.handleの前にマッチングを実行
+                    screen_data = (screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat)
+                    all_matches = self._find_matches_for_eco_check(screen_data)
+                    
+                    # 復帰条件変更: 画像マッチを検出したら即座にEco Modeを解除する
+                    if self.is_eco_cooldown_active and all_matches:
+                        self.last_successful_click_time = time.time() # Eco Mode解除
+                        self._log("画像を検出したため、省エネモードから通常監視に復帰します。", force=True)
+                        # self.logger.log(f"[DEBUG] ECO MODE EXIT: Match found. New LCT: {self.last_successful_click_time:.3f}") # ★★★ 削除
+                        
+                    # Stateに処理を委譲 (クリック処理など)
+                    self.state.handle(current_time, screen_data, last_match_time_map, pre_matches=all_matches)
+                
+            except Exception as e:
+                self.logger.log(f"監視ループでエラーが発生しました: {e}"); time.sleep(1.0)
+            finally:
+                # 最後の短い待機
+                # self.logger.log(f"[DEBUG] Loop End. Final sleep(0.01).") # ★★★ 削除
+                time.sleep(0.01)
+
+    def _find_matches_for_eco_check(self, screen_data):
+        """Eco Modeの復帰チェックに必要なマッチングのみを実行"""
+        
+        def filter_cache(cache):
+            # 除外フォルダ、タイマー優先フォルダ以外を対象
+            return {
+                p: d for p, d in cache.items() 
+                if d.get('folder_mode') not in ['excluded', 'priority_timer']
+            }
+
+        active_normal_cache = filter_cache(self.normal_template_cache)
+        normal_matches = self._find_best_match(*screen_data, active_normal_cache)
+        
+        # IdleState でのみバックアップトリガーもチェック
+        if isinstance(self.state, IdleState):
+            active_backup_cache = filter_cache(self.backup_template_cache)
+            backup_trigger_matches = self._find_best_match(*screen_data, active_backup_cache)
+            if backup_trigger_matches:
+                normal_matches.extend(backup_trigger_matches)
+        
+        return normal_matches
 
     def check_screen_stability(self) -> bool:
         if not hasattr(self, 'latest_frame_for_hash') or self.latest_frame_for_hash is None:
             return False
             
         h, w, _ = self.latest_frame_for_hash.shape
-        roi = self.latest_frame_for_hash[h//2-32:h//2+32, w//2-32:w//2+32]
+        # キャプチャ範囲が小さすぎる場合はチェックをスキップし、常に安定とみなす
+        if h < 64 or w < 64:
+            return True
+
+        # 安定性チェックの領域を左上隅に変更
+        roi = self.latest_frame_for_hash[0:64, 0:64]
+        
         current_hash = calculate_phash(roi)
         
         if current_hash is None:
@@ -455,13 +582,24 @@ class CoreEngine(QObject):
     def _process_matches_as_sequence(self, all_matches, current_time, last_match_time_map):
         if not all_matches: return False
         clickable = [m for m in all_matches if current_time-last_match_time_map.get(m['path'],0) > (m['settings'].get('interval_time',1.5) + (m['settings'].get('debounce_time',0.0) if self._last_clicked_path==m['path'] else 0))]
-        if not clickable: return False
+        
+        # クリック可能な対象は無い場合は、活動時間(last_successful_click_time)の更新を行わず False を返す
+        if not clickable:
+            return False
+            
         target = min(clickable, key=lambda m: (m['settings'].get('interval_time', 1.5), -m['confidence']))
-        if self.app_config.get('screen_stability_check',{}).get('enabled',True) and not self.check_screen_stability():
+        
+        # Eco Mode中でない、かつ安定性チェックが有効で、画面が不安定な場合
+        is_stability_check_enabled = self.app_config.get('screen_stability_check',{}).get('enabled',True)
+        
+        if is_stability_check_enabled and not self.is_eco_cooldown_active and not self.check_screen_stability():
             self._log("画面が不安定なためクリックを保留します。")
             self.updateStatus.emit("画面不安定", "orange")
+            self.last_successful_click_time = current_time # Eco Modeへの移行を防ぐ
             return False
-        else:
+        
+        # 安定性チェックをスキップした場合は通常通り監視中ステータスに戻す
+        if not self.is_eco_cooldown_active:
             self.updateStatus.emit("監視中...", "blue")
         
         if not self.is_monitoring: return False 
@@ -515,15 +653,18 @@ class CoreEngine(QObject):
     def _execute_click(self, match_info):
         result = self.action_manager.execute_click(match_info, self.recognition_area, self.target_hwnd, self.effective_capture_scale)
         if result and result.get('success'):
-            self._click_count+=1; self._last_clicked_path=result.get('path'); self.last_successful_click_time=time.time()
+            self._click_count+=1
+            self._last_clicked_path=result.get('path')
+            self.last_successful_click_time=time.time()
+            self.clickCountUpdated.emit(self._click_count)
+            
 
     def set_recognition_area(self, method: str):
         self.selectionProcessStarted.emit()
         self.ui_manager.hide()
-        if self.performance_monitor: self.performance_monitor.hide()
-        # ★★★ ここからが修正部分 ★★★
+        if self.performance_monitor:
+            self.performance_monitor.hide()
         self._stop_global_mouse_listener()
-        # ★★★ 修正部分ここまで ★★★
         if method == "rectangle":
             self.target_hwnd, self.current_window_scale = None, None
             self.windowScaleCalculated.emit(0.0)
@@ -547,15 +688,16 @@ class CoreEngine(QObject):
         if self.keyboard_selection_listener: self.keyboard_selection_listener.stop(); self.keyboard_selection_listener = None
         self.selectionProcessFinished.emit()
         self._show_ui_safe()
-        # ★★★ ここからが修正部分 ★★★
+        if self.performance_monitor and not self.performance_monitor.isVisible():
+            self.performance_monitor.show()
         self._start_global_mouse_listener()
-        # ★★★ 修正部分ここまで ★★★
 
     def _on_key_press_for_selection(self, key):
         if key == keyboard.Key.esc:
             self.logger.log("キーボードによりウィンドウ選択がキャンセルされました。")
             if self.window_selection_listener: self.window_selection_listener.stop()
             if self.keyboard_selection_listener: self.keyboard_selection_listener.stop()
+            # _on_selection_cancelledを直接呼ぶと競合の可能性があるためシグナル経由を維持
             self._showUiSignal.connect(self._on_selection_cancelled)
             self._showUiSignal.emit()
             self._showUiSignal.disconnect(self._on_selection_cancelled)
@@ -565,9 +707,7 @@ class CoreEngine(QObject):
         if self.keyboard_selection_listener: self.keyboard_selection_listener.stop(); self.keyboard_selection_listener = None
         if sys.platform == 'win32': self._handle_window_click_for_selection_windows(x, y)
         else: self._handle_window_click_for_selection_linux(x, y)
-        # ★★★ ここからが修正部分 ★★★
         self._start_global_mouse_listener()
-        # ★★★ 修正部分ここまで ★★★
 
     def _handle_window_click_for_selection_windows(self, x, y):
         try:
@@ -660,11 +800,12 @@ class CoreEngine(QObject):
             self.recognition_area = coords
             self.logger.log(f"認識範囲を設定: {coords}")
             self._update_rec_area_preview()
-            self.selectionProcessFinished.emit(); self.ui_manager.show()
+            self.selectionProcessFinished.emit()
+            self.ui_manager.show()
+            if self.performance_monitor and not self.performance_monitor.isVisible():
+                self.performance_monitor.show()
         if hasattr(self, 'selection_overlay'): self.selection_overlay = None
-        # ★★★ ここからが修正部分 ★★★
         self._start_global_mouse_listener()
-        # ★★★ 修正部分ここまで ★★★
         
     def _get_filename_from_user(self):
         if sys.platform == 'win32': return QInputDialog.getText(self.ui_manager, "ファイル名を入力", "保存するファイル名を入力してください:")
@@ -678,20 +819,48 @@ class CoreEngine(QObject):
 
     def _save_captured_image(self, region_coords):
         try:
+            # キャプチャ実行前にUIを非表示にする
+            self.ui_manager.hide()
+            if self.performance_monitor: self.performance_monitor.hide()
+            QTimer.singleShot(100, lambda: self._capture_and_prompt_for_save(region_coords))
+        except Exception as e:
+            QMessageBox.critical(self.ui_manager, "エラー", f"画像保存準備中にエラー:\n{e}")
+            self._show_ui_and_monitor()
+            self.selectionProcessFinished.emit()
+
+    def _capture_and_prompt_for_save(self, region_coords):
+        try:
             captured_image = self.capture_manager.capture_frame(region=region_coords)
-            self._show_ui_safe()
-            if self.performance_monitor and not self.performance_monitor.isVisible(): self.performance_monitor.show()
-            if captured_image is None: QMessageBox.warning(self.ui_manager, "エラー", "画像のキャプチャに失敗しました。"); self.selectionProcessFinished.emit(); return
+            
+            # キャプチャ後にUIを再表示
+            self._show_ui_and_monitor()
+
+            if captured_image is None:
+                QMessageBox.warning(self.ui_manager, "エラー", "画像のキャプチャに失敗しました。")
+                self.selectionProcessFinished.emit()
+                return
+
             file_name, ok = self._get_filename_from_user()
             if ok and file_name:
                 self.ui_manager.set_tree_enabled(False)
                 save_path = self.config_manager.base_dir / f"{file_name}.png"
                 if save_path.exists() and QMessageBox.question(self.ui_manager, "上書き確認", f"'{save_path.name}' は既に存在します。上書きしますか？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) == QMessageBox.StandardButton.No:
-                    self.ui_manager.set_tree_enabled(True); self.selectionProcessFinished.emit(); return
+                    self.ui_manager.set_tree_enabled(True)
+                    self.selectionProcessFinished.emit()
+                    return
                 self.thread_pool.submit(self._save_image_task, captured_image, save_path).add_done_callback(self._on_save_image_done)
-            else: self.selectionProcessFinished.emit()
+            else:
+                self.selectionProcessFinished.emit()
         except Exception as e:
-            QMessageBox.critical(self.ui_manager, "エラー", f"画像保存準備中にエラー:\n{e}"); self.selectionProcessFinished.emit()
+            QMessageBox.critical(self.ui_manager, "エラー", f"画像保存中にエラー:\n{e}")
+            self._show_ui_and_monitor()
+            self.selectionProcessFinished.emit()
+
+    def _show_ui_and_monitor(self):
+        """UIマネージャーとパフォーマンスモニターを安全に再表示するヘルパーメソッド"""
+        self._show_ui_safe()
+        if self.performance_monitor and not self.performance_monitor.isVisible():
+            self.performance_monitor.show()
 
     def _save_image_task(self, image, save_path):
         try:
@@ -723,3 +892,99 @@ class CoreEngine(QObject):
     def get_backup_click_countdown(self) -> float:
         if isinstance(self.state, CountdownState): return self.state.get_remaining_time()
         return -1.0
+
+    def _find_matches_for_eco_check(self, screen_data):
+        """Eco Modeの復帰チェックに必要なマッチングのみを実行"""
+        
+        def filter_cache(cache):
+            # 除外フォルダ、タイマー優先フォルダ以外を対象
+            return {
+                p: d for p, d in cache.items() 
+                if d.get('folder_mode') not in ['excluded', 'priority_timer']
+            }
+
+        active_normal_cache = filter_cache(self.normal_template_cache)
+        normal_matches = self._find_best_match(*screen_data, active_normal_cache)
+        
+        # IdleState でのみバックアップトリガーもチェック
+        if isinstance(self.state, IdleState):
+            active_backup_cache = filter_cache(self.backup_template_cache)
+            backup_trigger_matches = self._find_best_match(*screen_data, active_backup_cache)
+            if backup_trigger_matches:
+                normal_matches.extend(backup_trigger_matches)
+        
+        return normal_matches
+
+
+    def _process_matches_as_sequence(self, all_matches, current_time, last_match_time_map):
+        if not all_matches: return False
+        clickable = [m for m in all_matches if current_time-last_match_time_map.get(m['path'],0) > (m['settings'].get('interval_time',1.5) + (m['settings'].get('debounce_time',0.0) if self._last_clicked_path==m['path'] else 0))]
+        
+        # クリック可能な対象は無い場合は、活動時間(last_successful_click_time)の更新を行わず False を返す
+        if not clickable:
+            return False
+            
+        target = min(clickable, key=lambda m: (m['settings'].get('interval_time', 1.5), -m['confidence']))
+        
+        # Eco Mode中でない、かつ安定性チェックが有効で、画面が不安定な場合
+        is_stability_check_enabled = self.app_config.get('screen_stability_check',{}).get('enabled',True)
+        
+        if is_stability_check_enabled and not self.is_eco_cooldown_active and not self.check_screen_stability():
+            self._log("画面が不安定なためクリックを保留します。")
+            self.updateStatus.emit("画面不安定", "orange")
+            self.last_successful_click_time = current_time # Eco Modeへの移行を防ぐ
+            return False
+        
+        # 安定性チェックをスキップした場合は通常通り監視中ステータスに戻す
+        if not self.is_eco_cooldown_active:
+            self.updateStatus.emit("監視中...", "blue")
+        
+        if not self.is_monitoring: return False 
+        self._execute_click(target); last_match_time_map[target['path']] = time.time()
+        return True
+
+    def _execute_final_backup_click(self, target_path):
+        screen_bgr = self.capture_manager.capture_frame(region=self.recognition_area)
+        if screen_bgr is None: self._log("バックアップクリック失敗: 画面キャプチャができませんでした。", force=True); return
+        screen_gray, screen_bgr_umat, screen_gray_umat = cv2.cvtColor(screen_bgr, cv2.COLOR_BGR2GRAY), None, None
+        if cv2.ocl.useOpenCL():
+            try: screen_bgr_umat, screen_gray_umat = cv2.UMat(screen_bgr), cv2.UMat(screen_gray)
+            except Exception as e: self.logger.log(f"バックアップクリック時のUMat変換に失敗: {e}")
+        cache_item = self.backup_template_cache.get(target_path)
+        if not cache_item: self._log(f"バックアップクリック失敗: '{Path(target_path).name}' がキャッシュにありません。", force=True); return
+        matches = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, {target_path: cache_item})
+        if matches: self._execute_click(max(matches, key=lambda m: m['confidence']))
+        else: self._log(f"バックアップクリック失敗: '{Path(target_path).name}' が見つかりませんでした。", force=True)
+    
+    def _find_best_match(self, s_bgr, s_gray, s_bgr_umat, s_gray_umat, cache):
+        with self.cache_lock:
+            if not cache: return []
+            use_cl, use_gs = cv2.ocl.useOpenCL(), self.app_config.get('grayscale_matching',False)
+            screen = s_gray if use_gs else s_bgr
+            if use_cl: screen_umat = s_gray_umat if use_gs else s_bgr_umat; screen = screen_umat if screen_umat else screen
+            s_shape = screen.get().shape[:2] if use_cl and isinstance(screen,cv2.UMat) else screen.shape[:2]
+            results, futures = [], []
+            for path, data in cache.items():
+                is_search = data['best_scale'] is None
+                templates = data['scaled_templates'] if is_search else [t for t in data['scaled_templates'] if t['scale']==data['best_scale']] or data['scaled_templates']
+                for t in templates:
+                    template = t['gray'] if use_gs else t['image']
+                    if use_cl: t_umat = t.get('gray_umat' if use_gs else 'image_umat'); template = t_umat if t_umat else template
+                    task = {'path':path,'settings':data['settings'],'template':template,'scale':t['scale']}
+                    if use_cl:
+                        if (m:=_match_template_task(screen,task,s_shape,t['shape'])): results.append(m)
+                    else: futures.append(self.thread_pool.submit(_match_template_task,screen,task,s_shape,t['shape']))
+            if not use_cl:
+                for f in futures:
+                    if (r:=f.result()): results.append(r)
+        if not results: return []
+        best_match = max(results, key=lambda r: r['confidence'])
+        with self.cache_lock:
+            path, cache_dict = best_match['path'], self.normal_template_cache if best_match['path'] in self.normal_template_cache else self.backup_template_cache
+            if (item:=cache_dict.get(path)) and item['best_scale'] is None:
+                 item['best_scale'] = best_match['scale']
+                 self._log(f"最適スケール発見: {Path(path).name} @ {best_match['scale']:.3f}倍 (信頼度: {best_match['confidence']:.2f})")
+                 self.bestScaleFound.emit(path, best_match['scale'])
+        return results
+
+}

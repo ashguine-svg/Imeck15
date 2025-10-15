@@ -23,9 +23,7 @@ from core import CoreEngine
 from capture import CaptureManager
 from config import ConfigManager
 from monitor import PerformanceMonitor
-# ★★★ ここからが修正部分 ★★★
 from dialogs import InitializationDialog
-# ★★★ 修正部分ここまで ★★★
 
 LOCK_PORT = 54321
 _lock_socket = None
@@ -106,6 +104,9 @@ def main():
     core_engine.fpsUpdated.connect(performance_monitor.update_fps)
     core_engine.cacheBuildFinished.connect(ui_manager.on_cache_build_finished)
     
+    # ★★★ ここに接続を追加 ★★★
+    core_engine.clickCountUpdated.connect(performance_monitor.update_click_count)
+    
     core_engine.selectionProcessStarted.connect(ui_manager.on_selection_process_started)
     core_engine.selectionProcessFinished.connect(ui_manager.on_selection_process_finished)
 
@@ -146,10 +147,7 @@ def main():
         # Linux環境でのみ、UI表示後に初期化ダイアログを表示して対策を実行
         def run_initialization_dialog():
             try:
-                # ★★★ ここからが修正部分 ★★★
-                # InitializationDialog は dialogs.py に移動したため、ここからインポート
                 dialog = InitializationDialog(core_engine, logger, ui_manager)
-                # ★★★ 修正部分ここまで ★★★
                 dialog.exec()
             except ImportError:
                 logger.log("エラー: InitializationDialog が見つかりません。")

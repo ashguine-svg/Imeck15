@@ -15,7 +15,7 @@ class PerformanceMonitor(QDialog):
     """
     
     toggleMonitoringRequested = Signal()
-    performanceUpdated = Signal(float, float) # ★★★ 追加: CPUとFPSを通知するシグナル ★★★
+    performanceUpdated = Signal(float, float)
     
     def __init__(self, ui_manager, parent=None):
         super().__init__(parent)
@@ -31,6 +31,8 @@ class PerformanceMonitor(QDialog):
         self.process = psutil.Process()
         self.process.cpu_percent(interval=None)
         self.current_fps = 0.0
+        # ★★★ 1. クリック回数を保持するための変数を追加 ★★★
+        self.current_clicks = 0
         
         self.setup_ui()
         self.start_time = time.time()
@@ -83,12 +85,17 @@ class PerformanceMonitor(QDialog):
 
     def update_fps(self, fps):
         self.current_fps = fps
+
+    # ★★★ 2. CoreEngineからのクリック回数通知を受け取るための新しいスロット（メソッド）を追加 ★★★
+    def update_click_count(self, count):
+        self.current_clicks = count
         
     def update_performance_info(self):
         try:
             cpu_percent = self.process.cpu_percent()
             mem_used = self.process.memory_info().rss / (1024 * 1024)
-            clicks = self.ui_manager.core_engine._click_count if self.ui_manager and self.ui_manager.core_engine else 0
+            # ★★★ 3. 内部変数への直接アクセスをやめ、安全に保持している値を使用 ★★★
+            clicks = self.current_clicks
             uptime_seconds = int(time.time() - self.start_time)
             hours, remainder = divmod(uptime_seconds, 3600)
             minutes, seconds = divmod(remainder, 60)
@@ -97,7 +104,6 @@ class PerformanceMonitor(QDialog):
                          f"クリック: {clicks}  稼働: {hours:02d}:{minutes:02d}:{seconds:02d}")
             self.perf_label.setText(perf_text)
 
-            # ★★★ 追加: CPUとFPSの情報をシグナルで送信 ★★★
             self.performanceUpdated.emit(cpu_percent, self.current_fps)
 
             if self.ui_manager and self.ui_manager.core_engine:
