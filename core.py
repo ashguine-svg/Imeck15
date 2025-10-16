@@ -1,5 +1,3 @@
-# core.py (デバッグログ削除版)
-
 import sys
 import threading
 import time
@@ -456,7 +454,6 @@ class CoreEngine(QObject):
                 
                 # 1. CountdownState Check (User wants 1 FPS)
                 if isinstance(self.state, CountdownState): 
-                    self._log(f"バックアップカウントダウン中: {self.state.get_remaining_time():.0f}秒...")
                     # self.logger.log(f"[DEBUG] Countdown State: Enforcing 1.0s sleep.") # ★★★ 削除
                     time.sleep(1.0)
                     
@@ -986,5 +983,3 @@ class CoreEngine(QObject):
                  self._log(f"最適スケール発見: {Path(path).name} @ {best_match['scale']:.3f}倍 (信頼度: {best_match['confidence']:.2f})")
                  self.bestScaleFound.emit(path, best_match['scale'])
         return results
-
-}

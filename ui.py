@@ -49,7 +49,7 @@ class UIManager(QMainWindow):
         self.app_settings_widgets = {}
         self.auto_scale_widgets = {}
 
-        self.setWindowTitle("Imeck15")
+        self.setWindowTitle("Imeck15 v1.4.1.0")
         self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
 
         self.save_timer = QTimer(self); self.save_timer.setSingleShot(True); self.save_timer.setInterval(1000)
@@ -257,6 +257,7 @@ class UIManager(QMainWindow):
         threshold_layout.addWidget(QLabel("閾値:"))
         self.app_settings_widgets['stability_threshold'] = QSpinBox()
         self.app_settings_widgets['stability_threshold'].setRange(0, 20)
+        # self.app_settings_widgets['stability_threshold'].setValue(5) # この行を削除
         threshold_layout.addWidget(self.app_settings_widgets['stability_threshold'])
         threshold_layout.addStretch()
         stability_layout.addLayout(threshold_layout, 0, 1)
