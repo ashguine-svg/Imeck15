@@ -27,6 +27,9 @@ class FloatingWindow(QDialog):
         )
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setWindowOpacity(0.85)
+        
+        # ★★★ ツールチップを常に有効にする設定を追加 ★★★
+        self.setAttribute(Qt.WA_AlwaysShowToolTips, True)
 
         self.offset = None
 

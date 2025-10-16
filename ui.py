@@ -72,7 +72,6 @@ class UIManager(QMainWindow):
             random_cb=self.item_settings_widgets['random_click']
         )
         
-        # ★★★ 修正箇所 ★★★
         # __init__ 内での connect_signals の呼び出しを削除します。
         # このメソッドの呼び出しは、core_engine が設定された後、main.py の責務となります。
         # self.connect_signals() 
@@ -87,7 +86,10 @@ class UIManager(QMainWindow):
         central_widget = QWidget(); self.setCentralWidget(central_widget); main_layout = QVBoxLayout(central_widget)
         header_frame = QFrame(); header_layout = QHBoxLayout(header_frame)
         self.monitor_button = QPushButton("監視開始"); self.monitor_button.setFixedSize(100, 30)
-        self.monitor_button.setToolTip("右クリックで監視停止、右ダブルクリックで監視開始")
+        self.monitor_button.setToolTip(
+            "監視を開始します。\n"
+            "**[重要]** 動作中のプログラムを緊急停止するには、マウスの右クリックを**長押し**するか、キーボードの **Escキー** を押してください。"
+        )
         header_layout.addWidget(self.monitor_button)
         self.perf_monitor_button = QPushButton("パフォーマンス"); self.perf_monitor_button.setFixedSize(120, 30); header_layout.addWidget(self.perf_monitor_button)
         self.header_rec_area_button = QPushButton("認識範囲設定"); self.header_rec_area_button.setFixedSize(120, 30); self.header_rec_area_button.clicked.connect(self.setRecAreaDialog)
@@ -427,6 +429,13 @@ class UIManager(QMainWindow):
         self.item_settings_widgets['point_click'] = QCheckBox("1点クリック")
         self.item_settings_widgets['range_click'] = QCheckBox("範囲クリック")
         self.item_settings_widgets['random_click'] = QCheckBox("範囲内ランダム")
+        
+        # ★★★ ツールチップを追加 ★★★
+        self.item_settings_widgets['point_click'].setToolTip("プレビュー画像上の1点をクリック座標として設定します。")
+        self.item_settings_widgets['range_click'].setToolTip("プレビュー画像上で矩形範囲を設定し、その中心またはランダムな位置をクリックします。")
+        self.item_settings_widgets['random_click'].setToolTip("範囲クリックが有効な場合、クリック座標を範囲内でランダムに決定します。")
+        # ★★★ ツールチップを追加 ★★★
+
         click_type_layout.addWidget(self.item_settings_widgets['point_click'])
         click_type_layout.addWidget(self.item_settings_widgets['range_click'])
         click_type_layout.addWidget(self.item_settings_widgets['random_click'])
@@ -449,6 +458,12 @@ class UIManager(QMainWindow):
         roi_mode_layout = QHBoxLayout()
         self.item_settings_widgets['roi_mode_fixed'] = QRadioButton("固定")
         self.item_settings_widgets['roi_mode_variable'] = QRadioButton("可変")
+        
+        # ★★★ ツールチップを追加 ★★★
+        self.item_settings_widgets['roi_mode_fixed'].setToolTip("設定されたクリック座標を中心に、固定の200x200ピクセル範囲をROIとします。")
+        self.item_settings_widgets['roi_mode_variable'].setToolTip("プレビュー上でドラッグして、任意の探索範囲を設定します。")
+        # ★★★ ツールチップを追加 ★★★
+
         self.roi_mode_group = QButtonGroup(self)
         self.roi_mode_group.addButton(self.item_settings_widgets['roi_mode_fixed'])
         self.roi_mode_group.addButton(self.item_settings_widgets['roi_mode_variable'])
@@ -458,6 +473,11 @@ class UIManager(QMainWindow):
 
         self.item_settings_widgets['set_roi_variable_button'] = QPushButton("ROI範囲設定")
         self.item_settings_widgets['set_roi_variable_button'].setCheckable(True)
+        self.item_settings_widgets['set_roi_variable_button'].setToolTip(
+            "画像の認識領域（ROI）を設定します。\n"
+            "設定中は、クリック座標や範囲の描画がROI内での相対座標になります。\n"
+            "再押下で設定を解除します。"
+        )
         item_settings_layout.addWidget(self.item_settings_widgets['set_roi_variable_button'], 4, 2, 1, 2)
         
         right_layout.addWidget(item_settings_group, 1)

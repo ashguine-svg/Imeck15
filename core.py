@@ -1,3 +1,5 @@
+# core.py (デバッグログ削除版)
+
 import sys
 import threading
 import time
@@ -430,10 +432,8 @@ class CoreEngine(QObject):
         while self.is_monitoring:
             try:
                 current_time = time.time()
-                # self.logger.log(f"[DEBUG] Loop Start. Time: {current_time:.3f}, State: {self.state.get_name() if self.state else 'None'}") # ★★★ 削除
                 
                 if self._cooldown_until > current_time:
-                    # self.logger.log(f"[DEBUG] Cooldown Skip. Until: {self._cooldown_until:.3f}") # ★★★ 削除
                     time.sleep(min(self._cooldown_until - current_time, 0.1)); continue
                 
                 # FPS計算 (このロジックはフレームのスキップとは独立して継続)
@@ -454,27 +454,21 @@ class CoreEngine(QObject):
                 
                 # 1. CountdownState Check (User wants 1 FPS)
                 if isinstance(self.state, CountdownState): 
-                    # self.logger.log(f"[DEBUG] Countdown State: Enforcing 1.0s sleep.") # ★★★ 削除
                     time.sleep(1.0)
                     
                 # 2. Eco Mode Check (Must skip capture/handle if not yet time)
                 elif self.is_eco_cooldown_active:
                     self._log("省エネモード待機中...")
-                    # self.logger.log(f"[DEBUG] Eco Mode Active. Last Check: {self._last_eco_check_time:.3f}") # ★★★ 削除
                     
                     if current_time - self._last_eco_check_time < self.ECO_CHECK_INTERVAL:
                         sleep_time = self.ECO_CHECK_INTERVAL - (current_time - self._last_eco_check_time)
                         if sleep_time > 0:
-                            # self.logger.log(f"[DEBUG] Eco Mode Wait: Sleeping for {sleep_time:.3f}s.") # ★★★ 削除
                             time.sleep(sleep_time)
-                        # else:
-                            # self.logger.log(f"[DEBUG] Eco Mode Wait: Sleep time zero/negative.") # ★★★ 削除
                              
                         skip_capture_and_handle = True # Skip capture/handle, wait for next second
                         
                     else:
                         self._last_eco_check_time = current_time
-                        # self.logger.log(f"[DEBUG] Eco Mode Execute: Proceeding to Capture. New Last Check: {self._last_eco_check_time:.3f}") # ★★★ 削除
                         # Do NOT skip capture/handle, proceed to check for match
                 
                 # 3. Normal State Frame Skip
@@ -483,18 +477,13 @@ class CoreEngine(QObject):
                     skip_capture_and_handle = True
 
                 if skip_capture_and_handle:
-                    # self.logger.log(f"[DEBUG] Skipping Capture and Handle.") # ★★★ 削除
                     continue # Go to next loop iteration, skipping capture/handle
 
                 # --- Capture/Handle Block ---
                 
-                # self.logger.log(f"[DEBUG] Starting Capture at {time.time():.3f}") # ★★★ 削除
-                
                 # 認識処理に進む
                 screen_bgr = self.capture_manager.capture_frame(region=self.recognition_area)
                 if screen_bgr is None: self._log("画面のキャプチャに失敗しました。"); time.sleep(1.0); continue
-                
-                # self.logger.log(f"[DEBUG] Capture Success. Proceeding to Match and Handle.") # ★★★ 削除
                 
                 if self.effective_capture_scale != 1.0: screen_bgr = cv2.resize(screen_bgr, None, fx=self.effective_capture_scale, fy=self.effective_capture_scale, interpolation=cv2.INTER_AREA)
                 self.latest_frame_for_hash, screen_gray = screen_bgr.copy(), cv2.cvtColor(screen_bgr, cv2.COLOR_BGR2GRAY)
@@ -512,7 +501,6 @@ class CoreEngine(QObject):
                     if self.is_eco_cooldown_active and all_matches:
                         self.last_successful_click_time = time.time() # Eco Mode解除
                         self._log("画像を検出したため、省エネモードから通常監視に復帰します。", force=True)
-                        # self.logger.log(f"[DEBUG] ECO MODE EXIT: Match found. New LCT: {self.last_successful_click_time:.3f}") # ★★★ 削除
                         
                     # Stateに処理を委譲 (クリック処理など)
                     self.state.handle(current_time, screen_data, last_match_time_map, pre_matches=all_matches)
@@ -521,7 +509,6 @@ class CoreEngine(QObject):
                 self.logger.log(f"監視ループでエラーが発生しました: {e}"); time.sleep(1.0)
             finally:
                 # 最後の短い待機
-                # self.logger.log(f"[DEBUG] Loop End. Final sleep(0.01).") # ★★★ 削除
                 time.sleep(0.01)
 
     def _find_matches_for_eco_check(self, screen_data):
@@ -553,6 +540,7 @@ class CoreEngine(QObject):
         h, w, _ = self.latest_frame_for_hash.shape
         # キャプチャ範囲が小さすぎる場合はチェックをスキップし、常に安定とみなす
         if h < 64 or w < 64:
+            self._log("安定性チェック: ROIが小さすぎるためスキップ (安定とみなす)", force=True)
             return True
 
         # 安定性チェックの領域を左上隅に変更
@@ -566,11 +554,24 @@ class CoreEngine(QObject):
         self.screen_stability_hashes.append(current_hash)
         
         if len(self.screen_stability_hashes) < self.screen_stability_hashes.maxlen:
+            self._log(f"安定性チェック: 履歴不足 {len(self.screen_stability_hashes)}/{self.screen_stability_hashes.maxlen}", force=True)
             return False
             
         threshold = self.app_config.get('screen_stability_check', {}).get('threshold', 8)
         
-        return (self.screen_stability_hashes[-1] - self.screen_stability_hashes[0]) <= threshold
+        # ハッシュ差分を計算
+        hash_diff = self.screen_stability_hashes[-1] - self.screen_stability_hashes[0]
+
+        # デバッグログ追加: ハッシュ値と差分を出力
+        log_msg = (
+            f"安定性チェック:\n"
+            f"  Current Hash: {self.screen_stability_hashes[-1]}\n"
+            f"  Oldest Hash:  {self.screen_stability_hashes[0]}\n"
+            f"  Difference:   {hash_diff} (閾値: {threshold})"
+        )
+        self._log(log_msg, force=True)
+
+        return hash_diff <= threshold
         
     def _check_and_activate_timer_priority_mode(self):
         for path, activation_time in self.priority_timers.items():
@@ -829,15 +830,20 @@ class CoreEngine(QObject):
         try:
             captured_image = self.capture_manager.capture_frame(region=region_coords)
             
-            # キャプチャ後にUIを再表示
-            self._show_ui_and_monitor()
+            # 1. キャプチャした画像データを、画像プレビューに一時的に表示する
+            if captured_image is not None and captured_image.size > 0:
+                # プレビューに表示するために、まずUIを再表示する
+                self._show_ui_and_monitor()
+                # プレビュー欄を更新 (settings_dataはNoneで良い)
+                self.ui_manager.update_image_preview(captured_image, settings_data=None)
 
             if captured_image is None:
                 QMessageBox.warning(self.ui_manager, "エラー", "画像のキャプチャに失敗しました。")
                 self.selectionProcessFinished.emit()
                 return
-
+            
             file_name, ok = self._get_filename_from_user()
+            
             if ok and file_name:
                 self.ui_manager.set_tree_enabled(False)
                 save_path = self.config_manager.base_dir / f"{file_name}.png"
@@ -855,7 +861,7 @@ class CoreEngine(QObject):
 
     def _show_ui_and_monitor(self):
         """UIマネージャーとパフォーマンスモニターを安全に再表示するヘルパーメソッド"""
-        self._show_ui_safe()
+        self._show_ui_safe() 
         if self.performance_monitor and not self.performance_monitor.isVisible():
             self.performance_monitor.show()
 
