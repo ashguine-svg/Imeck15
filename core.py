@@ -549,7 +549,10 @@ class CoreEngine(QObject):
                     try: screen_bgr_umat, screen_gray_umat = cv2.UMat(screen_bgr), cv2.UMat(screen_gray)
                     except Exception as e: self.logger.log(f"スクリーンショットのUMat変換に失敗: {e}")
                 
-                if self.state:
+                # ★★★ ここが修正されたブロックです ★★★
+                # 状態をローカル変数にコピーして、レースコンディションを防ぐ
+                current_state = self.state
+                if current_state:
                     screen_data = (screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat)
                     all_matches = self._find_matches_for_eco_check(screen_data)
                     
@@ -558,8 +561,9 @@ class CoreEngine(QObject):
                         self._log("画像を検出したため、省エネモードから通常監視に復帰します。", force=True)
                         self.is_eco_cooldown_active = False
                         self.just_exited_eco_mode = True
-                        
-                    self.state.handle(current_time, screen_data, last_match_time_map, pre_matches=all_matches)
+                    
+                    # ローカル変数を使って安全にメソッドを呼び出す
+                    current_state.handle(current_time, screen_data, last_match_time_map, pre_matches=all_matches)
                 
             except Exception as e:
                 self.logger.log(f"監視ループでエラーが発生しました: {e}"); time.sleep(1.0)
