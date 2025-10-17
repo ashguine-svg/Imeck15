@@ -1,4 +1,4 @@
-# core.py (1/2) - 右クリック操作のロジックを変更
+# core.py (1/2)
 
 import sys
 import threading
@@ -109,10 +109,9 @@ class CoreEngine(QObject):
         self.logger.log(f"CPU論理コア数: {cpu_cores}, 認識スレッド数: {worker_threads} (最大2)")
         self.cache_lock = threading.Lock()
         
-        # ★★★ 変更点: 新しいクリック検出ロジック用の変数を設定 ★★★
         self.right_click_count = 0
         self.click_reset_timer = None
-        self.MULTI_CLICK_INTERVAL = 0.4  # この秒数以内にクリックされれば連続とみなす
+        self.MULTI_CLICK_INTERVAL = 0.4
 
         self.mouse_listener = None
         self._start_global_mouse_listener()
@@ -271,14 +270,11 @@ class CoreEngine(QObject):
                 self.logger.log(f"警告: マウスリスナーの停止中にエラーが発生しました: {e}")
         self.mouse_listener = None
 
-    # ★★★ 変更点: クリックカウンタをリセットするメソッドを追加 ★★★
     def _reset_click_count(self):
         self.right_click_count = 0
 
-    # ★★★ 変更点: 右クリックの処理をダブル/トリプルクリック対応に変更 ★★★
     def _on_global_click(self, x, y, button, pressed):
         if button == mouse.Button.right and pressed:
-            # 既存のタイマーがあればキャンセル
             if self.click_reset_timer and self.click_reset_timer.is_alive():
                 self.click_reset_timer.cancel()
 
@@ -287,16 +283,13 @@ class CoreEngine(QObject):
             if self.right_click_count == 2:
                 self.logger.log("右ダブルクリック検出: 監視を停止します。")
                 self.stopMonitoringRequested.emit()
-                # この後タイマーがセットされ、一定時間後にカウントがリセットされる
 
             elif self.right_click_count == 3:
                 self.logger.log("右トリプルクリック検出: 監視を開始します。")
                 self.startMonitoringRequested.emit()
-                # トリプルクリックが成立したら、即座にカウントをリセット
                 self.right_click_count = 0
-                return # タイマーをセットせずに終了
+                return
 
-            # 次のクリックを待つためのタイマーを開始
             self.click_reset_timer = Timer(self.MULTI_CLICK_INTERVAL, self._reset_click_count)
             self.click_reset_timer.start()
 
@@ -369,6 +362,7 @@ class CoreEngine(QObject):
             else: QMessageBox.critical(self.ui_manager, "エラー", message)
 
     def move_multiple_items_into_folder(self, source_paths: list, dest_folder_path: str):
+        """ドラッグ＆ドロップによる複数アイテムのフォルダ移動を処理する。"""
         if not source_paths or not dest_folder_path:
             return
 
@@ -382,6 +376,8 @@ class CoreEngine(QObject):
             else:
                 self.logger.log(f"移動失敗: {message}")
                 QMessageBox.warning(self.ui_manager, "移動エラー", message)
+        
+        # UIの更新はdropEvent側で完了し、orderUpdated経由で保存されるため、ここでは何もしない
 
     def move_item_out_of_folder(self):
         source_path_str, name = self.ui_manager.get_selected_item_path()
@@ -402,6 +398,7 @@ class CoreEngine(QObject):
             self.current_image_path, self.current_image_settings, self.current_image_mat = None, None, None
             self.updatePreview.emit(None, None); return
         try:
+            # ★★★ 変更点: 常に最新のパス情報をconfig_managerから取得するよう試みる ★★★
             updated_path_str = self.config_manager.get_current_path_for_item(file_path)
             self.current_image_path = updated_path_str
             self.current_image_settings = self.config_manager.load_item_setting(Path(updated_path_str))
@@ -466,6 +463,7 @@ class CoreEngine(QObject):
         self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
 
     def on_order_changed(self):
+        # ★★★ 変更点: UIの見た目を元にJSONを保存し、キャッシュを再構築する ★★★
         self.ui_manager.save_tree_order()
         self.ui_manager.set_tree_enabled(False)
         self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)

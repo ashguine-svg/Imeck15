@@ -1,4 +1,4 @@
-# config.py
+# config.py (完全なコード)
 
 import json
 import shutil
@@ -340,18 +340,34 @@ class ConfigManager:
             if source_json_path.exists():
                 shutil.move(str(source_json_path), dest_folder_path / source_json_path.name)
             
-            source_parent = source_path.parent
-            source_order_list = self.load_image_order(None if source_parent == self.base_dir else source_parent)
-            item_key_source = str(source_path) if source_parent == self.base_dir else source_path.name
-            if item_key_source in source_order_list:
-                source_order_list.remove(item_key_source)
-                self.save_image_order(source_order_list, None if source_parent == self.base_dir else source_parent)
-
-            dest_order_list = self.load_image_order(None if dest_folder_path == self.base_dir else dest_folder_path)
-            item_key_dest = str(dest_path) if dest_folder_path == self.base_dir else dest_path.name
-            dest_order_list.append(item_key_dest)
-            self.save_image_order(dest_order_list, None if dest_folder_path == self.base_dir else dest_folder_path)
+            # ★★★ 変更点: order listの更新はsave_tree_orderに一任するため、ここでは行わない ★★★
+            # source_parent = source_path.parent
+            # ... (古いorder更新ロジックを削除) ...
             
             return True, f"'{source_path.name}' を '{dest_folder_path.name}' に移動しました。"
         except Exception as e:
             return False, f"移動中にエラーが発生しました: {e}"
+
+    # ★★★ 変更点: エラーの原因だったget_current_path_for_itemメソッドを追加 ★★★
+    def get_current_path_for_item(self, item_path_str: str) -> str:
+        """
+        指定されたアイテム名から、現在のフルパスを再帰的に検索して返します。
+        D&Dによる移動後も正しいパスを追跡するために使用します。
+        """
+        if not item_path_str:
+            return item_path_str
+            
+        try:
+            item_name = Path(item_path_str).name
+            # .rglobを使ってサブディレクトリ内も再帰的に検索
+            found_paths = list(self.base_dir.rglob(item_name))
+            
+            if found_paths:
+                # 最初に見つかったパスを返す
+                return str(found_paths[0])
+            else:
+                # 見つからなければ、元のパスをそのまま返す
+                return item_path_str
+        except Exception:
+            # 何かエラーが起きても、とりあえず元のパスを返す
+            return item_path_str
