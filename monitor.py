@@ -31,7 +31,6 @@ class PerformanceMonitor(QDialog):
         self.process = psutil.Process()
         self.process.cpu_percent(interval=None)
         self.current_fps = 0.0
-        # ★★★ 1. クリック回数を保持するための変数を追加 ★★★
         self.current_clicks = 0
         
         self.setup_ui()
@@ -49,7 +48,7 @@ class PerformanceMonitor(QDialog):
         top_layout.setContentsMargins(0, 0, 0, 0)
 
         self.monitor_button = QPushButton("監視開始/停止")
-        self.monitor_button.setToolTip("右クリックで監視停止、右ダブルクリックで監視開始")
+        self.monitor_button.setToolTip("右ダブルクリックで監視停止、右トリプルクリックで監視開始")
         top_layout.addWidget(self.monitor_button)
 
         self.rec_area_button = QPushButton("認識範囲設定")
@@ -72,7 +71,6 @@ class PerformanceMonitor(QDialog):
         main_layout.addWidget(self.log_text_edit)
         
     def connect_signals(self):
-        """シグナルとスロットを接続します"""
         self.monitor_button.clicked.connect(self.toggleMonitoringRequested.emit)
         if self.ui_manager:
             self.rec_area_button.clicked.connect(self.ui_manager.setRecAreaDialog)
@@ -81,12 +79,11 @@ class PerformanceMonitor(QDialog):
         if status_text == "監視中...":
             self.monitor_button.setStyleSheet("background-color: #3399FF; color: white;")
         else:
-            self.monitor_button.setStyleSheet("") # デフォルトのスタイルに戻す
+            self.monitor_button.setStyleSheet("")
 
     def update_fps(self, fps):
         self.current_fps = fps
 
-    # ★★★ 2. CoreEngineからのクリック回数通知を受け取るための新しいスロット（メソッド）を追加 ★★★
     def update_click_count(self, count):
         self.current_clicks = count
         
@@ -94,7 +91,6 @@ class PerformanceMonitor(QDialog):
         try:
             cpu_percent = self.process.cpu_percent()
             mem_used = self.process.memory_info().rss / (1024 * 1024)
-            # ★★★ 3. 内部変数への直接アクセスをやめ、安全に保持している値を使用 ★★★
             clicks = self.current_clicks
             uptime_seconds = int(time.time() - self.start_time)
             hours, remainder = divmod(uptime_seconds, 3600)

@@ -81,6 +81,8 @@ class ConfigManager:
                 "enabled": True,
                 "preset": "標準"
             },
+            "recognition_area": None,
+            "target_hwnd": None,
             "screen_stability_check": {
                 "enabled": True,
                 "threshold": 8
@@ -147,15 +149,14 @@ class ConfigManager:
                 'priority_timeout': 5,
             }
         else:
-            # ★★★ ここからが修正部分 ★★★
             default_setting = {
                 'image_path': str(item_path),
                 'click_position': None,
                 'click_rect': None,
                 'roi_enabled': False,
-                'roi_mode': 'fixed',  # 'fixed' または 'variable'
-                'roi_rect': None,  # 固定ROI(200x200)の計算結果用
-                'roi_rect_variable': None, # 可変ROIのユーザー指定座標
+                'roi_mode': 'fixed',
+                'roi_rect': None,
+                'roi_rect_variable': None,
                 'point_click': True,
                 'range_click': False,
                 'random_click': False,
@@ -165,7 +166,6 @@ class ConfigManager:
                 'threshold': 0.8,
                 'debounce_time': 0.0
             }
-            # ★★★ 修正部分ここまで ★★★
         
         if not setting_path.exists():
             return default_setting

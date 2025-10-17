@@ -1,4 +1,4 @@
-# ui.py
+# ui.py (完全な最終版コード - これで全体を置き換えてください)
 
 import sys
 from PySide6.QtWidgets import (
@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QGroupBox, QSpinBox, QDoubleSpinBox, QCheckBox,
     QGridLayout, QSizePolicy, QSpacerItem, QToolButton, QFileDialog, QLineEdit,
     QTreeWidget, QTreeWidgetItem, QMenu, QTabWidget, QTextEdit, QDialog, QMessageBox,
-    QComboBox, QDialogButtonBox, QRadioButton, QButtonGroup, QScrollArea
+    QComboBox, QDialogButtonBox, QRadioButton, QButtonGroup, QScrollArea, QAbstractItemView
 )
 from PySide6.QtGui import (
     QIcon, QPixmap, QImage, QPainter, QColor, QFontMetrics, QPen, QCursor,
@@ -33,12 +33,136 @@ try:
 except:
     OPENCL_AVAILABLE = False
 
+class DraggableTreeWidget(QTreeWidget):
+    """ドラッグ＆ドロップによる順序変更と視覚的フィードバックをサポートするカスタムQTreeWidget。"""
+    orderUpdated = Signal()
+    itemsMoved = Signal(list, str) 
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.last_highlighted_item = None
+        self.highlight_color = QApplication.palette().highlight().color().lighter(150)
+        self.config_manager = None
+
+    def dragEnterEvent(self, event):
+        if event.source() == self:
+            event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event):
+        if event.source() != self:
+            super().dragMoveEvent(event)
+            return
+        
+        event.acceptProposedAction()
+
+        if self.last_highlighted_item:
+            self.last_highlighted_item.setBackground(0, QBrush(Qt.transparent))
+            self.last_highlighted_item = None
+
+        item = self.itemAt(event.position().toPoint())
+        if item:
+            item.setBackground(0, self.highlight_color)
+            self.last_highlighted_item = item
+
+    def dragLeaveEvent(self, event):
+        if self.last_highlighted_item:
+            self.last_highlighted_item.setBackground(0, QBrush(Qt.transparent))
+            self.last_highlighted_item = None
+        super().dragLeaveEvent(event)
+
+    def dropEvent(self, event):
+        if self.last_highlighted_item:
+            self.last_highlighted_item.setBackground(0, QBrush(Qt.transparent))
+            self.last_highlighted_item = None
+
+        if event.source() != self:
+            super().dropEvent(event)
+            return
+
+        target_item = self.itemAt(event.position().toPoint())
+        dragged_items = self.selectedItems()
+        if not dragged_items:
+            return
+
+        source_parent = dragged_items[0].parent()
+        pos = self.dropIndicatorPosition()
+        
+        # UI上での移動を完結させる
+        cloned_items = [item.clone() for item in dragged_items]
+        
+        # 移動元のアイテムを一度削除
+        for item in dragged_items:
+            parent = item.parent()
+            if parent:
+                parent.removeChild(item)
+            else:
+                self.takeTopLevelItem(self.indexOfTopLevelItem(item))
+
+        # ドロップ先の親と挿入インデックスを正確に計算
+        dest_parent = None
+        insert_index = -1
+        
+        if pos == self.DropIndicatorPosition.OnItem and target_item:
+            path_str = target_item.data(0, Qt.UserRole)
+            if path_str and Path(path_str).is_dir():
+                dest_parent = target_item
+                insert_index = 0 # フォルダの先頭に入れる
+            else: # ファイルの上なら、その親の後ろに
+                dest_parent = target_item.parent()
+                if dest_parent:
+                    insert_index = dest_parent.indexOfChild(target_item) + 1
+                else:
+                    insert_index = self.indexOfTopLevelItem(target_item) + 1
+        elif target_item: # アイテムの間
+            dest_parent = target_item.parent()
+            if dest_parent:
+                insert_index = dest_parent.indexOfChild(target_item)
+                if pos == self.DropIndicatorPosition.BelowItem:
+                    insert_index += 1
+            else:
+                insert_index = self.indexOfTopLevelItem(target_item)
+                if pos == self.DropIndicatorPosition.BelowItem:
+                    insert_index += 1
+        else: # リストの何もないところ (末尾)
+            dest_parent = None
+            insert_index = self.topLevelItemCount()
+
+        # 計算した位置にアイテムを挿入
+        if dest_parent:
+            for i, item in enumerate(cloned_items):
+                dest_parent.insertChild(insert_index + i, item)
+        else:
+            for i, item in enumerate(cloned_items):
+                self.insertTopLevelItem(insert_index + i, item)
+
+        # 移動したアイテムを選択状態にする
+        self.clearSelection()
+        for item in cloned_items:
+            item.setSelected(True)
+            self.scrollToItem(item)
+        
+        # 親が変更された場合は、物理的なファイル移動をcoreに依頼
+        if source_parent != dest_parent:
+            dest_path = str(self.config_manager.base_dir) if dest_parent is None else dest_parent.data(0, Qt.UserRole)
+            source_paths = [item.data(0, Qt.UserRole) for item in dragged_items if item.data(0, Qt.UserRole)]
+            if source_paths and dest_path:
+                self.itemsMoved.emit(source_paths, dest_path)
+        
+        # どのようなD&D操作であっても、最終的にUIの見た目を元にJSONを保存させる
+        self.orderUpdated.emit()
+        event.accept()
+
+
 class UIManager(QMainWindow):
     startMonitoringRequested = Signal(); stopMonitoringRequested = Signal(); openPerformanceMonitorRequested = Signal()
     loadImagesRequested = Signal(list); setRecAreaMethodSelected = Signal(str); captureImageRequested = Signal()
-    deleteItemRequested = Signal(); orderChanged = Signal()
+    deleteItemsRequested = Signal(list); orderChanged = Signal()
+    itemsMovedIntoFolder = Signal(list, str) 
     folderSettingsChanged = Signal()
-    imageSettingsChanged = Signal(dict); createFolderRequested = Signal(); moveItemIntoFolderRequested = Signal()
+    imageSettingsChanged = Signal(dict); createFolderRequested = Signal()
+    moveItemIntoFolderRequested = Signal()
     moveItemOutOfFolderRequested = Signal()
     appConfigChanged = Signal()
 
@@ -49,7 +173,7 @@ class UIManager(QMainWindow):
         self.app_settings_widgets = {}
         self.auto_scale_widgets = {}
 
-        self.setWindowTitle("Imeck15 v1.4.1.0")
+        self.setWindowTitle("Imeck15 v1.4.4.0")
         self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
 
         self.save_timer = QTimer(self); self.save_timer.setSingleShot(True); self.save_timer.setInterval(1000)
@@ -72,23 +196,18 @@ class UIManager(QMainWindow):
             random_cb=self.item_settings_widgets['random_click']
         )
         
-        # __init__ 内での connect_signals の呼び出しを削除します。
-        # このメソッドの呼び出しは、core_engine が設定された後、main.py の責務となります。
-        # self.connect_signals() 
-
         QTimer.singleShot(100, self.adjust_initial_size)
     
     def set_performance_monitor(self, monitor):
         self.performance_monitor = monitor
         
     def setup_ui(self):
-        # (このメソッドは変更ありません)
         central_widget = QWidget(); self.setCentralWidget(central_widget); main_layout = QVBoxLayout(central_widget)
         header_frame = QFrame(); header_layout = QHBoxLayout(header_frame)
         self.monitor_button = QPushButton("監視開始"); self.monitor_button.setFixedSize(100, 30)
         self.monitor_button.setToolTip(
             "監視を開始します。\n"
-            "**[重要]** 動作中のプログラムを緊急停止するには、マウスの右クリックを**長押し**するか、キーボードの **Escキー** を押してください。"
+            "**[重要]** 動作中のプログラムを緊急停止するには、キーボードの **Escキー** を押してください。"
         )
         header_layout.addWidget(self.monitor_button)
         self.perf_monitor_button = QPushButton("パフォーマンス"); self.perf_monitor_button.setFixedSize(120, 30); header_layout.addWidget(self.perf_monitor_button)
@@ -110,7 +229,16 @@ class UIManager(QMainWindow):
         left_frame = QFrame(); left_layout = QVBoxLayout(left_frame); left_layout.addWidget(QLabel("登録済み画像"))
         order_button_frame = QHBoxLayout(); move_up_button = QPushButton("▲ 上げる"); move_down_button = QPushButton("▼ 下げる")
         order_button_frame.addWidget(move_up_button); order_button_frame.addWidget(move_down_button); left_layout.addLayout(order_button_frame)
-        self.image_tree = QTreeWidget()
+        
+        self.image_tree = DraggableTreeWidget()
+        self.image_tree.config_manager = self.config_manager
+        self.image_tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.image_tree.setDragDropMode(QAbstractItemView.InternalMove)
+        self.image_tree.setDragEnabled(True)
+        self.image_tree.setAcceptDrops(True)
+        self.image_tree.setDropIndicatorShown(True)
+        self.image_tree.setContextMenuPolicy(Qt.CustomContextMenu)
+
         self.image_tree.setStyleSheet("""
             QTreeWidget {
                 border: 1px solid darkgray;
@@ -125,7 +253,8 @@ class UIManager(QMainWindow):
         move_in_button = QPushButton("フォルダに入れる"); button_layout.addWidget(move_in_button, 2, 0)
         move_out_button = QPushButton("フォルダから出す"); button_layout.addWidget(move_out_button, 2, 1)
         load_image_button.clicked.connect(self.load_images_dialog); capture_image_button.clicked.connect(self.captureImageRequested.emit)
-        delete_item_button.clicked.connect(self.deleteItemRequested.emit); move_up_button.clicked.connect(self.move_item_up); move_down_button.clicked.connect(self.move_item_down)
+        delete_item_button.clicked.connect(self.on_delete_button_clicked)
+        move_up_button.clicked.connect(self.move_item_up); move_down_button.clicked.connect(self.move_item_down)
         create_folder_button.clicked.connect(self.createFolderRequested.emit); move_in_button.clicked.connect(self.moveItemIntoFolderRequested.emit); move_out_button.clicked.connect(self.moveItemOutOfFolderRequested.emit)
         left_layout.addLayout(button_layout); content_layout.addWidget(left_frame, 1)
         right_frame = QFrame(); right_layout = QVBoxLayout(right_frame)
@@ -259,7 +388,6 @@ class UIManager(QMainWindow):
         threshold_layout.addWidget(QLabel("閾値:"))
         self.app_settings_widgets['stability_threshold'] = QSpinBox()
         self.app_settings_widgets['stability_threshold'].setRange(0, 20)
-        # self.app_settings_widgets['stability_threshold'].setValue(5) # この行を削除
         threshold_layout.addWidget(self.app_settings_widgets['stability_threshold'])
         threshold_layout.addStretch()
         stability_layout.addLayout(threshold_layout, 0, 1)
@@ -430,11 +558,9 @@ class UIManager(QMainWindow):
         self.item_settings_widgets['range_click'] = QCheckBox("範囲クリック")
         self.item_settings_widgets['random_click'] = QCheckBox("範囲内ランダム")
         
-        # ★★★ ツールチップを追加 ★★★
         self.item_settings_widgets['point_click'].setToolTip("プレビュー画像上の1点をクリック座標として設定します。")
         self.item_settings_widgets['range_click'].setToolTip("プレビュー画像上で矩形範囲を設定し、その中心またはランダムな位置をクリックします。")
         self.item_settings_widgets['random_click'].setToolTip("範囲クリックが有効な場合、クリック座標を範囲内でランダムに決定します。")
-        # ★★★ ツールチップを追加 ★★★
 
         click_type_layout.addWidget(self.item_settings_widgets['point_click'])
         click_type_layout.addWidget(self.item_settings_widgets['range_click'])
@@ -459,10 +585,8 @@ class UIManager(QMainWindow):
         self.item_settings_widgets['roi_mode_fixed'] = QRadioButton("固定")
         self.item_settings_widgets['roi_mode_variable'] = QRadioButton("可変")
         
-        # ★★★ ツールチップを追加 ★★★
         self.item_settings_widgets['roi_mode_fixed'].setToolTip("設定されたクリック座標を中心に、固定の200x200ピクセル範囲をROIとします。")
         self.item_settings_widgets['roi_mode_variable'].setToolTip("プレビュー上でドラッグして、任意の探索範囲を設定します。")
-        # ★★★ ツールチップを追加 ★★★
 
         self.roi_mode_group = QButtonGroup(self)
         self.roi_mode_group.addButton(self.item_settings_widgets['roi_mode_fixed'])
@@ -509,7 +633,7 @@ class UIManager(QMainWindow):
 
         stability_conf = self.app_config.get('screen_stability_check', {})
         self.app_settings_widgets['stability_check_enabled'].setChecked(stability_conf.get('enabled', True))
-        self.app_settings_widgets['stability_threshold'].setValue(stability_conf.get('threshold', 5))
+        self.app_settings_widgets['stability_threshold'].setValue(stability_conf.get('threshold', 8))
 
         lw_conf = self.app_config.get('lightweight_mode', {})
         self.app_settings_widgets['lightweight_mode_enabled'].setChecked(lw_conf.get('enabled', False))
@@ -579,18 +703,18 @@ class UIManager(QMainWindow):
         self.appConfigChanged.emit()
 
     def connect_signals(self):
-        # どのスロットが接続されているか追跡するためのフラグ
-        if not hasattr(self, '_signals_connected'):
-            self._signals_connected = True
-        else:
-            # 既に接続済みの場合は、重複して接続しない
+        if hasattr(self, '_signals_connected') and self._signals_connected:
             return
             
         self.monitor_button.clicked.connect(self.toggle_monitoring)
         self.perf_monitor_button.clicked.connect(self.openPerformanceMonitorRequested.emit)
         self.image_tree.itemSelectionChanged.connect(self.on_image_tree_selection_changed)
-        self.image_tree.itemClicked.connect(self.on_tree_item_clicked)
         
+        self.image_tree.customContextMenuRequested.connect(self.on_tree_context_menu)
+        self.image_tree.orderUpdated.connect(self.orderChanged.emit)
+
+        self.image_tree.itemsMoved.connect(self.itemsMovedIntoFolder.emit)
+
         self.set_rec_area_button_main_ui.clicked.connect(self.setRecAreaDialog)
 
         self.toggle_minimal_ui_button.clicked.connect(self.toggle_minimal_ui_mode)
@@ -623,6 +747,8 @@ class UIManager(QMainWindow):
             self.preview_label.roiSettingChanged.connect(self.core_engine.on_roi_settings_changed)
             self.save_timer.timeout.connect(self.core_engine.save_current_settings)
             self.appConfigChanged.connect(self.core_engine.on_app_config_changed)
+            
+        self._signals_connected = True
         
     def open_image_folder(self):
         folder_path = str(self.config_manager.base_dir)
@@ -680,6 +806,7 @@ class UIManager(QMainWindow):
 
                 folder_item = QTreeWidgetItem(self.image_tree, [f"📁 {item_data['name']}"])
                 folder_item.setData(0, Qt.UserRole, item_data['path'])
+                folder_item.setFlags(folder_item.flags() | Qt.ItemIsDropEnabled)
 
                 brush = QBrush(QApplication.palette().text().color())
                 icon_color = Qt.transparent
@@ -717,8 +844,13 @@ class UIManager(QMainWindow):
                 
         if item_to_reselect: self.image_tree.setCurrentItem(item_to_reselect)
         self.image_tree.blockSignals(False)
+        self.on_image_tree_selection_changed()
 
-    def on_tree_item_clicked(self, item, column):
+    def on_tree_context_menu(self, pos):
+        item = self.image_tree.itemAt(pos)
+        if not item:
+            return
+
         path_str = item.data(0, Qt.UserRole)
         if not path_str or not Path(path_str).is_dir():
             return
@@ -756,44 +888,101 @@ class UIManager(QMainWindow):
         
     def move_item_up(self):
         if self.is_processing_tree_change: return
-        self.set_tree_enabled(False); item = self.image_tree.currentItem()
-        if not item: self.set_tree_enabled(True); return
+        item = self.image_tree.currentItem()
+        if not item: return
         parent = item.parent()
         if parent:
             index = parent.indexOfChild(item)
-            if index > 0: parent.takeChild(index); parent.insertChild(index - 1, item)
+            if index > 0:
+                self.set_tree_enabled(False)
+                parent.takeChild(index)
+                parent.insertChild(index - 1, item)
         else:
             index = self.image_tree.indexOfTopLevelItem(item)
-            if index > 0: self.image_tree.takeTopLevelItem(index); self.image_tree.insertTopLevelItem(index - 1, item)
-        self.image_tree.setCurrentItem(item); self.save_tree_order()
+            if index > 0:
+                self.set_tree_enabled(False)
+                self.image_tree.takeTopLevelItem(index)
+                self.image_tree.insertTopLevelItem(index - 1, item)
+        self.image_tree.setCurrentItem(item); self.orderChanged.emit()
+        self.set_tree_enabled(True)
         
     def move_item_down(self):
         if self.is_processing_tree_change: return
-        self.set_tree_enabled(False); item = self.image_tree.currentItem()
-        if not item: self.set_tree_enabled(True); return
+        item = self.image_tree.currentItem()
+        if not item: return
         parent = item.parent()
         if parent:
             index = parent.indexOfChild(item)
-            if index < parent.childCount() - 1: parent.takeChild(index); parent.insertChild(index + 1, item)
+            if index < parent.childCount() - 1:
+                self.set_tree_enabled(False)
+                parent.takeChild(index)
+                parent.insertChild(index + 1, item)
         else:
             index = self.image_tree.indexOfTopLevelItem(item)
-            if index < self.image_tree.topLevelItemCount() - 1: self.image_tree.takeTopLevelItem(index); self.image_tree.insertTopLevelItem(index + 1, item)
-        self.image_tree.setCurrentItem(item); self.save_tree_order()
+            if index < self.image_tree.topLevelItemCount() - 1:
+                self.set_tree_enabled(False)
+                self.image_tree.takeTopLevelItem(index)
+                self.image_tree.insertTopLevelItem(index + 1, item)
+        self.image_tree.setCurrentItem(item); self.orderChanged.emit()
+        self.set_tree_enabled(True)
         
     def save_tree_order(self):
-        top_level_order = [self.image_tree.topLevelItem(i).data(0, Qt.UserRole) for i in range(self.image_tree.topLevelItemCount())]
-        self.config_manager.save_image_order(top_level_order)
+        top_level_order = []
         for i in range(self.image_tree.topLevelItemCount()):
-            item = self.image_tree.topLevelItem(i); path = item.data(0, Qt.UserRole)
-            if path and Path(path).is_dir():
-                child_order = []
-                for j in range(item.childCount()):
-                    child_item = item.child(j)
-                    child_path_str = child_item.data(0, Qt.UserRole)
-                    if child_path_str:
-                        child_order.append(Path(child_path_str).name)
-                self.config_manager.save_image_order(child_order, folder_path=path)
-        self.orderChanged.emit()
+            item = self.image_tree.topLevelItem(i)
+            original_path = Path(item.data(0, Qt.UserRole))
+            
+            if original_path.is_dir():
+                path_str = str(original_path)
+            else:
+                new_path = self.config_manager.base_dir / original_path.name
+                path_str = str(new_path)
+                if str(original_path) != path_str:
+                    item.setData(0, Qt.UserRole, path_str)
+
+            top_level_order.append(path_str)
+        self.config_manager.save_image_order(top_level_order)
+
+        for i in range(self.image_tree.topLevelItemCount()):
+            folder_item = self.image_tree.topLevelItem(i)
+            folder_path_str = folder_item.data(0, Qt.UserRole)
+            
+            if folder_path_str and Path(folder_path_str).is_dir():
+                child_order_filenames = []
+                for j in range(folder_item.childCount()):
+                    child_item = folder_item.child(j)
+                    original_path = Path(child_item.data(0, Qt.UserRole))
+                    
+                    if not original_path.is_dir():
+                        new_path = Path(folder_path_str) / original_path.name
+                        
+                        if str(original_path) != str(new_path):
+                            child_item.setData(0, Qt.UserRole, str(new_path))
+
+                        child_order_filenames.append(original_path.name)
+
+                self.config_manager.save_image_order(child_order_filenames, folder_path=folder_path_str)
+
+    def on_delete_button_clicked(self):
+        selected_items = self.image_tree.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "警告", "削除するアイテムを選択してください。")
+            return
+
+        item_names = [f"'{item.text(0).strip()}'" for item in selected_items]
+        
+        reply = QMessageBox.question(
+            self,
+            "削除の確認",
+            f"{len(item_names)}個のアイテム ({', '.join(item_names)}) を本当に削除しますか？\n(フォルダの場合、中のファイルもすべて削除されます)",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            paths_to_delete = [item.data(0, Qt.UserRole) for item in selected_items if item.data(0, Qt.UserRole)]
+            if paths_to_delete:
+                self.deleteItemsRequested.emit(paths_to_delete)
     
     def get_current_item_settings(self):
         settings = {}
@@ -811,8 +1000,9 @@ class UIManager(QMainWindow):
         return settings
         
     def set_settings_from_data(self, settings_data):
-        is_folder = Path(self.get_selected_item_path()[0] or "").is_dir()
-        
+        selected_path, _ = self.get_selected_item_path()
+        is_folder = selected_path and Path(selected_path).is_dir()
+
         all_widgets = list(self.item_settings_widgets.values()) + \
                       [self.item_settings_widgets['roi_mode_fixed'], self.item_settings_widgets['roi_mode_variable']]
 
@@ -859,10 +1049,11 @@ class UIManager(QMainWindow):
         self.preview_mode_manager.sync_from_settings_data(settings_data)
         self._update_roi_widgets_state()
 
-    def on_item_settings_changed(self):
+    def on_item_settings_changed(self, *args):
         settings = self.get_current_item_settings()
         self.imageSettingsChanged.emit(settings)
         self._update_roi_widgets_state()
+        self.preview_label.set_drawing_data(self.get_current_item_settings())
 
     def _update_roi_widgets_state(self):
         is_roi_enabled = self.item_settings_widgets['roi_enabled'].isChecked()
@@ -950,7 +1141,8 @@ class UIManager(QMainWindow):
     def update_image_preview(self, cv_image: np.ndarray, settings_data: dict = None):
         self.set_settings_from_data(settings_data)
         if cv_image is None or cv_image.size == 0:
-            if not (self.get_selected_item_path()[0] and Path(self.get_selected_item_path()[0]).is_dir()):
+            selected_path, _ = self.get_selected_item_path()
+            if not (selected_path and Path(selected_path).is_dir()):
                 self.preview_label.setText("画像を選択してください")
             self.preview_label.set_pixmap(None)
             return
@@ -1018,12 +1210,25 @@ class UIManager(QMainWindow):
             if self.performance_monitor:
                 self.performance_monitor.performanceUpdated.connect(self.floating_window.update_performance)
 
-            self.set_status(self.status_label.text(), self.status_label.palette().color(QPalette.WindowText).name())
+            current_status_text = self.status_label.text()
+            current_status_color = self.status_label.palette().color(QPalette.ColorRole.WindowText).name()
+            if current_status_text == "監視中...":
+                current_status_color = "blue"
+            elif current_status_text == "待機中":
+                current_status_color = "green"
+
+            self.floating_window.update_status(current_status_text, current_status_color)
             
             self.floating_window.show()
             self.toggle_minimal_ui_button.setText("最小UIモード停止")
         else:
             if self.floating_window:
+                if self.performance_monitor:
+                    if hasattr(self.performance_monitor, 'performanceUpdated'):
+                        try:
+                            self.performance_monitor.performanceUpdated.disconnect(self.floating_window.update_performance)
+                        except (TypeError, RuntimeError):
+                            pass
                 self.floating_window.close()
                 self.floating_window = None
             
@@ -1032,7 +1237,7 @@ class UIManager(QMainWindow):
                 self.setGeometry(self.normal_ui_geometries['main'])
             
             if self.performance_monitor:
-                if 'perf' in self.normal_ui_geometries:
+                if 'perf' in self.normal_ui_geometries and not self.performance_monitor.isVisible():
                     self.performance_monitor.show()
                     self.performance_monitor.setGeometry(self.normal_ui_geometries['perf'])
             
@@ -1050,5 +1255,5 @@ class UIManager(QMainWindow):
             if self.floating_window:
                 self.floating_window.show()
         else:
-            if self.performance_monitor:
+            if self.performance_monitor and not self.performance_monitor.isVisible():
                 self.performance_monitor.show()

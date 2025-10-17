@@ -28,19 +28,15 @@ class FloatingWindow(QDialog):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setWindowOpacity(0.85)
         
-        # ★★★ ツールチップを常に有効にする設定を追加 ★★★
         self.setAttribute(Qt.WA_AlwaysShowToolTips, True)
 
         self.offset = None
 
-        # OSからタイトルバーの高さを取得
         title_bar_height = self.style().pixelMetric(QStyle.PM_TitleBarHeight)
         
-        # ウィンドウ自体の高さをタイトルバーの高さに固定
         self.setFixedHeight(title_bar_height)
         
         layout = QHBoxLayout(self)
-        # レイアウトの余白を調整して高さいっぱいにウィジェットを配置
         margin = 2
         layout.setContentsMargins(margin * 2, margin, margin * 2, margin)
         layout.setSpacing(4)
@@ -52,16 +48,13 @@ class FloatingWindow(QDialog):
         self.toggle_ui_button = QPushButton("⇔")
         self.close_button = QPushButton("×")
         
-        # ボタンの高さをタイトルバーの高さに合わせて調整
         button_height = title_bar_height - (margin * 2)
         
         for btn in [self.start_button, self.stop_button, self.capture_button, self.set_rec_area_button, self.toggle_ui_button, self.close_button]:
-            btn.setFixedSize(button_height, button_height) # 幅も高さに合わせる
+            btn.setFixedSize(button_height, button_height)
             font = btn.font()
-            # フォントサイズも高さに合わせて調整
             font.setPointSize(int(button_height * 0.45))
             btn.setFont(font)
-            # 角丸の半径も調整
             btn.setStyleSheet(f"QPushButton {{ border-radius: {int(button_height / 2)}px; background-color: rgba(200, 200, 200, 150); color: black; }} QPushButton:hover {{ background-color: rgba(220, 220, 220, 200); }}")
         
         self.close_button.setStyleSheet(f"QPushButton {{ border-radius: {int(button_height / 2)}px; background-color: rgba(231, 76, 60, 180); color: white; font-weight: bold; }} QPushButton:hover {{ background-color: rgba(231, 76, 60, 230); }}")
@@ -119,7 +112,6 @@ class FloatingWindow(QDialog):
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setPen(Qt.NoPen)
         painter.setBrush(QColor(50, 50, 50, 200))
-        # 角丸の半径をウィンドウの高さの半分に設定
         radius = self.height() / 2.0
         painter.drawRoundedRect(self.rect(), radius, radius)
 
@@ -141,9 +133,7 @@ class FloatingWindow(QDialog):
         
         screen_rect = QApplication.primaryScreen().availableGeometry()
         pos = self.pos()
-        # ★★★ ここからが修正箇所 ★★★
-        snap_margin = 10 # 5pxから10pxに変更
-        # ★★★ 修正はここまで ★★★
+        snap_margin = 10
         
         new_pos = QPoint(pos.x(), pos.y())
         moved = False
