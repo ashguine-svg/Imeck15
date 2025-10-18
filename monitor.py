@@ -1,4 +1,4 @@
-# monitor.py
+# monitor.py (修正統合版)
 
 import sys
 import time
@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QTextEdit, QSizePolicy, QSpacerItem
 )
 from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtGui import QColor
 
 class PerformanceMonitor(QDialog):
     """
@@ -57,6 +58,11 @@ class PerformanceMonitor(QDialog):
         self.backup_countdown_label = QLabel("")
         self.backup_countdown_label.setStyleSheet("font-size: 12px; color: #888888;")
         top_layout.addWidget(self.backup_countdown_label)
+        
+        # ★★★ 変更点: 安定性表示ラベルを追加 ★★★
+        self.stability_label = QLabel("安定性: ---")
+        self.stability_label.setStyleSheet("font-size: 12px; font-weight: bold; color: gray;")
+        top_layout.addWidget(self.stability_label)
 
         top_layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
         
@@ -86,6 +92,11 @@ class PerformanceMonitor(QDialog):
 
     def update_click_count(self, count):
         self.current_clicks = count
+
+    # ★★★ 変更点: 安定性表示を更新するスロットを追加 ★★★
+    def update_stability_status(self, status_text: str, color: QColor):
+        self.stability_label.setText(f"安定性: {status_text}")
+        self.stability_label.setStyleSheet(f"font-size: 12px; font-weight: bold; color: {color.name()};")
         
     def update_performance_info(self):
         try:

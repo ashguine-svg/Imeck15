@@ -1,4 +1,4 @@
-# core.py (1/2)
+# core.py (1/2) - 修正統合版
 
 import sys
 import threading
@@ -7,7 +7,8 @@ import cv2
 import numpy as np
 import os
 from PySide6.QtCore import QObject, Signal, QThread, QPoint, QRect, Qt, QTimer
-from PySide6.QtGui import QMouseEvent, QPainter, QPen, QColor, QBrush, QPainterPath, QKeyEvent
+# ★★★ 変更点: QColorを追加 ★★★
+from PySide6.QtGui import QMouseEvent, QPainter, QPen, QColor, QBrush, QPainterPath, QKeyEvent, QColor
 from PySide6.QtWidgets import QDialog, QWidget, QLabel, QVBoxLayout, QMessageBox, QApplication, QInputDialog, QFileDialog
 from pathlib import Path
 from pynput import mouse, keyboard
@@ -66,6 +67,8 @@ class CoreEngine(QObject):
     askToSaveWindowBaseSizeSignal = Signal(str)
     askToApplyWindowScaleSignal = Signal(float)
     clickCountUpdated = Signal(int)
+    # ★★★ 変更点: 安定性ステータス更新用のシグナルを追加 ★★★
+    stabilityStatusUpdated = Signal(str, QColor)
 
 
     def __init__(self, ui_manager, capture_manager, config_manager, logger, performance_monitor):
@@ -146,6 +149,8 @@ class CoreEngine(QObject):
         
         self.current_fps = 0.0
         self.just_exited_eco_mode = False
+        
+        self.pending_click_match = None
         
         self.on_app_config_changed()
         self._load_recognition_settings()
@@ -340,7 +345,7 @@ class CoreEngine(QObject):
                 self.logger.log(message); self.ui_manager.update_image_tree()
                 self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
             else: QMessageBox.warning(self.ui_manager, "エラー", message)
-# core.py (2/2)
+# core.py (2/2) - 修正統合版
 
     def move_item_into_folder(self):
         source_path_str, name = self.ui_manager.get_selected_item_path()
@@ -355,14 +360,13 @@ class CoreEngine(QObject):
         if ok and dest_folder_name:
             dest_folder_path_str = str(self.config_manager.base_dir / dest_folder_name)
             success, message = self.config_manager.move_item(source_path_str, dest_folder_path_str)
-            if success: 
+            if success:
                 self.logger.log(message)
                 self.ui_manager.update_image_tree()
                 self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
             else: QMessageBox.critical(self.ui_manager, "エラー", message)
 
     def move_multiple_items_into_folder(self, source_paths: list, dest_folder_path: str):
-        """ドラッグ＆ドロップによる複数アイテムのフォルダ移動を処理する。"""
         if not source_paths or not dest_folder_path:
             return
 
@@ -376,8 +380,6 @@ class CoreEngine(QObject):
             else:
                 self.logger.log(f"移動失敗: {message}")
                 QMessageBox.warning(self.ui_manager, "移動エラー", message)
-        
-        # UIの更新はdropEvent側で完了し、orderUpdated経由で保存されるため、ここでは何もしない
 
     def move_item_out_of_folder(self):
         source_path_str, name = self.ui_manager.get_selected_item_path()
@@ -387,22 +389,24 @@ class CoreEngine(QObject):
             QMessageBox.warning(self.ui_manager, "警告", "フォルダの中にある画像ファイルを選択してください。"); return
         dest_folder_path_str = str(self.config_manager.base_dir)
         success, message = self.config_manager.move_item(source_path_str, dest_folder_path_str)
-        if success: 
+        if success:
             self.logger.log(message)
             self.ui_manager.update_image_tree()
             self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
         else: QMessageBox.critical(self.ui_manager, "エラー", message)
 
     def load_image_and_settings(self, file_path: str):
-        if file_path is None or Path(file_path).is_dir():
+        if file_path is None or (Path(file_path).exists() and Path(file_path).is_dir()):
             self.current_image_path, self.current_image_settings, self.current_image_mat = None, None, None
             self.updatePreview.emit(None, None); return
         try:
-            # ★★★ 変更点: 常に最新のパス情報をconfig_managerから取得するよう試みる ★★★
             updated_path_str = self.config_manager.get_current_path_for_item(file_path)
+            if not Path(updated_path_str).exists():
+                 raise FileNotFoundError(f"指定されたパスが見つかりません: {updated_path_str}")
+
             self.current_image_path = updated_path_str
             self.current_image_settings = self.config_manager.load_item_setting(Path(updated_path_str))
-            
+
             with open(updated_path_str, 'rb') as f: self.current_image_mat = cv2.imdecode(np.fromfile(f, np.uint8), cv2.IMREAD_COLOR)
             if self.current_image_mat is None: raise ValueError("画像ファイルのデコードに失敗。")
         except Exception as e:
@@ -411,9 +415,10 @@ class CoreEngine(QObject):
             self.updatePreview.emit(None, None); return
         self._recalculate_and_update(request_save=False)
 
+
     def on_image_settings_changed(self, settings: dict):
         if self.current_image_settings: self.current_image_settings.update(settings); self._recalculate_and_update()
-    
+
     def on_roi_settings_changed(self, roi_data: dict):
         if self.current_image_settings:
             self.current_image_settings.update(roi_data)
@@ -437,17 +442,17 @@ class CoreEngine(QObject):
 
         if roi_mode == 'variable':
             return settings.get('roi_rect_variable')
-        
+
         center_x, center_y = -1, -1
         if settings.get('point_click') and settings.get('click_position'):
             center_x, center_y = settings['click_position']
         elif settings.get('range_click') and settings.get('click_rect'):
             rect = settings['click_rect']
             center_x, center_y = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
-        
+
         if center_x == -1:
             return None
-            
+
         roi_w, roi_h = 200, 200
         return (int(center_x - roi_w/2), int(center_y - roi_h/2), int(center_x + roi_w/2), int(center_y + roi_h/2))
 
@@ -463,7 +468,6 @@ class CoreEngine(QObject):
         self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
 
     def on_order_changed(self):
-        # ★★★ 変更点: UIの見た目を元にJSONを保存し、キャッシュを再構築する ★★★
         self.ui_manager.save_tree_order()
         self.ui_manager.set_tree_enabled(False)
         self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
@@ -479,7 +483,7 @@ class CoreEngine(QObject):
         if not self.is_monitoring:
             self.is_monitoring = True; self.state = IdleState(self)
             self._click_count, self._cooldown_until, self._last_clicked_path = 0, 0, None
-            self.clickCountUpdated.emit(self._click_count) 
+            self.clickCountUpdated.emit(self._click_count)
             self.screen_stability_hashes.clear(); self.last_successful_click_time, self.is_eco_cooldown_active = 0, False
             self._last_eco_check_time = time.time()
             self.ui_manager.set_tree_enabled(False)
@@ -491,40 +495,45 @@ class CoreEngine(QObject):
     def stop_monitoring(self):
         if self.is_monitoring:
             self.is_monitoring = False; self.state = None
+            self.pending_click_match = None
             if self._monitor_thread and self._monitor_thread.is_alive(): self._monitor_thread.join(timeout=1.0)
             with self.cache_lock:
                 for item in list(self.normal_template_cache.values()) + list(self.backup_template_cache.values()): item['best_scale'] = None
             self.updateStatus.emit("待機中", "green"); self.logger.log("監視を停止しました。")
+            self.stabilityStatusUpdated.emit("---", QColor("gray")) # ★★★ 変更点: 停止時に安定性表示をリセット ★★★
             self.ui_manager.set_tree_enabled(True)
-    
+
     def _monitoring_loop(self):
         last_match_time_map, fps_last_time, frame_counter = {}, time.time(), 0
-        
+
         while self.is_monitoring:
             try:
                 current_time = time.time()
-                
+
                 if self._cooldown_until > current_time:
                     time.sleep(min(self._cooldown_until - current_time, 0.1)); continue
-                
+
                 frame_counter += 1
                 if (delta_time := current_time - fps_last_time) >= 1.0:
                     fps = frame_counter / delta_time
                     self.fpsUpdated.emit(fps)
                     fps_last_time, frame_counter = current_time, 0
-                
+
                 if isinstance(self.state, IdleState): self._check_and_activate_timer_priority_mode()
-                
+
                 is_eco_enabled = self.app_config.get('eco_mode',{}).get('enabled',False)
                 is_eco_eligible = is_eco_enabled and self.last_successful_click_time > 0 and isinstance(self.state,IdleState) and (current_time-self.last_successful_click_time > self.ECO_MODE_DELAY)
-                
+
                 self.is_eco_cooldown_active = is_eco_eligible
-                
+
                 skip_capture_and_handle = False
-                
-                if isinstance(self.state, CountdownState): 
-                    time.sleep(1.0)
+
+                if isinstance(self.state, CountdownState):
+                    # ★★★ 変更点: カウントダウン中は安定性チェックしない ★★★
+                    self.stabilityStatusUpdated.emit("---", QColor("gray"))
+                    time.sleep(1.0) # バックアップクリックまでの待機
                 elif self.is_eco_cooldown_active:
+                    self.stabilityStatusUpdated.emit("---", QColor("gray")) # ★★★ 変更点: Ecoモード中もリセット ★★★
                     self._log("省エネモード待機中...")
                     if current_time - self._last_eco_check_time < self.ECO_CHECK_INTERVAL:
                         sleep_time = self.ECO_CHECK_INTERVAL - (current_time - self._last_eco_check_time)
@@ -532,8 +541,7 @@ class CoreEngine(QObject):
                         skip_capture_and_handle = True
                     else:
                         self._last_eco_check_time = current_time
-                elif (frame_counter % self.effective_frame_skip_rate) != 0: 
-                    time.sleep(0.01)
+                elif (frame_counter % self.effective_frame_skip_rate) != 0:
                     skip_capture_and_handle = True
 
                 if skip_capture_and_handle:
@@ -541,30 +549,27 @@ class CoreEngine(QObject):
 
                 screen_bgr = self.capture_manager.capture_frame(region=self.recognition_area)
                 if screen_bgr is None: self._log("画面のキャプチャに失敗しました。"); time.sleep(1.0); continue
-                
+
                 if self.effective_capture_scale != 1.0: screen_bgr = cv2.resize(screen_bgr, None, fx=self.effective_capture_scale, fy=self.effective_capture_scale, interpolation=cv2.INTER_AREA)
                 self.latest_frame_for_hash, screen_gray = screen_bgr.copy(), cv2.cvtColor(screen_bgr, cv2.COLOR_BGR2GRAY)
                 screen_bgr_umat, screen_gray_umat = None, None
                 if cv2.ocl.useOpenCL():
                     try: screen_bgr_umat, screen_gray_umat = cv2.UMat(screen_bgr), cv2.UMat(screen_gray)
                     except Exception as e: self.logger.log(f"スクリーンショットのUMat変換に失敗: {e}")
-                
-                # ★★★ ここが修正されたブロックです ★★★
-                # 状態をローカル変数にコピーして、レースコンディションを防ぐ
+
                 current_state = self.state
                 if current_state:
                     screen_data = (screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat)
                     all_matches = self._find_matches_for_eco_check(screen_data)
-                    
+
                     if self.is_eco_cooldown_active and all_matches:
                         self.last_successful_click_time = current_time
                         self._log("画像を検出したため、省エネモードから通常監視に復帰します。", force=True)
                         self.is_eco_cooldown_active = False
                         self.just_exited_eco_mode = True
-                    
-                    # ローカル変数を使って安全にメソッドを呼び出す
+
                     current_state.handle(current_time, screen_data, last_match_time_map, pre_matches=all_matches)
-                
+
             except Exception as e:
                 self.logger.log(f"監視ループでエラーが発生しました: {e}"); time.sleep(1.0)
             finally:
@@ -573,90 +578,109 @@ class CoreEngine(QObject):
     def _find_matches_for_eco_check(self, screen_data):
         def filter_cache(cache):
             return {
-                p: d for p, d in cache.items() 
+                p: d for p, d in cache.items()
                 if d.get('folder_mode') not in ['excluded', 'priority_timer']
             }
 
         active_normal_cache = filter_cache(self.normal_template_cache)
         normal_matches = self._find_best_match(*screen_data, active_normal_cache)
-        
+
         if isinstance(self.state, IdleState):
             active_backup_cache = filter_cache(self.backup_template_cache)
             backup_trigger_matches = self._find_best_match(*screen_data, active_backup_cache)
             if backup_trigger_matches:
                 normal_matches.extend(backup_trigger_matches)
-        
+
         return normal_matches
 
+    # ★★★ 変更点: 安定性チェックの結果をシグナルで通知するように変更 ★★★
     def check_screen_stability(self) -> bool:
         if not hasattr(self, 'latest_frame_for_hash') or self.latest_frame_for_hash is None:
-            return False
-            
+            self.stabilityStatusUpdated.emit("取得不可", QColor("gray"))
+            return False # 安定性不明時は不安定とみなす方が安全
+
         h, w, _ = self.latest_frame_for_hash.shape
         if h < 64 or w < 64:
             self._log("安定性チェック: ROIが小さすぎるためスキップ (安定とみなす)", force=True)
+            self.stabilityStatusUpdated.emit("スキップ(小)", QColor("gray"))
             return True
 
-        roi = self.latest_frame_for_hash[0:64, 0:64]
-        current_hash = calculate_phash(roi)
-        
-        if current_hash is None: return False
-            
+        current_hash = calculate_phash(self.latest_frame_for_hash[0:64, 0:64])
+
+        if current_hash is None:
+             self.stabilityStatusUpdated.emit("ハッシュ計算失敗", QColor("gray"))
+             return False # ハッシュ計算失敗時も不安定とみなす
+
         self.screen_stability_hashes.append(current_hash)
-        
+
         if len(self.screen_stability_hashes) < self.screen_stability_hashes.maxlen:
-            self._log(f"安定性チェック: 履歴不足 {len(self.screen_stability_hashes)}/{self.screen_stability_hashes.maxlen}", force=True)
-            return False
-            
+            status_text = f"履歴不足({len(self.screen_stability_hashes)}/{self.screen_stability_hashes.maxlen})"
+            self.stabilityStatusUpdated.emit(status_text, QColor("gray"))
+            return False # 履歴不足時は不安定とみなす
+
         threshold = self.app_config.get('screen_stability_check', {}).get('threshold', 8)
         hash_diff = self.screen_stability_hashes[-1] - self.screen_stability_hashes[0]
+        is_stable = hash_diff <= threshold
 
-        log_msg = (
-            f"安定性チェック: "
-            f"差分: {hash_diff} (閾値: {threshold})"
-        )
-        self._log(log_msg, force=True)
+        status_text = f"{hash_diff} (閾値:{threshold})"
+        color = QColor("green") if is_stable else QColor("red")
+        self.stabilityStatusUpdated.emit(status_text, color)
 
-        return hash_diff <= threshold
-        
+        return is_stable
+
+
     def _check_and_activate_timer_priority_mode(self):
         for path, activation_time in self.priority_timers.items():
-            if time.time() >= activation_time: self.transition_to_timer_priority(path); break 
+            if time.time() >= activation_time: self.transition_to_timer_priority(path); break
 
     def _process_matches_as_sequence(self, all_matches, current_time, last_match_time_map):
-        if not all_matches: return False
-        clickable = [m for m in all_matches if current_time-last_match_time_map.get(m['path'],0) > (m['settings'].get('interval_time',1.5) + (m['settings'].get('debounce_time',0.0) if self._last_clicked_path==m['path'] else 0))]
-        
-        if not clickable: return False
-            
-        target = min(clickable, key=lambda m: (m['settings'].get('interval_time', 1.5), -m['confidence']))
-        
-        is_stability_check_enabled = self.app_config.get('screen_stability_check',{}).get('enabled',True)
-        perform_stability_check = is_stability_check_enabled
+        is_stability_check_enabled = self.app_config.get('screen_stability_check', {}).get('enabled', True)
+        is_stable = True
 
-        if self.current_fps > 0 and self.current_fps <= 7.0:
-            perform_stability_check = False
-            self._log(f"低FPS ({self.current_fps:.1f} ≦ 7.0) のため安定性チェックをスキップ。", force=True)
-        
-        is_critical_check = self.just_exited_eco_mode
-        
-        if perform_stability_check:
-            if not self.check_screen_stability():
-                self._log("画面が不安定なためクリックを保留します。")
-                self.updateStatus.emit("画面不安定", "orange")
-                self.last_successful_click_time = current_time
-                if is_critical_check:
-                    self.just_exited_eco_mode = False
-                return False
+        if is_stability_check_enabled:
+            if self.current_fps > 0 and self.current_fps <= 7.0:
+                is_stable = True
+                self._log(f"低FPS ({self.current_fps:.1f} ≦ 7.0) のため安定性チェックをスキップ。", force=True)
+                # 低FPS時もステータスは送る
+                self.stabilityStatusUpdated.emit(f"スキップ(低FPS)", QColor("gray"))
+            else:
+                is_stable = self.check_screen_stability()
 
-        if is_critical_check:
-            self.just_exited_eco_mode = False
-        
+        if not is_stable:
+            if not self.pending_click_match:
+                clickable = [m for m in all_matches if current_time - last_match_time_map.get(m['path'], 0) > (m['settings'].get('interval_time', 1.5) + (m['settings'].get('debounce_time', 0.0) if self._last_clicked_path == m['path'] else 0))]
+                if clickable:
+                    target = min(clickable, key=lambda m: (m['settings'].get('interval_time', 1.5), -m['confidence']))
+                    self.pending_click_match = target
+                    self._log("画面が不安定なためクリックを保留します。")
+
+            self.updateStatus.emit("画面不安定(待機中)", "orange")
+            self.last_successful_click_time = current_time
+            return False
+
+        if self.pending_click_match:
+            self.logger.log(f"画面が安定したため、待機中のクリック '{Path(self.pending_click_match['path']).name}' を実行します。")
+            if not self.is_monitoring: return False
+
+            last_match_time_map[self.pending_click_match['path']] = time.time()
+            self._execute_click(self.pending_click_match)
+            return True
+
         if not self.is_eco_cooldown_active:
             self.updateStatus.emit("監視中...", "blue")
-        
-        if not self.is_monitoring: return False 
-        self._execute_click(target); last_match_time_map[target['path']] = time.time()
+
+        if not all_matches:
+            return False
+
+        clickable = [m for m in all_matches if current_time - last_match_time_map.get(m['path'], 0) > (m['settings'].get('interval_time', 1.5) + (m['settings'].get('debounce_time', 0.0) if self._last_clicked_path == m['path'] else 0))]
+        if not clickable:
+            return False
+
+        target = min(clickable, key=lambda m: (m['settings'].get('interval_time', 1.5), -m['confidence']))
+        if not self.is_monitoring: return False
+
+        last_match_time_map[target['path']] = time.time()
+        self._execute_click(target)
         return True
 
     def _execute_final_backup_click(self, target_path):
@@ -671,7 +695,7 @@ class CoreEngine(QObject):
         matches = self._find_best_match(screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat, {target_path: cache_item})
         if matches: self._execute_click(max(matches, key=lambda m: m['confidence']))
         else: self._log(f"バックアップクリック失敗: '{Path(target_path).name}' が見つかりませんでした。", force=True)
-    
+
     def _find_best_match(self, s_bgr, s_gray, s_bgr_umat, s_gray_umat, cache):
         with self.cache_lock:
             if not cache: return []
@@ -710,7 +734,8 @@ class CoreEngine(QObject):
             self._last_clicked_path = result.get('path')
             self.last_successful_click_time = time.time()
             self.clickCountUpdated.emit(self._click_count)
-            
+            self.pending_click_match = None
+
     def set_recognition_area(self, method: str):
         self.selectionProcessStarted.emit()
         self.ui_manager.hide()
@@ -731,7 +756,7 @@ class CoreEngine(QObject):
             self.window_selection_listener.start()
             self.keyboard_selection_listener = keyboard.Listener(on_press=self._on_key_press_for_selection)
             self.keyboard_selection_listener.start()
-            
+
     def _on_selection_cancelled(self):
         self.logger.log("範囲選択がキャンセルされました。")
         if self._is_capturing_for_registration: self._is_capturing_for_registration = False
@@ -767,9 +792,9 @@ class CoreEngine(QObject):
             right, bottom = left + client_rect_win[2], top + client_rect_win[3]
             if right <= left or bottom <= top:
                 self.logger.log(f"ウィンドウ領域の計算結果が無効です: ({left},{top},{right},{bottom})。"); self._on_selection_cancelled(); return
-            
+
             import pyautogui
-            
+
             rect = (max(0, left), max(0, top), min(pyautogui.size().width, right), min(pyautogui.size().height, bottom))
             if self._is_capturing_for_registration: self._areaSelectedForProcessing.emit(rect); return
             title = win32gui.GetWindowText(hwnd)
@@ -779,7 +804,7 @@ class CoreEngine(QObject):
         except Exception as e:
             self.logger.log(f"ウィンドウ領域の取得に失敗: {e}"); self.target_hwnd = None
             self._showUiSignal.emit(); self.selectionProcessFinished.emit()
-    
+
     def _handle_window_click_for_selection_linux(self, x, y):
         if missing := [tool for tool in ['xdotool', 'xwininfo'] if not shutil.which(tool)]:
             self.logger.log(f"エラー: {', '.join(missing)} が見つかりません。"); self._showUiSignal.emit(); self.selectionProcessFinished.emit(); return
@@ -791,9 +816,9 @@ class CoreEngine(QObject):
             left, top, w, h = int(info['Absolute upper-left X']), int(info['Absolute upper-left Y']), int(info['Width']), int(info['Height'])
             title = info['xwininfo'].split('"')[1] if '"' in info.get('xwininfo', '') else f"Window (ID: {window_id})"
             if w <= 0 or h <= 0: self.logger.log(f"ウィンドウ領域の計算結果が無効です。"); self._on_selection_cancelled(); return
-            
+
             import pyautogui
-            
+
             rect = (max(0, left), max(0, top), min(pyautogui.size().width, left+w), min(pyautogui.size().height, top+h))
             if self._is_capturing_for_registration: self._areaSelectedForProcessing.emit(rect); return
             self._pending_window_info = {"title": title, "dims": {'width': w, 'height': h}, "rect": rect }
@@ -819,7 +844,7 @@ class CoreEngine(QObject):
             self.windowScaleCalculated.emit(self.current_window_scale if self.current_window_scale is not None else 0.0)
             self._areaSelectedForProcessing.emit(rect)
         except Exception as e: self.logger.log(f"基準サイズ応答の処理中にエラー: {e}")
-        finally: 
+        finally:
             if not self._pending_scale_prompt_info: self._pending_window_info = None; self._showUiSignal.emit(); self.selectionProcessFinished.emit()
 
     def process_apply_scale_prompt_response(self, apply_scale: bool):
@@ -850,7 +875,7 @@ class CoreEngine(QObject):
             self._show_ui_safe()
         if hasattr(self, 'selection_overlay'): self.selection_overlay = None
         self._start_global_mouse_listener()
-        
+
     def _get_filename_from_user(self):
         if sys.platform == 'win32': return QInputDialog.getText(self.ui_manager, "ファイル名を入力", "保存するファイル名を入力してください:")
         else:
@@ -874,7 +899,7 @@ class CoreEngine(QObject):
     def _capture_and_prompt_for_save(self, region_coords):
         try:
             captured_image = self.capture_manager.capture_frame(region=region_coords)
-            
+
             if captured_image is not None and captured_image.size > 0:
                 self._show_ui_and_monitor()
                 self.ui_manager.update_image_preview(captured_image, settings_data=None)
@@ -883,9 +908,9 @@ class CoreEngine(QObject):
                 QMessageBox.warning(self.ui_manager, "エラー", "画像のキャプチャに失敗しました。")
                 self.selectionProcessFinished.emit()
                 return
-            
+
             file_name, ok = self._get_filename_from_user()
-            
+
             if ok and file_name:
                 self.ui_manager.set_tree_enabled(False)
                 save_path = self.config_manager.base_dir / f"{file_name}.png"
@@ -903,7 +928,7 @@ class CoreEngine(QObject):
             self.selectionProcessFinished.emit()
 
     def _show_ui_and_monitor(self):
-        self._show_ui_safe() 
+        self._show_ui_safe()
         if self.performance_monitor and not self.performance_monitor.isVisible():
             self.performance_monitor.show()
 
@@ -923,18 +948,18 @@ class CoreEngine(QObject):
                 self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
             else: QMessageBox.critical(self.ui_manager, "エラー", message); self.ui_manager.set_tree_enabled(True)
         finally: self.selectionProcessFinished.emit()
-                
+
     def clear_recognition_area(self):
         self.recognition_area, self.current_window_scale, self.target_hwnd = None, None, None
         self.windowScaleCalculated.emit(0.0)
         if 'dxcam' in sys.modules and self.capture_manager.dxcam_sct: self.capture_manager.dxcam_sct.target_hwnd = None
         self.logger.log("認識範囲をクリアしました。"); self.updateRecAreaPreview.emit(None)
         self._save_recognition_settings()
-        
+
     def _update_rec_area_preview(self):
         img = self.capture_manager.capture_frame(region=self.recognition_area) if self.recognition_area else None
         self.updateRecAreaPreview.emit(img)
-    
+
     def get_backup_click_countdown(self) -> float:
         if isinstance(self.state, CountdownState): return self.state.get_remaining_time()
         return -1.0

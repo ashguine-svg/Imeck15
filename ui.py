@@ -6,14 +6,15 @@ from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QGroupBox, QSpinBox, QDoubleSpinBox, QCheckBox,
     QGridLayout, QSizePolicy, QSpacerItem, QToolButton, QFileDialog, QLineEdit,
     QTreeWidget, QTreeWidgetItem, QMenu, QTabWidget, QTextEdit, QDialog, QMessageBox,
-    QComboBox, QDialogButtonBox, QRadioButton, QButtonGroup, QScrollArea, QAbstractItemView
+    QComboBox, QDialogButtonBox, QRadioButton, QButtonGroup, QScrollArea, QAbstractItemView,
+    QProxyStyle, QStyle, QStyleOptionViewItem # ★★★ QStyleOptionViewItem を追加 ★★★
 )
 from PySide6.QtGui import (
     QIcon, QPixmap, QImage, QPainter, QColor, QFontMetrics, QPen, QCursor,
     QBrush, QFont, QPalette
 )
 from PySide6.QtCore import (
-    Qt, QSize, QThread, Signal, QTimer, QObject, QRect, QPoint, QRectF, QPointF
+    Qt, QSize, QThread, Signal, QTimer, QObject, QRect, QPoint, QRectF, QPointF, QEvent
 )
 
 import os
@@ -33,16 +34,84 @@ try:
 except:
     OPENCL_AVAILABLE = False
 
+
+# ui.py の DraggableTreeWidget クラス全体をこれで置き換えてください
+
+# ui.py の DraggableTreeWidget クラス全体をこれで置き換えてください
+
+# ui.py の DraggableTreeWidget クラス全体をこれで置き換えてください
+
+class CustomTreeStyle(QProxyStyle):
+    """QTreeWidgetのアイテム描画に介入してドロップインジケータ線を描画するスタイル"""
+    def drawControl(self, element, option, painter, widget=None):
+        # アイテム描画 (CE_ItemViewItem) に介入
+        if element == QStyle.CE_ItemViewItem and isinstance(widget, DraggableTreeWidget):
+            # まずデフォルトのアイテム描画を実行
+            super().drawControl(element, option, painter, widget)
+
+            tree_widget = widget
+            # QStyleOptionViewItemからインデックスを取得
+            if isinstance(option, QStyleOptionViewItem):
+                index = option.index
+                item = tree_widget.itemFromIndex(index)
+
+                # このアイテムがインジケータ描画対象か？
+                if item and item == tree_widget.drop_indicator_item and tree_widget.drop_indicator_pos:
+                    painter.save()
+                    try:
+                        pen = QPen(QColor("red"), 2) # 赤色, 2px
+                        pen.setCapStyle(Qt.FlatCap)
+                        painter.setPen(pen)
+                        rect = option.rect # アイテムの描画矩形
+
+                        if rect.isValid():
+                            # 線のY座標 (矩形の上辺か下辺か)
+                            y = rect.top() if tree_widget.drop_indicator_pos == QAbstractItemView.DropIndicatorPosition.AboveItem else rect.bottom()
+                            # 線がアイテム境界の外側に来るように1pxずらす
+                            y += -1 if tree_widget.drop_indicator_pos == QAbstractItemView.DropIndicatorPosition.AboveItem else 1
+
+                            # 線の左右X座標 (少し内側に)
+                            left = rect.left() + 1
+                            right = rect.right() - 1
+
+                            # 描画
+                            if left < right:
+                                painter.drawLine(left, y, right, y)
+                    finally:
+                        painter.restore()
+            else:
+                 # option が QStyleOptionViewItem でない場合はデフォルト処理
+                 super().drawControl(element, option, painter, widget)
+
+        else:
+            # 他のコントロール要素はデフォルトの描画に任せる
+            super().drawControl(element, option, painter, widget)
+
+    # PE_IndicatorBranch の描画は完全に無効化する（線は drawControl で描くため）
+    def drawPrimitive(self, element, option, painter, widget=None):
+        if element == QStyle.PE_IndicatorBranch and isinstance(widget, DraggableTreeWidget):
+             return # 何も描画しない
+        super().drawPrimitive(element, option, painter, widget)
+
+
+# ui.py の DraggableTreeWidget クラス全体をこれで置き換えてください
+
+# ui.py の DraggableTreeWidget クラス全体をこれで置き換えてください
+
 class DraggableTreeWidget(QTreeWidget):
     """ドラッグ＆ドロップによる順序変更と視覚的フィードバックをサポートするカスタムQTreeWidget。"""
     orderUpdated = Signal()
-    itemsMoved = Signal(list, str) 
+    itemsMoved = Signal(list, str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.last_highlighted_item = None
         self.highlight_color = QApplication.palette().highlight().color().lighter(150)
-        self.config_manager = None
+        self.config_manager = None # UIManagerから設定される
+
+        # ★★★ 変更点: ダミーアイテム用の変数を保持 ★★★
+        self.dummy_indicator_item = None # 挿入するダミーアイテム
+        self.setDropIndicatorShown(False) # 標準インジケータは使わない
 
     def dragEnterEvent(self, event):
         if event.source() == self:
@@ -54,45 +123,68 @@ class DraggableTreeWidget(QTreeWidget):
         if event.source() != self:
             super().dragMoveEvent(event)
             return
-        
+
         event.acceptProposedAction()
 
+        # --- リセット処理 ---
         if self.last_highlighted_item:
             self.last_highlighted_item.setBackground(0, QBrush(Qt.transparent))
             self.last_highlighted_item = None
+        self._remove_dummy_indicator() # 既存のダミーを削除
 
-        item = self.itemAt(event.position().toPoint())
-        if item:
-            item.setBackground(0, self.highlight_color)
-            self.last_highlighted_item = item
+        # --- ドロップ先の特定とインジケータ設定 ---
+        target_item = self.itemAt(event.position().toPoint())
+        pos = self.dropIndicatorPosition()
+
+        if pos == self.DropIndicatorPosition.OnItem and target_item:
+            path_str = target_item.data(0, Qt.UserRole)
+            if path_str and Path(path_str).is_dir():
+                # フォルダの上にドロップ -> ハイライト
+                target_item.setBackground(0, self.highlight_color)
+                self.last_highlighted_item = target_item
+            else:
+                # ファイルの上 -> その下にダミーアイテムを挿入 (Belowとして扱う)
+                self._insert_dummy_indicator(target_item, self.DropIndicatorPosition.BelowItem)
+
+        elif pos in [self.DropIndicatorPosition.AboveItem, self.DropIndicatorPosition.BelowItem] and target_item:
+            # アイテムの間にドロップ -> ダミーアイテムを挿入
+            self._insert_dummy_indicator(target_item, pos)
+
+        elif pos == self.DropIndicatorPosition.OnViewport:
+             # ビューポート (アイテムがない場所) にドロップ -> 末尾にダミーアイテムを挿入
+             self._insert_dummy_indicator(None, self.DropIndicatorPosition.BelowItem) # target_item=None で末尾扱い
 
     def dragLeaveEvent(self, event):
+        # --- リセット処理 ---
         if self.last_highlighted_item:
             self.last_highlighted_item.setBackground(0, QBrush(Qt.transparent))
             self.last_highlighted_item = None
+        self._remove_dummy_indicator()
+
         super().dragLeaveEvent(event)
 
     def dropEvent(self, event):
+        # --- リセット処理 ---
         if self.last_highlighted_item:
             self.last_highlighted_item.setBackground(0, QBrush(Qt.transparent))
             self.last_highlighted_item = None
+        self._remove_dummy_indicator() # ★★★ dropEvent開始時にダミーを削除 ★★★
 
+        # --- ドロップ処理本体 (変更なし) ---
         if event.source() != self:
             super().dropEvent(event)
             return
 
-        target_item = self.itemAt(event.position().toPoint())
+        target_item = self.itemAt(event.position().toPoint()) # ダミー削除後のアイテムを取得
         dragged_items = self.selectedItems()
         if not dragged_items:
             return
 
         source_parent = dragged_items[0].parent()
-        pos = self.dropIndicatorPosition()
-        
-        # UI上での移動を完結させる
+        pos = self.dropIndicatorPosition() # ダミー削除後の位置を取得
+
         cloned_items = [item.clone() for item in dragged_items]
-        
-        # 移動元のアイテムを一度削除
+
         for item in dragged_items:
             parent = item.parent()
             if parent:
@@ -100,16 +192,15 @@ class DraggableTreeWidget(QTreeWidget):
             else:
                 self.takeTopLevelItem(self.indexOfTopLevelItem(item))
 
-        # ドロップ先の親と挿入インデックスを正確に計算
         dest_parent = None
         insert_index = -1
-        
+
         if pos == self.DropIndicatorPosition.OnItem and target_item:
             path_str = target_item.data(0, Qt.UserRole)
-            if path_str and Path(path_str).is_dir():
+            if path_str and Path(path_str).is_dir(): # フォルダドロップ
                 dest_parent = target_item
-                insert_index = 0 # フォルダの先頭に入れる
-            else: # ファイルの上なら、その親の後ろに
+                insert_index = 0
+            else: # ファイルの上 (Below扱い)
                 dest_parent = target_item.parent()
                 if dest_parent:
                     insert_index = dest_parent.indexOfChild(target_item) + 1
@@ -125,11 +216,11 @@ class DraggableTreeWidget(QTreeWidget):
                 insert_index = self.indexOfTopLevelItem(target_item)
                 if pos == self.DropIndicatorPosition.BelowItem:
                     insert_index += 1
-        else: # リストの何もないところ (末尾)
-            dest_parent = None
-            insert_index = self.topLevelItemCount()
+        else: # OnViewport (末尾)
+             dest_parent = None
+             insert_index = self.topLevelItemCount()
 
-        # 計算した位置にアイテムを挿入
+
         if dest_parent:
             for i, item in enumerate(cloned_items):
                 dest_parent.insertChild(insert_index + i, item)
@@ -137,24 +228,57 @@ class DraggableTreeWidget(QTreeWidget):
             for i, item in enumerate(cloned_items):
                 self.insertTopLevelItem(insert_index + i, item)
 
-        # 移動したアイテムを選択状態にする
         self.clearSelection()
         for item in cloned_items:
             item.setSelected(True)
             self.scrollToItem(item)
-        
-        # 親が変更された場合は、物理的なファイル移動をcoreに依頼
+
         if source_parent != dest_parent:
             dest_path = str(self.config_manager.base_dir) if dest_parent is None else dest_parent.data(0, Qt.UserRole)
-            source_paths = [item.data(0, Qt.UserRole) for item in dragged_items if item.data(0, Qt.UserRole)]
+            source_paths = [dragged.data(0, Qt.UserRole) for dragged in dragged_items if dragged.data(0, Qt.UserRole)]
             if source_paths and dest_path:
                 self.itemsMoved.emit(source_paths, dest_path)
-        
-        # どのようなD&D操作であっても、最終的にUIの見た目を元にJSONを保存させる
+
         self.orderUpdated.emit()
         event.accept()
 
+    # ★★★ 変更点: ダミーアイテム挿入メソッドを修正 ★★★
+    def _insert_dummy_indicator(self, target_item, pos):
+        if self.dummy_indicator_item: # 既にあったら削除
+             self._remove_dummy_indicator()
 
+        self.dummy_indicator_item = QTreeWidgetItem()
+        self.dummy_indicator_item.setText(0, "　――――――　") # 罫線テキストを設定
+        self.dummy_indicator_item.setForeground(0, QBrush(QColor("red"))) # 文字色を赤に
+        # self.dummy_indicator_item.setSizeHint(0, QSize(0, 5)) # 高さはテキストに任せるので削除
+        self.dummy_indicator_item.setFlags(Qt.ItemIsEnabled) # 選択不可にする
+
+        if target_item:
+            parent = target_item.parent()
+            if parent: # 子アイテムの場合
+                index = parent.indexOfChild(target_item)
+                if pos == self.DropIndicatorPosition.BelowItem:
+                    index += 1
+                parent.insertChild(index, self.dummy_indicator_item)
+            else: # トップレベルアイテムの場合
+                index = self.indexOfTopLevelItem(target_item)
+                if pos == self.DropIndicatorPosition.BelowItem:
+                    index += 1
+                self.insertTopLevelItem(index, self.dummy_indicator_item)
+        else: # target_item が None (末尾) の場合
+            self.addTopLevelItem(self.dummy_indicator_item)
+
+    # ★★★ 変更点なし: ダミーアイテム削除メソッド ★★★
+    def _remove_dummy_indicator(self):
+        if self.dummy_indicator_item:
+            parent = self.dummy_indicator_item.parent()
+            if parent:
+                parent.removeChild(self.dummy_indicator_item)
+            else:
+                 index = self.indexOfTopLevelItem(self.dummy_indicator_item)
+                 if index != -1:
+                    self.takeTopLevelItem(index)
+            self.dummy_indicator_item = None
 class UIManager(QMainWindow):
     startMonitoringRequested = Signal(); stopMonitoringRequested = Signal(); openPerformanceMonitorRequested = Signal()
     loadImagesRequested = Signal(list); setRecAreaMethodSelected = Signal(str); captureImageRequested = Signal()
@@ -173,7 +297,7 @@ class UIManager(QMainWindow):
         self.app_settings_widgets = {}
         self.auto_scale_widgets = {}
 
-        self.setWindowTitle("Imeck15 v1.4.4.0")
+        self.setWindowTitle("Imeck15 v1.5.4.0")
         self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
 
         self.save_timer = QTimer(self); self.save_timer.setSingleShot(True); self.save_timer.setInterval(1000)
