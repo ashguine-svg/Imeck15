@@ -56,24 +56,31 @@ class ActionManager:
         if not (sys.platform == 'win32' and target_hwnd):
             return
 
+        # ターゲットが既にフォアグラウンドなら何もしない
         if win32gui.GetForegroundWindow() == target_hwnd:
             return
 
         try:
+            # 現在フォアグラウンドのウィンドウのスレッドIDを取得
             foreground_thread_id, _ = win32process.GetWindowThreadProcessId(win32gui.GetForegroundWindow())
+            # 自分自身のスレッドIDを取得
             current_thread_id = win32api.GetCurrentThreadId()
 
+            # フォアグラウンドスレッドの入力処理にアタッチする
             win32process.AttachThreadInput(foreground_thread_id, current_thread_id, True)
 
             try:
+                # 最小化されている場合は通常の状態に戻す
                 if win32gui.IsIconic(target_hwnd):
                     win32gui.ShowWindow(target_hwnd, win32con.SW_NORMAL)
                 
+                # ウィンドウをフォアグラウンドに設定する
                 win32gui.SetForegroundWindow(target_hwnd)
             finally:
+                # 処理が終わったら、必ずデタッチする
                 win32process.AttachThreadInput(foreground_thread_id, current_thread_id, False)
 
-            time.sleep(0.2)
+            time.sleep(0.2) # ウィンドウが切り替わるのを少し待つ
             
             if win32gui.GetForegroundWindow() == target_hwnd:
                 self.logger.log(f"ウィンドウ '{win32gui.GetWindowText(target_hwnd)}' をアクティブ化しました。")
@@ -81,11 +88,23 @@ class ActionManager:
                  self.logger.log(f"ウィンドウ '{win32gui.GetWindowText(target_hwnd)}' のアクティブ化を試みましたが、失敗した可能性があります。")
 
         except Exception as e:
+            # ★★★ ここからが修正部分 ★★★
             self.logger.log(f"ウィンドウのアクティブ化中にエラーが発生しました: {e}")
+            # ★★★ 修正部分ここまで ★★★
 
     def execute_click(self, match_info, recognition_area, target_hwnd, effective_capture_scale):
         """
         マッチング情報に基づいてクリックを実行します。
+
+        Args:
+            match_info (dict): _find_best_matchから得られるマッチング結果。
+            recognition_area (tuple): (x1, y1, x2, y2) の形式の認識エリア座標。
+            target_hwnd (int): 操作対象のウィンドウハンドル (Windowsのみ)。
+            effective_capture_scale (float): 軽量化モードなどで適用されているキャプチャのスケール。
+
+        Returns:
+            dict: クリックが成功したかどうかと関連情報を含む辞書。
+                  例: {'success': True, 'path': '/path/to/image.png'}
         """
         self._activate_window(target_hwnd)
 
@@ -146,7 +165,9 @@ class ActionManager:
             final_click_y = int(click_y_float)
             
             if not (1 <= final_click_x < screen_width - 1 and 1 <= final_click_y < screen_height - 1):
+                # ★★★ ここからが修正部分 ★★★
                 self.logger.log(f"警告: 計算されたクリック座標 ({final_click_x}, {final_click_y}) が画面の端すぎるためクリックを中止しました。")
+                # ★★★ 修正部分ここまで ★★★
                 return {'success': False, 'path': str(path)}
             
             try:
@@ -159,11 +180,15 @@ class ActionManager:
                 return {'success': True, 'path': str(path)}
 
             except pyautogui.FailSafeException:
+                # ★★★ ここからが修正部分 ★★★
                 self.logger.log("PyAutoGUIのフェイルセーフが作動しました。ユーザーがマウスを画面の隅に移動したか、座標計算に問題がある可能性があります。")
+                # ★★★ 修正部分ここまで ★★★
                 return {'success': False, 'path': str(path)}
 
         except Exception as e:
+            # ★★★ ここからが修正部分 ★★★
             self.logger.log(f"クリック実行中にエラーが発生しました: {e}")
+            # ★★★ 修正部分ここまで ★★★
             return {'success': False, 'path': match_info.get('path', 'Unknown')}
         finally:
             block_input(False)

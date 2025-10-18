@@ -23,6 +23,16 @@ class TemplateManager:
     def build_cache(self, app_config, current_window_scale, effective_capture_scale, is_monitoring, existing_priority_timers):
         """
         設定に基づいてテンプレートキャッシュを構築します。
+
+        Args:
+            app_config (dict): アプリケーション全体の設定。
+            current_window_scale (float | None): 現在のウィンドウのスケール。
+            effective_capture_scale (float): 軽量化モードなどを考慮した実効キャプチャスケール。
+            is_monitoring (bool): 現在監視中かどうかのフラグ。
+            existing_priority_timers (dict): 既存の優先タイマー情報。
+
+        Returns:
+            tuple: (normal_cache, backup_cache, priority_timers, folder_children_map) を返します。
         """
         normal_cache = {}
         backup_cache = {}
@@ -75,7 +85,7 @@ class TemplateManager:
                          priority_timers[folder_path] = time.time() + interval_seconds
                     elif folder_path not in existing_priority_timers:
                          priority_timers[folder_path] = time.time() + interval_seconds
-                    else:
+                    else: # 監視中の再構築でもタイマーを引き継ぐ
                          priority_timers[folder_path] = existing_priority_timers[folder_path]
                     
                 for child_data in item_data.get('children', []):
@@ -110,6 +120,7 @@ class TemplateManager:
 
             image_to_process = original_image
             
+            # ★★★ ここからが修正部分 ★★★
             if settings.get('roi_enabled', False):
                 h, w = original_image.shape[:2]
                 
@@ -117,8 +128,10 @@ class TemplateManager:
                 rect_to_use = None
                 
                 if roi_mode == 'variable':
+                    # 可変モードの場合は 'roi_rect_variable' を使用する
                     rect_to_use = settings.get('roi_rect_variable')
-                else:
+                else: # 'fixed' またはデフォルトの場合
+                    # 固定モードの場合は 'roi_rect' を使用する
                     rect_to_use = settings.get('roi_rect')
                 
                 if rect_to_use:
@@ -129,6 +142,7 @@ class TemplateManager:
                         self.logger.log(f"警告: '{Path(path).name}' のROI領域が無効なため、フル画像を使用します。")
                 else:
                     self.logger.log(f"警告: '{Path(path).name}' のROIが有効ですが、領域が未設定です。")
+            # ★★★ 修正部分ここまで ★★★
             
             use_opencl = OPENCL_AVAILABLE and cv2.ocl.useOpenCL()
 

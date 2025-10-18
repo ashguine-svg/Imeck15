@@ -1,4 +1,4 @@
-# monitor.py (修正統合版)
+# monitor.py
 
 import sys
 import time
@@ -8,7 +8,6 @@ from PySide6.QtWidgets import (
     QTextEdit, QSizePolicy, QSpacerItem
 )
 from PySide6.QtCore import Qt, Signal, QTimer
-from PySide6.QtGui import QColor
 
 class PerformanceMonitor(QDialog):
     """
@@ -32,6 +31,7 @@ class PerformanceMonitor(QDialog):
         self.process = psutil.Process()
         self.process.cpu_percent(interval=None)
         self.current_fps = 0.0
+        # ★★★ 1. クリック回数を保持するための変数を追加 ★★★
         self.current_clicks = 0
         
         self.setup_ui()
@@ -58,11 +58,6 @@ class PerformanceMonitor(QDialog):
         self.backup_countdown_label = QLabel("")
         self.backup_countdown_label.setStyleSheet("font-size: 12px; color: #888888;")
         top_layout.addWidget(self.backup_countdown_label)
-        
-        # ★★★ 変更点: 安定性表示ラベルを追加 ★★★
-        self.stability_label = QLabel("安定性: ---")
-        self.stability_label.setStyleSheet("font-size: 12px; font-weight: bold; color: gray;")
-        top_layout.addWidget(self.stability_label)
 
         top_layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
         
@@ -77,6 +72,7 @@ class PerformanceMonitor(QDialog):
         main_layout.addWidget(self.log_text_edit)
         
     def connect_signals(self):
+        """シグナルとスロットを接続します"""
         self.monitor_button.clicked.connect(self.toggleMonitoringRequested.emit)
         if self.ui_manager:
             self.rec_area_button.clicked.connect(self.ui_manager.setRecAreaDialog)
@@ -85,23 +81,20 @@ class PerformanceMonitor(QDialog):
         if status_text == "監視中...":
             self.monitor_button.setStyleSheet("background-color: #3399FF; color: white;")
         else:
-            self.monitor_button.setStyleSheet("")
+            self.monitor_button.setStyleSheet("") # デフォルトのスタイルに戻す
 
     def update_fps(self, fps):
         self.current_fps = fps
 
+    # ★★★ 2. CoreEngineからのクリック回数通知を受け取るための新しいスロット（メソッド）を追加 ★★★
     def update_click_count(self, count):
         self.current_clicks = count
-
-    # ★★★ 変更点: 安定性表示を更新するスロットを追加 ★★★
-    def update_stability_status(self, status_text: str, color: QColor):
-        self.stability_label.setText(f"安定性: {status_text}")
-        self.stability_label.setStyleSheet(f"font-size: 12px; font-weight: bold; color: {color.name()};")
         
     def update_performance_info(self):
         try:
             cpu_percent = self.process.cpu_percent()
             mem_used = self.process.memory_info().rss / (1024 * 1024)
+            # ★★★ 3. 内部変数への直接アクセスをやめ、安全に保持している値を使用 ★★★
             clicks = self.current_clicks
             uptime_seconds = int(time.time() - self.start_time)
             hours, remainder = divmod(uptime_seconds, 3600)

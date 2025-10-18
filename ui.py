@@ -1,4 +1,4 @@
-# ui.py (完全な最終版コード - これで全体を置き換えてください)
+# ui.py (D&D機能 統合版)
 
 import sys
 from PySide6.QtWidgets import (
@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QGridLayout, QSizePolicy, QSpacerItem, QToolButton, QFileDialog, QLineEdit,
     QTreeWidget, QTreeWidgetItem, QMenu, QTabWidget, QTextEdit, QDialog, QMessageBox,
     QComboBox, QDialogButtonBox, QRadioButton, QButtonGroup, QScrollArea, QAbstractItemView,
-    QProxyStyle, QStyle, QStyleOptionViewItem # ★★★ QStyleOptionViewItem を追加 ★★★
+    QProxyStyle, QStyle, QStyleOptionViewItem
 )
 from PySide6.QtGui import (
     QIcon, QPixmap, QImage, QPainter, QColor, QFontMetrics, QPen, QCursor,
@@ -34,13 +34,7 @@ try:
 except:
     OPENCL_AVAILABLE = False
 
-
-# ui.py の DraggableTreeWidget クラス全体をこれで置き換えてください
-
-# ui.py の DraggableTreeWidget クラス全体をこれで置き換えてください
-
-# ui.py の DraggableTreeWidget クラス全体をこれで置き換えてください
-
+# ★★★ D&D機能のために CustomTreeStyle クラスを追加 ★★★
 class CustomTreeStyle(QProxyStyle):
     """QTreeWidgetのアイテム描画に介入してドロップインジケータ線を描画するスタイル"""
     def drawControl(self, element, option, painter, widget=None):
@@ -94,10 +88,7 @@ class CustomTreeStyle(QProxyStyle):
         super().drawPrimitive(element, option, painter, widget)
 
 
-# ui.py の DraggableTreeWidget クラス全体をこれで置き換えてください
-
-# ui.py の DraggableTreeWidget クラス全体をこれで置き換えてください
-
+# ★★★ D&D機能のために DraggableTreeWidget クラスを追加 ★★★
 class DraggableTreeWidget(QTreeWidget):
     """ドラッグ＆ドロップによる順序変更と視覚的フィードバックをサポートするカスタムQTreeWidget。"""
     orderUpdated = Signal()
@@ -248,7 +239,7 @@ class DraggableTreeWidget(QTreeWidget):
              self._remove_dummy_indicator()
 
         self.dummy_indicator_item = QTreeWidgetItem()
-        self.dummy_indicator_item.setText(0, "　――――――　") # 罫線テキストを設定
+        self.dummy_indicator_item.setText(0, "――――――　") # 罫線テキストを設定
         self.dummy_indicator_item.setForeground(0, QBrush(QColor("red"))) # 文字色を赤に
         # self.dummy_indicator_item.setSizeHint(0, QSize(0, 5)) # 高さはテキストに任せるので削除
         self.dummy_indicator_item.setFlags(Qt.ItemIsEnabled) # 選択不可にする
@@ -279,14 +270,20 @@ class DraggableTreeWidget(QTreeWidget):
                  if index != -1:
                     self.takeTopLevelItem(index)
             self.dummy_indicator_item = None
+
+
 class UIManager(QMainWindow):
     startMonitoringRequested = Signal(); stopMonitoringRequested = Signal(); openPerformanceMonitorRequested = Signal()
     loadImagesRequested = Signal(list); setRecAreaMethodSelected = Signal(str); captureImageRequested = Signal()
-    deleteItemsRequested = Signal(list); orderChanged = Signal()
+    
+    # ★★★ D&D変更点: deleteItemRequested を deleteItemsRequested に変更 (複数削除対応) ★★★
+    deleteItemsRequested = Signal(list)
+    orderChanged = Signal()
+    # ★★★ D&D変更点: D&Dによるアイテム移動シグナルを追加 ★★★
     itemsMovedIntoFolder = Signal(list, str) 
+    
     folderSettingsChanged = Signal()
-    imageSettingsChanged = Signal(dict); createFolderRequested = Signal()
-    moveItemIntoFolderRequested = Signal()
+    imageSettingsChanged = Signal(dict); createFolderRequested = Signal(); moveItemIntoFolderRequested = Signal()
     moveItemOutOfFolderRequested = Signal()
     appConfigChanged = Signal()
 
@@ -297,7 +294,7 @@ class UIManager(QMainWindow):
         self.app_settings_widgets = {}
         self.auto_scale_widgets = {}
 
-        self.setWindowTitle("Imeck15 v1.5.4.0")
+        self.setWindowTitle("Imeck15 v1.4.1 (D&D 統合版)") # バージョン情報は任意
         self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
 
         self.save_timer = QTimer(self); self.save_timer.setSingleShot(True); self.save_timer.setInterval(1000)
@@ -326,12 +323,13 @@ class UIManager(QMainWindow):
         self.performance_monitor = monitor
         
     def setup_ui(self):
+        # (このメソッドは変更ありません)
         central_widget = QWidget(); self.setCentralWidget(central_widget); main_layout = QVBoxLayout(central_widget)
         header_frame = QFrame(); header_layout = QHBoxLayout(header_frame)
         self.monitor_button = QPushButton("監視開始"); self.monitor_button.setFixedSize(100, 30)
         self.monitor_button.setToolTip(
             "監視を開始します。\n"
-            "**[重要]** 動作中のプログラムを緊急停止するには、キーボードの **Escキー** を押してください。"
+            "右ダブルクリックで停止・右トリプルクリックで開始"
         )
         header_layout.addWidget(self.monitor_button)
         self.perf_monitor_button = QPushButton("パフォーマンス"); self.perf_monitor_button.setFixedSize(120, 30); header_layout.addWidget(self.perf_monitor_button)
@@ -354,14 +352,15 @@ class UIManager(QMainWindow):
         order_button_frame = QHBoxLayout(); move_up_button = QPushButton("▲ 上げる"); move_down_button = QPushButton("▼ 下げる")
         order_button_frame.addWidget(move_up_button); order_button_frame.addWidget(move_down_button); left_layout.addLayout(order_button_frame)
         
+        # ★★★ D&D変更点: QTreeWidget を DraggableTreeWidget に変更 ★★★
         self.image_tree = DraggableTreeWidget()
         self.image_tree.config_manager = self.config_manager
-        self.image_tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self.image_tree.setDragDropMode(QAbstractItemView.InternalMove)
+        self.image_tree.setSelectionMode(QAbstractItemView.ExtendedSelection) # 複数選択を許可
+        self.image_tree.setDragDropMode(QAbstractItemView.InternalMove) # D&Dモードを内部移動に設定
         self.image_tree.setDragEnabled(True)
         self.image_tree.setAcceptDrops(True)
-        self.image_tree.setDropIndicatorShown(True)
-        self.image_tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.image_tree.setDropIndicatorShown(False) # カスタムインジケータを使うため標準はOFF
+        self.image_tree.setContextMenuPolicy(Qt.CustomContextMenu) # 右クリックメニュー用にポリシー変更
 
         self.image_tree.setStyleSheet("""
             QTreeWidget {
@@ -376,19 +375,23 @@ class UIManager(QMainWindow):
         create_folder_button = QPushButton("フォルダを作成"); button_layout.addWidget(create_folder_button, 1, 1)
         move_in_button = QPushButton("フォルダに入れる"); button_layout.addWidget(move_in_button, 2, 0)
         move_out_button = QPushButton("フォルダから出す"); button_layout.addWidget(move_out_button, 2, 1)
+        
         load_image_button.clicked.connect(self.load_images_dialog); capture_image_button.clicked.connect(self.captureImageRequested.emit)
+        
+        # ★★★ D&D変更点: 削除ボタンの接続先を変更 (複数削除対応のため) ★★★
         delete_item_button.clicked.connect(self.on_delete_button_clicked)
+        
         move_up_button.clicked.connect(self.move_item_up); move_down_button.clicked.connect(self.move_item_down)
         create_folder_button.clicked.connect(self.createFolderRequested.emit); move_in_button.clicked.connect(self.moveItemIntoFolderRequested.emit); move_out_button.clicked.connect(self.moveItemOutOfFolderRequested.emit)
         left_layout.addLayout(button_layout); content_layout.addWidget(left_frame, 1)
-        right_frame = QFrame(); right_layout = QVBoxLayout(right_frame)
         
+        # --- 右側のUI (変更なし) ---
+        right_frame = QFrame(); right_layout = QVBoxLayout(right_frame)
         self.preview_tabs = QTabWidget()
         main_preview_widget = QWidget(); main_preview_layout = QVBoxLayout(main_preview_widget)
         self.preview_label = InteractivePreviewLabel(); self.preview_label.setAlignment(Qt.AlignCenter)
         main_preview_layout.addWidget(self.preview_label)
         self.preview_tabs.addTab(main_preview_widget, "画像プレビュー")
-        
         rec_area_widget = QWidget(); rec_area_layout = QVBoxLayout(rec_area_widget)
         rec_area_buttons_layout = QHBoxLayout()
         self.set_rec_area_button_main_ui = QPushButton("認識範囲設定"); self.clear_rec_area_button_main_ui = QPushButton("クリア")
@@ -396,29 +399,23 @@ class UIManager(QMainWindow):
         self.rec_area_preview_label = ScaledPixmapLabel("認識範囲プレビュー"); self.rec_area_preview_label.setAlignment(Qt.AlignCenter)
         rec_area_layout.addWidget(self.rec_area_preview_label)
         self.preview_tabs.addTab(rec_area_widget, "認識範囲")
-        
         log_widget = QWidget(); log_layout = QVBoxLayout(log_widget)
         self.log_text = QTextEdit(); self.log_text.setReadOnly(True)
         log_layout.addWidget(self.log_text)
         self.preview_tabs.addTab(log_widget, "ログ")
-
         self.auto_scale_group = QGroupBox(); auto_scale_layout = QGridLayout(self.auto_scale_group)
-        
         self.auto_scale_widgets['use_window_scale'] = QCheckBox("ウィンドウスケール基準")
         self.auto_scale_widgets['use_window_scale'].setToolTip(
             "ON: ウィンドウや探索で得られた最適スケールをテンプレートに適用します。\n"
             "OFF: スケール補正を無効にし、常に元の画像サイズ(1.0倍)で認識を試みます。"
         )
         auto_scale_layout.addWidget(self.auto_scale_widgets['use_window_scale'], 0, 0, 1, 2)
-        
         self.auto_scale_widgets['enabled'] = QCheckBox("スケール検索を有効にする")
         auto_scale_layout.addWidget(self.auto_scale_widgets['enabled'], 1, 0, 1, 2)
-
         auto_scale_layout.addWidget(QLabel("中心:"), 2, 0); self.auto_scale_widgets['center'] = QDoubleSpinBox(); self.auto_scale_widgets['center'].setRange(0.5, 2.0); self.auto_scale_widgets['center'].setSingleStep(0.1); auto_scale_layout.addWidget(self.auto_scale_widgets['center'], 2, 1)
         auto_scale_layout.addWidget(QLabel("範囲(±):"), 2, 2); self.auto_scale_widgets['range'] = QDoubleSpinBox(); self.auto_scale_widgets['range'].setRange(0.1, 0.5); self.auto_scale_widgets['range'].setSingleStep(0.05); auto_scale_layout.addWidget(self.auto_scale_widgets['range'], 2, 3)
         auto_scale_layout.addWidget(QLabel("ステップ数:"), 3, 0); self.auto_scale_widgets['steps'] = QSpinBox(); self.auto_scale_widgets['steps'].setRange(3, 11); self.auto_scale_widgets['steps'].setSingleStep(2); auto_scale_layout.addWidget(self.auto_scale_widgets['steps'], 3, 1)
         self.auto_scale_info_label = QLabel("探索: 0.80 ... 1.20"); auto_scale_layout.addWidget(self.auto_scale_info_label, 3, 2, 1, 2)
-        
         scale_info_layout = QHBoxLayout()
         self.current_best_scale_label = QLabel("最適スケール: ---")
         font = self.current_best_scale_label.font(); font.setBold(True)
@@ -426,9 +423,7 @@ class UIManager(QMainWindow):
         self.current_best_scale_label.setStyleSheet("color: gray;")
         scale_info_layout.addWidget(self.current_best_scale_label)
         scale_info_layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
-
         auto_scale_layout.addLayout(scale_info_layout, 4, 0, 1, 4)
-        
         as_desc_label = QLabel(
             "<b>ウィンドウスケール基準:</b><br>"
             "認識範囲をウィンドウに設定すると、その基準サイズからの拡縮率を自動計算し、スケールとして適用します。<br><br>"
@@ -441,16 +436,13 @@ class UIManager(QMainWindow):
         auto_scale_layout.addWidget(as_desc_label, 5, 0, 1, 4)
         self.auto_scale_group.setFlat(True)
         self.preview_tabs.addTab(self.auto_scale_group, "自動スケール")
-
         app_settings_scroll_area = QScrollArea()
         app_settings_scroll_area.setWidgetResizable(True)
         app_settings_scroll_area.setStyleSheet("QScrollArea { border: 0; }")
-        
         app_settings_widget = QWidget()
         app_settings_layout = QVBoxLayout(app_settings_widget)
         app_settings_layout.setSpacing(10)
         app_settings_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-
         self.app_settings_widgets['grayscale_matching'] = QCheckBox("グレースケール検索 (高速)")
         app_settings_layout.addWidget(self.app_settings_widgets['grayscale_matching'])
         gs_desc_label = QLabel("<b>メリット:</b> 処理が高速になり、僅かな色のの違いを無視できます。<br>"
@@ -458,7 +450,6 @@ class UIManager(QMainWindow):
         gs_desc_label.setWordWrap(True)
         gs_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
         app_settings_layout.addWidget(gs_desc_label)
-
         self.app_settings_widgets['capture_method'] = QCheckBox("DXCamを使用")
         self.app_settings_widgets['capture_method'].setEnabled(DXCAM_AVAILABLE)
         app_settings_layout.addWidget(self.app_settings_widgets['capture_method'])
@@ -467,14 +458,12 @@ class UIManager(QMainWindow):
         dxcam_desc_label.setWordWrap(True)
         dxcam_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
         app_settings_layout.addWidget(dxcam_desc_label)
-        
         self.app_settings_widgets['eco_mode_enabled'] = QCheckBox("省エネモード")
         app_settings_layout.addWidget(self.app_settings_widgets['eco_mode_enabled'])
         eco_desc_label = QLabel("クリック後、5秒間マッチする画像がない場合にCPU負荷を低減するため、監視を1秒に1回の低頻度モードに移行します。")
         eco_desc_label.setWordWrap(True)
         eco_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
         app_settings_layout.addWidget(eco_desc_label)
-        
         fs_layout = QHBoxLayout()
         fs_layout.addWidget(QLabel("フレームスキップ:"))
         self.app_settings_widgets['frame_skip_rate'] = QSpinBox()
@@ -487,7 +476,6 @@ class UIManager(QMainWindow):
         fs_desc_label.setWordWrap(True)
         fs_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
         app_settings_layout.addWidget(fs_desc_label)
-        
         self.app_settings_widgets['use_opencl'] = QCheckBox("OpenCL (GPU支援) を使用")
         self.app_settings_widgets['use_opencl'].setEnabled(OPENCL_AVAILABLE)
         app_settings_layout.addWidget(self.app_settings_widgets['use_opencl'])
@@ -501,13 +489,10 @@ class UIManager(QMainWindow):
         opencl_desc_label.setWordWrap(True)
         opencl_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
         app_settings_layout.addWidget(opencl_desc_label)
-        
         stability_group = QGroupBox("画面安定性チェック")
         stability_layout = QGridLayout(stability_group)
-
         self.app_settings_widgets['stability_check_enabled'] = QCheckBox("有効にする")
         stability_layout.addWidget(self.app_settings_widgets['stability_check_enabled'], 0, 0)
-        
         threshold_layout = QHBoxLayout()
         threshold_layout.addWidget(QLabel("閾値:"))
         self.app_settings_widgets['stability_threshold'] = QSpinBox()
@@ -515,7 +500,6 @@ class UIManager(QMainWindow):
         threshold_layout.addWidget(self.app_settings_widgets['stability_threshold'])
         threshold_layout.addStretch()
         stability_layout.addLayout(threshold_layout, 0, 1)
-
         stability_desc_label = QLabel(
             "画面の描画中やエフェクト発生時を検出し、安定するまでクリックを保留します。<br>"
             "数値を大きくすると、より大きな画面変化があっても「安定」とみなすようになります。"
@@ -523,15 +507,11 @@ class UIManager(QMainWindow):
         stability_desc_label.setWordWrap(True)
         stability_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
         stability_layout.addWidget(stability_desc_label, 1, 0, 1, 2)
-        
         app_settings_layout.addWidget(stability_group)
-
         lw_mode_group = QGroupBox("軽量化モード")
         lw_mode_layout = QVBoxLayout(lw_mode_group)
-
         self.app_settings_widgets['lightweight_mode_enabled'] = QCheckBox("軽量化モードを有効にする")
         lw_mode_layout.addWidget(self.app_settings_widgets['lightweight_mode_enabled'])
-
         preset_layout = QHBoxLayout()
         preset_layout.addWidget(QLabel("プリセット:"))
         self.app_settings_widgets['lightweight_mode_preset'] = QComboBox()
@@ -539,7 +519,6 @@ class UIManager(QMainWindow):
         preset_layout.addWidget(self.app_settings_widgets['lightweight_mode_preset'])
         preset_layout.addStretch()
         lw_mode_layout.addLayout(preset_layout)
-
         cs_desc_label = QLabel(
             "<b>標準 (Standard):</b> デフォルト設定 (スケール:0.5倍, スキップ:+5)<br>"
             "<b>パフォーマンス (Performance):</b> 標準より高いパフォーマンスを発揮します (スケール:0.4倍, スキップ:+20)<br>"
@@ -549,18 +528,13 @@ class UIManager(QMainWindow):
         cs_desc_label.setWordWrap(True)
         cs_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
         lw_mode_layout.addWidget(cs_desc_label)
-        
         app_settings_layout.addWidget(lw_mode_group)
-        
         app_settings_scroll_area.setWidget(app_settings_widget)
         self.preview_tabs.addTab(app_settings_scroll_area, "アプリ設定")
-
         usage_widget = QWidget()
         usage_layout = QVBoxLayout(usage_widget)
-        
         usage_text = QTextEdit()
         usage_text.setReadOnly(True)
-        
         usage_html = """
         <!DOCTYPE html>
         <html>
@@ -631,33 +605,26 @@ class UIManager(QMainWindow):
         </html>
         """
         usage_text.setHtml(usage_html)
-        
         usage_layout.addWidget(usage_text)
         usage_widget.setLayout(usage_layout)
-        
         self.preview_tabs.addTab(usage_widget, "使い方")
-        
         right_layout.addWidget(self.preview_tabs, 2)
-
         item_settings_group = QGroupBox("画像ごとの設定")
         item_settings_layout = QGridLayout(item_settings_group)
         item_settings_layout.setColumnStretch(1, 1)
         item_settings_layout.setColumnStretch(3, 1)
-
         item_settings_layout.addWidget(QLabel("認識精度:"), 0, 0)
         self.item_settings_widgets['threshold'] = QDoubleSpinBox()
         self.item_settings_widgets['threshold'].setRange(0.5, 1.0)
         self.item_settings_widgets['threshold'].setSingleStep(0.01)
         self.item_settings_widgets['threshold'].setValue(0.8)
         item_settings_layout.addWidget(self.item_settings_widgets['threshold'], 0, 1)
-
         item_settings_layout.addWidget(QLabel("インターバル(秒):"), 0, 2)
         self.item_settings_widgets['interval_time'] = QDoubleSpinBox()
         self.item_settings_widgets['interval_time'].setRange(0.1, 10.0)
         self.item_settings_widgets['interval_time'].setSingleStep(0.1)
         self.item_settings_widgets['interval_time'].setValue(1.5)
         item_settings_layout.addWidget(self.item_settings_widgets['interval_time'], 0, 3)
-
         self.item_settings_widgets['backup_click'] = QCheckBox("バックアップクリック")
         item_settings_layout.addWidget(self.item_settings_widgets['backup_click'], 1, 0)
         self.item_settings_widgets['backup_time'] = QDoubleSpinBox()
@@ -665,7 +632,6 @@ class UIManager(QMainWindow):
         self.item_settings_widgets['backup_time'].setSingleStep(1.0)
         self.item_settings_widgets['backup_time'].setValue(300.0)
         item_settings_layout.addWidget(self.item_settings_widgets['backup_time'], 1, 1)
-        
         item_settings_layout.addWidget(QLabel("デバウンス(秒):"), 1, 2)
         self.item_settings_widgets['debounce_time'] = QDoubleSpinBox()
         self.item_settings_widgets['debounce_time'].setRange(0.0, 10.0)
@@ -676,26 +642,21 @@ class UIManager(QMainWindow):
             "これにより、インターバルがより長い他の画像が先にクリックされる機会を作ることができます。"
         )
         item_settings_layout.addWidget(self.item_settings_widgets['debounce_time'], 1, 3)
-
         click_type_layout = QHBoxLayout()
         self.item_settings_widgets['point_click'] = QCheckBox("1点クリック")
         self.item_settings_widgets['range_click'] = QCheckBox("範囲クリック")
         self.item_settings_widgets['random_click'] = QCheckBox("範囲内ランダム")
-        
         self.item_settings_widgets['point_click'].setToolTip("プレビュー画像上の1点をクリック座標として設定します。")
         self.item_settings_widgets['range_click'].setToolTip("プレビュー画像上で矩形範囲を設定し、その中心またはランダムな位置をクリックします。")
         self.item_settings_widgets['random_click'].setToolTip("範囲クリックが有効な場合、クリック座標を範囲内でランダムに決定します。")
-
         click_type_layout.addWidget(self.item_settings_widgets['point_click'])
         click_type_layout.addWidget(self.item_settings_widgets['range_click'])
         click_type_layout.addWidget(self.item_settings_widgets['random_click'])
         item_settings_layout.addLayout(click_type_layout, 2, 0, 1, 4)
-
         separator = QFrame()
         separator.setFrameShape(QFrame.Shape.HLine)
         separator.setFrameShadow(QFrame.Shadow.Sunken)
         item_settings_layout.addWidget(separator, 3, 0, 1, 4)
-        
         self.item_settings_widgets['roi_enabled'] = QCheckBox("ROI有効")
         self.item_settings_widgets['roi_enabled'].setToolTip(
             "ROI (Region of Interest) を有効にすると、指定した範囲のみを探索対象とします。\n"
@@ -704,21 +665,17 @@ class UIManager(QMainWindow):
             "・可変: プレビュー上でドラッグして、探索範囲を自由に設定できます。"
         )
         item_settings_layout.addWidget(self.item_settings_widgets['roi_enabled'], 4, 0)
-        
         roi_mode_layout = QHBoxLayout()
         self.item_settings_widgets['roi_mode_fixed'] = QRadioButton("固定")
         self.item_settings_widgets['roi_mode_variable'] = QRadioButton("可変")
-        
         self.item_settings_widgets['roi_mode_fixed'].setToolTip("設定されたクリック座標を中心に、固定の200x200ピクセル範囲をROIとします。")
         self.item_settings_widgets['roi_mode_variable'].setToolTip("プレビュー上でドラッグして、任意の探索範囲を設定します。")
-
         self.roi_mode_group = QButtonGroup(self)
         self.roi_mode_group.addButton(self.item_settings_widgets['roi_mode_fixed'])
         self.roi_mode_group.addButton(self.item_settings_widgets['roi_mode_variable'])
         roi_mode_layout.addWidget(self.item_settings_widgets['roi_mode_fixed'])
         roi_mode_layout.addWidget(self.item_settings_widgets['roi_mode_variable'])
         item_settings_layout.addLayout(roi_mode_layout, 4, 1)
-
         self.item_settings_widgets['set_roi_variable_button'] = QPushButton("ROI範囲設定")
         self.item_settings_widgets['set_roi_variable_button'].setCheckable(True)
         self.item_settings_widgets['set_roi_variable_button'].setToolTip(
@@ -727,9 +684,7 @@ class UIManager(QMainWindow):
             "再押下で設定を解除します。"
         )
         item_settings_layout.addWidget(self.item_settings_widgets['set_roi_variable_button'], 4, 2, 1, 2)
-        
         right_layout.addWidget(item_settings_group, 1)
-
         content_layout.addWidget(right_frame, 2)
         main_layout.addWidget(content_frame)
 
@@ -740,6 +695,7 @@ class UIManager(QMainWindow):
         return window_color.lightness() < text_color.lightness()
 
     def load_app_settings_to_ui(self):
+        # (v1.4.1から変更なし)
         as_conf = self.app_config.get('auto_scale', {})
         self.auto_scale_widgets['use_window_scale'].setChecked(as_conf.get('use_window_scale', True))
         self.auto_scale_widgets['enabled'].setChecked(as_conf.get('enabled', False))
@@ -757,6 +713,7 @@ class UIManager(QMainWindow):
 
         stability_conf = self.app_config.get('screen_stability_check', {})
         self.app_settings_widgets['stability_check_enabled'].setChecked(stability_conf.get('enabled', True))
+        # ★★★ v1.4.1 (ui.py) の '5' から D&D版 (ui(D&D).py) の '8' に修正 ★★★
         self.app_settings_widgets['stability_threshold'].setValue(stability_conf.get('threshold', 8))
 
         lw_conf = self.app_config.get('lightweight_mode', {})
@@ -767,19 +724,17 @@ class UIManager(QMainWindow):
         self.update_dependent_widgets_state()
 
     def update_dependent_widgets_state(self):
+        # (v1.4.1から変更なし)
         is_lw_mode_enabled = self.app_settings_widgets['lightweight_mode_enabled'].isChecked()
-        
         self.auto_scale_group.setEnabled(not is_lw_mode_enabled)
-        
         self.app_settings_widgets['lightweight_mode_preset'].setEnabled(is_lw_mode_enabled)
-        
         is_stability_enabled = self.app_settings_widgets['stability_check_enabled'].isChecked()
         self.app_settings_widgets['stability_threshold'].setEnabled(is_stability_enabled)
-
         is_fs_user_configurable = not is_lw_mode_enabled
         self.app_settings_widgets['frame_skip_rate'].setEnabled(is_fs_user_configurable)
 
     def get_auto_scale_settings(self) -> dict:
+        # (v1.4.1から変更なし)
         return {
             "use_window_scale": self.auto_scale_widgets['use_window_scale'].isChecked(),
             "enabled": self.auto_scale_widgets['enabled'].isChecked(),
@@ -789,6 +744,7 @@ class UIManager(QMainWindow):
         }
 
     def update_auto_scale_info(self):
+        # (v1.4.1から変更なし)
         if self.auto_scale_widgets['enabled'].isChecked():
             center = self.auto_scale_widgets['center'].value()
             range_ = self.auto_scale_widgets['range'].value()
@@ -801,32 +757,30 @@ class UIManager(QMainWindow):
             self.auto_scale_info_label.setStyleSheet("color: gray;")
 
     def on_app_settings_changed(self):
+        # (v1.4.1から変更なし、stability_threshold のデフォルト値は load_app_settings_to_ui でセットされる)
         self.app_config['auto_scale'] = self.get_auto_scale_settings()
         self.app_config['capture_method'] = 'dxcam' if self.app_settings_widgets['capture_method'].isChecked() else 'mss'
         self.app_config['frame_skip_rate'] = self.app_settings_widgets['frame_skip_rate'].value()
         self.app_config['grayscale_matching'] = self.app_settings_widgets['grayscale_matching'].isChecked()
         self.app_config['use_opencl'] = self.app_settings_widgets['use_opencl'].isChecked()
-        
         self.app_config['eco_mode'] = {
             "enabled": self.app_settings_widgets['eco_mode_enabled'].isChecked()
         }
-        
         self.app_config['screen_stability_check'] = {
             "enabled": self.app_settings_widgets['stability_check_enabled'].isChecked(),
             "threshold": self.app_settings_widgets['stability_threshold'].value()
         }
-
         self.app_config['lightweight_mode'] = {
             "enabled": self.app_settings_widgets['lightweight_mode_enabled'].isChecked(),
             "preset": self.app_settings_widgets['lightweight_mode_preset'].currentText()
         }
-        
         self.config_manager.save_app_config(self.app_config)
         self.update_auto_scale_info()
         self.update_dependent_widgets_state()
         self.appConfigChanged.emit()
 
     def connect_signals(self):
+        # ★★★ D&D変更点: 接続ロジックを D&D版 (ui(D&D).py) に合わせる ★★★
         if hasattr(self, '_signals_connected') and self._signals_connected:
             return
             
@@ -834,15 +788,14 @@ class UIManager(QMainWindow):
         self.perf_monitor_button.clicked.connect(self.openPerformanceMonitorRequested.emit)
         self.image_tree.itemSelectionChanged.connect(self.on_image_tree_selection_changed)
         
+        # itemClicked -> customContextMenuRequested
         self.image_tree.customContextMenuRequested.connect(self.on_tree_context_menu)
+        # D&Dシグナルを追加
         self.image_tree.orderUpdated.connect(self.orderChanged.emit)
-
         self.image_tree.itemsMoved.connect(self.itemsMovedIntoFolder.emit)
 
         self.set_rec_area_button_main_ui.clicked.connect(self.setRecAreaDialog)
-
         self.toggle_minimal_ui_button.clicked.connect(self.toggle_minimal_ui_mode)
-        
         self.open_image_folder_button.clicked.connect(self.open_image_folder)
         
         for widget in self.item_settings_widgets.values():
@@ -875,6 +828,7 @@ class UIManager(QMainWindow):
         self._signals_connected = True
         
     def open_image_folder(self):
+        # (v1.4.1から変更なし)
         folder_path = str(self.config_manager.base_dir)
         try:
             if sys.platform == 'win32':
@@ -889,28 +843,24 @@ class UIManager(QMainWindow):
             QMessageBox.warning(self, "エラー", f"フォルダを開けませんでした:\n{e}")
 
     def create_colored_icon(self, color, size=16):
+        # (v1.4.1から変更なし)
         pixmap = QPixmap(size, size)
         pixmap.fill(Qt.transparent)
-
         if color == Qt.transparent:
             return QIcon(pixmap)
-
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.Antialiasing)
-
         pen = QPen(Qt.black, 1)
         painter.setPen(pen)
-
         brush = QBrush(color)
         painter.setBrush(brush)
-        
         rect = QRectF(0.5, 0.5, size - 1, size - 1)
         painter.drawRoundedRect(rect, 3.0, 3.0)
-
         painter.end()
         return QIcon(pixmap)
 
     def update_image_tree(self):
+        # ★★★ D&D変更点: D&D版 (ui(D&D).py) のロジックに更新 ★★★
         self.image_tree.blockSignals(True)
         expanded_folders, (selected_path, _) = set(), self.get_selected_item_path()
         for i in range(self.image_tree.topLevelItemCount()):
@@ -930,6 +880,7 @@ class UIManager(QMainWindow):
 
                 folder_item = QTreeWidgetItem(self.image_tree, [f"📁 {item_data['name']}"])
                 folder_item.setData(0, Qt.UserRole, item_data['path'])
+                # D&Dドロップターゲットとして有効化
                 folder_item.setFlags(folder_item.flags() | Qt.ItemIsDropEnabled)
 
                 brush = QBrush(QApplication.palette().text().color())
@@ -968,17 +919,21 @@ class UIManager(QMainWindow):
                 
         if item_to_reselect: self.image_tree.setCurrentItem(item_to_reselect)
         self.image_tree.blockSignals(False)
+        # 選択変更を強制的に呼び出してプレビューを更新
         self.on_image_tree_selection_changed()
 
+    # ★★★ D&D変更点: on_tree_item_clicked を on_tree_context_menu に変更 ★★★
     def on_tree_context_menu(self, pos):
         item = self.image_tree.itemAt(pos)
         if not item:
             return
 
         path_str = item.data(0, Qt.UserRole)
+        # フォルダ以外（画像アイテム）は無視
         if not path_str or not Path(path_str).is_dir():
             return
 
+        # フォルダ設定ダイアログを開く
         folder_path = Path(path_str)
         current_settings = self.config_manager.load_item_setting(folder_path)
 
@@ -989,19 +944,23 @@ class UIManager(QMainWindow):
             self.folderSettingsChanged.emit()
 
     def set_tree_enabled(self, enabled: bool):
+        # (v1.4.1から変更なし)
         self.image_tree.setEnabled(enabled)
 
     def on_cache_build_finished(self):
+        # (v1.4.1から変更なし)
         self.update_image_tree()
         self.set_tree_enabled(True)
         self.is_processing_tree_change = False
         
     def get_selected_item_path(self):
+        # (v1.4.1から変更なし)
         selected_items = self.image_tree.selectedItems();
         if not selected_items: return None, None
         item = selected_items[0]; path = item.data(0, Qt.UserRole); name = item.text(0); return path, name
         
     def on_image_tree_selection_changed(self):
+        # (v1.4.1から変更なし)
         if self.is_processing_tree_change: return
         self.current_best_scale_label.setText("最適スケール: ---")
         self.current_best_scale_label.setStyleSheet("color: gray;")
@@ -1010,6 +969,7 @@ class UIManager(QMainWindow):
         if self.core_engine:
             self.core_engine.load_image_and_settings(path)
         
+    # ★★★ D&D変更点: move_item_up/down を D&D版 (ui(D&D).py) のロジックに更新 ★★★
     def move_item_up(self):
         if self.is_processing_tree_change: return
         item = self.image_tree.currentItem()
@@ -1027,8 +987,8 @@ class UIManager(QMainWindow):
                 self.set_tree_enabled(False)
                 self.image_tree.takeTopLevelItem(index)
                 self.image_tree.insertTopLevelItem(index - 1, item)
-        self.image_tree.setCurrentItem(item); self.orderChanged.emit()
-        self.set_tree_enabled(True)
+        self.image_tree.setCurrentItem(item); self.orderChanged.emit() # save_tree_order() を削除
+        self.set_tree_enabled(True) # emit後にTrueに戻す
         
     def move_item_down(self):
         if self.is_processing_tree_change: return
@@ -1047,9 +1007,10 @@ class UIManager(QMainWindow):
                 self.set_tree_enabled(False)
                 self.image_tree.takeTopLevelItem(index)
                 self.image_tree.insertTopLevelItem(index + 1, item)
-        self.image_tree.setCurrentItem(item); self.orderChanged.emit()
-        self.set_tree_enabled(True)
+        self.image_tree.setCurrentItem(item); self.orderChanged.emit() # save_tree_order() を削除
+        self.set_tree_enabled(True) # emit後にTrueに戻す
         
+    # ★★★ D&D変更点: save_tree_order を D&D版 (ui(D&D).py) のロジックに更新 ★★★
     def save_tree_order(self):
         top_level_order = []
         for i in range(self.image_tree.topLevelItemCount()):
@@ -1059,14 +1020,16 @@ class UIManager(QMainWindow):
             if original_path.is_dir():
                 path_str = str(original_path)
             else:
+                # D&Dによりルートに移動された画像の場合
                 new_path = self.config_manager.base_dir / original_path.name
                 path_str = str(new_path)
                 if str(original_path) != path_str:
-                    item.setData(0, Qt.UserRole, path_str)
+                    item.setData(0, Qt.UserRole, path_str) # データも更新
 
             top_level_order.append(path_str)
         self.config_manager.save_image_order(top_level_order)
 
+        # サブフォルダの順序も保存
         for i in range(self.image_tree.topLevelItemCount()):
             folder_item = self.image_tree.topLevelItem(i)
             folder_path_str = folder_item.data(0, Qt.UserRole)
@@ -1078,15 +1041,17 @@ class UIManager(QMainWindow):
                     original_path = Path(child_item.data(0, Qt.UserRole))
                     
                     if not original_path.is_dir():
+                        # D&Dによりフォルダに移動された画像の場合
                         new_path = Path(folder_path_str) / original_path.name
                         
                         if str(original_path) != str(new_path):
-                            child_item.setData(0, Qt.UserRole, str(new_path))
+                            child_item.setData(0, Qt.UserRole, str(new_path)) # データも更新
 
                         child_order_filenames.append(original_path.name)
 
                 self.config_manager.save_image_order(child_order_filenames, folder_path=folder_path_str)
-
+    
+    # ★★★ D&D変更点: 複数削除に対応する on_delete_button_clicked を追加 ★★★
     def on_delete_button_clicked(self):
         selected_items = self.image_tree.selectedItems()
         if not selected_items:
@@ -1107,8 +1072,9 @@ class UIManager(QMainWindow):
             paths_to_delete = [item.data(0, Qt.UserRole) for item in selected_items if item.data(0, Qt.UserRole)]
             if paths_to_delete:
                 self.deleteItemsRequested.emit(paths_to_delete)
-    
+
     def get_current_item_settings(self):
+        # (v1.4.1から変更なし)
         settings = {}
         for key, widget in self.item_settings_widgets.items():
             if isinstance(widget, QDoubleSpinBox):
@@ -1124,9 +1090,10 @@ class UIManager(QMainWindow):
         return settings
         
     def set_settings_from_data(self, settings_data):
+        # ★★★ D&D変更点: D&D版 (ui(D&D).py) のロジックに更新 (選択パス取得方法の修正) ★★★
         selected_path, _ = self.get_selected_item_path()
         is_folder = selected_path and Path(selected_path).is_dir()
-
+        
         all_widgets = list(self.item_settings_widgets.values()) + \
                       [self.item_settings_widgets['roi_mode_fixed'], self.item_settings_widgets['roi_mode_variable']]
 
@@ -1173,13 +1140,16 @@ class UIManager(QMainWindow):
         self.preview_mode_manager.sync_from_settings_data(settings_data)
         self._update_roi_widgets_state()
 
+    # ★★★ D&D変更点: on_item_settings_changed のロジックを D&D版 (ui(D&D).py) に更新 ★★★
     def on_item_settings_changed(self, *args):
         settings = self.get_current_item_settings()
         self.imageSettingsChanged.emit(settings)
         self._update_roi_widgets_state()
+        # プレビューにも即時反映
         self.preview_label.set_drawing_data(self.get_current_item_settings())
 
     def _update_roi_widgets_state(self):
+        # (v1.4.1から変更なし)
         is_roi_enabled = self.item_settings_widgets['roi_enabled'].isChecked()
         is_variable_mode = self.item_settings_widgets['roi_mode_variable'].isChecked()
 
@@ -1188,14 +1158,17 @@ class UIManager(QMainWindow):
         self.item_settings_widgets['set_roi_variable_button'].setEnabled(is_roi_enabled and is_variable_mode)
 
     def request_save(self): 
+        # (v1.4.1から変更なし)
         if self.core_engine:
             self.save_timer.start()
 
     def toggle_monitoring(self):
+        # (v1.4.1から変更なし)
         if self.monitor_button.text() == "監視開始": self.startMonitoringRequested.emit()
         else: self.stopMonitoringRequested.emit()
         
     def set_status(self, text, color="green"):
+        # (v1.4.1から変更なし)
         display_text = text
         style_color = color
         if text == "監視中...":
@@ -1216,12 +1189,14 @@ class UIManager(QMainWindow):
             self.floating_window.update_status(display_text, style_color)
 
     def on_best_scale_found(self, image_path: str, scale: float):
+        # (v1.4.1から変更なし)
         current_selected_path, _ = self.get_selected_item_path()
         if image_path and image_path == current_selected_path:
             self.current_best_scale_label.setText(f"最適スケール: {scale:.3f}倍")
             self.current_best_scale_label.setStyleSheet("color: green;")
 
     def on_window_scale_calculated(self, scale: float):
+        # (v1.4.1から変更なし)
         if scale > 0:
             self.current_best_scale_label.setText(f"計算スケール: {scale:.3f}倍")
             color = "white" if self.is_dark_mode() else "purple"
@@ -1232,6 +1207,7 @@ class UIManager(QMainWindow):
             self.current_best_scale_label.setStyleSheet("color: gray;")
             
     def prompt_to_save_base_size(self, window_title: str) -> bool:
+        # (v1.4.1から変更なし)
         reply = QMessageBox.question(
             self,
             "基準サイズの確認",
@@ -1242,11 +1218,13 @@ class UIManager(QMainWindow):
         return reply == QMessageBox.StandardButton.Yes
 
     def show_prompt_to_save_base_size(self, window_title: str):
+        # (v1.4.1から変更なし)
         save_as_base = self.prompt_to_save_base_size(window_title)
         if self.core_engine:
             self.core_engine.process_base_size_prompt_response(save_as_base)
             
     def show_prompt_to_apply_scale(self, scale: float):
+        # (v1.4.1から変更なし)
         reply = QMessageBox.question(
             self,
             "スケール適用の確認",
@@ -1259,10 +1237,12 @@ class UIManager(QMainWindow):
             self.core_engine.process_apply_scale_prompt_response(apply_scale)
 
     def load_images_dialog(self):
+        # (v1.4.1から変更なし)
         file_paths, _ = QFileDialog.getOpenFileNames(self, "画像を選択", str(self.config_manager.base_dir), "画像ファイル (*.png *.jpg *.jpeg *.bmp)")
         if file_paths: self.set_tree_enabled(False); self.loadImagesRequested.emit(file_paths)
         
     def update_image_preview(self, cv_image: np.ndarray, settings_data: dict = None):
+        # ★★★ D&D変更点: D&D版 (ui(D&D).py) のロジックに更新 (選択パス取得方法の修正) ★★★
         self.set_settings_from_data(settings_data)
         if cv_image is None or cv_image.size == 0:
             selected_path, _ = self.get_selected_item_path()
@@ -1279,6 +1259,7 @@ class UIManager(QMainWindow):
         self.preview_label.set_pixmap(pixmap)
         
     def update_rec_area_preview(self, cv_image: np.ndarray):
+        # (v1.4.1から変更なし)
         if cv_image is None or cv_image.size == 0:
             self.rec_area_preview_label.set_pixmap(None)
             self.rec_area_preview_label.setText("認識範囲プレビュー")
@@ -1291,9 +1272,12 @@ class UIManager(QMainWindow):
         pixmap = QPixmap.fromImage(q_image)
         self.rec_area_preview_label.set_pixmap(pixmap)
         
-    def update_log(self, message: str): self.log_text.append(message)
+    def update_log(self, message: str): 
+        # (v1.4.1から変更なし)
+        self.log_text.append(message)
     
     def closeEvent(self, event):
+        # (v1.4.1から変更なし)
         if self.floating_window:
             self.floating_window.close()
         if self.core_engine:
@@ -1303,16 +1287,19 @@ class UIManager(QMainWindow):
         event.accept()
         
     def setRecAreaDialog(self):
+        # (v1.4.1から変更なし)
         dialog = RecAreaSelectionDialog(self)
         dialog.selectionMade.connect(self.setRecAreaMethodSelected)
         dialog.move(QCursor.pos())
         dialog.exec()
 
     def adjust_initial_size(self):
+        # (v1.4.1から変更なし)
         self.setMinimumWidth(0)
         self.resize(960, 640)
 
     def toggle_minimal_ui_mode(self):
+        # ★★★ D&D変更点: D&D版 (ui(D&D).py) のロジックに更新 ★★★
         self.is_minimal_mode = not self.is_minimal_mode
         if self.is_minimal_mode:
             self.normal_ui_geometries['main'] = self.geometry()
@@ -1334,25 +1321,26 @@ class UIManager(QMainWindow):
             if self.performance_monitor:
                 self.performance_monitor.performanceUpdated.connect(self.floating_window.update_performance)
 
+            # 現在のステータスを正確に引き継ぐ
             current_status_text = self.status_label.text()
             current_status_color = self.status_label.palette().color(QPalette.ColorRole.WindowText).name()
             if current_status_text == "監視中...":
                 current_status_color = "blue"
             elif current_status_text == "待機中":
                 current_status_color = "green"
-
             self.floating_window.update_status(current_status_text, current_status_color)
             
             self.floating_window.show()
             self.toggle_minimal_ui_button.setText("最小UIモード停止")
         else:
             if self.floating_window:
+                # disconnect 処理を追加
                 if self.performance_monitor:
                     if hasattr(self.performance_monitor, 'performanceUpdated'):
                         try:
                             self.performance_monitor.performanceUpdated.disconnect(self.floating_window.update_performance)
                         except (TypeError, RuntimeError):
-                            pass
+                            pass # 接続されていない場合のエラーを無視
                 self.floating_window.close()
                 self.floating_window = None
             
@@ -1369,12 +1357,14 @@ class UIManager(QMainWindow):
             self.toggle_minimal_ui_button.setText("最小UIモード")
 
     def on_selection_process_started(self):
+        # (v1.4.1から変更なし)
         if self.performance_monitor:
             self.performance_monitor.hide()
         if self.is_minimal_mode and self.floating_window:
             self.floating_window.hide()
 
     def on_selection_process_finished(self):
+        # (v1.4.1から変更なし)
         if self.is_minimal_mode:
             if self.floating_window:
                 self.floating_window.show()

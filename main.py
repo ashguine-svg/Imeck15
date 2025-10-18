@@ -1,9 +1,10 @@
-# main.py
+# main.py (D&D対応版)
 
 import sys
 import os
 import socket
 
+# 実行されたスクリプト自身の場所を特定し、モジュール検索パスの先頭に追加する
 try:
     if getattr(sys, 'frozen', False):
         script_directory = os.path.dirname(sys.executable)
@@ -49,8 +50,7 @@ class Logger(QObject):
         self.ui_manager = ui_manager
         self.perf_monitor = perf_monitor
         self.logReady.connect(self.ui_manager.update_log)
-        if self.perf_monitor:
-            self.logReady.connect(self.perf_monitor.update_log)
+        self.logReady.connect(self.perf_monitor.update_log)
 
     def log(self, message):
         print(f"[LOG] {message}")
@@ -102,7 +102,6 @@ def main():
     core_engine.updatePreview.connect(ui_manager.update_image_preview)
     core_engine.updateRecAreaPreview.connect(ui_manager.update_rec_area_preview)
     core_engine.fpsUpdated.connect(performance_monitor.update_fps)
-    core_engine.fpsUpdated.connect(core_engine._on_fps_updated)
     core_engine.cacheBuildFinished.connect(ui_manager.on_cache_build_finished)
     
     core_engine.clickCountUpdated.connect(performance_monitor.update_click_count)
@@ -121,7 +120,7 @@ def main():
     ui_manager.imageSettingsChanged.connect(core_engine.on_image_settings_changed)
     ui_manager.captureImageRequested.connect(core_engine.capture_image_for_registration)
     
-    # 複数削除に対応したシグナルに接続
+    # ★★★ D&D変更点: deleteItemRequested -> deleteItemsRequested (複数・シグナル名変更) ★★★
     ui_manager.deleteItemsRequested.connect(core_engine.delete_selected_items)
     
     ui_manager.folderSettingsChanged.connect(core_engine.on_folder_settings_changed)
@@ -129,14 +128,12 @@ def main():
     ui_manager.orderChanged.connect(core_engine.on_order_changed)
     ui_manager.createFolderRequested.connect(core_engine.create_folder)
     
-    # ボタンクリックによる移動の接続
+    # ★★★ D&D変更点: moveItemIntoFolderRequested (ボタン) の接続先を変更 ★★★
     ui_manager.moveItemIntoFolderRequested.connect(core_engine.move_item_into_folder)
     
-    # ★★ ここからが追加された接続です ★★
-    # D&Dによる複数アイテムの移動シグナルをcoreのスロットに接続
-    ui_manager.itemsMovedIntoFolder.connect(core_engine.move_multiple_items_into_folder)
-    # ★★ ここまでが追加された接続です ★★
-    
+    # ★★★ D&D変更点: itemsMovedIntoFolder (D&D) の接続先を追加 ★★★
+    ui_manager.itemsMovedIntoFolder.connect(core_engine.move_items_into_folder)
+
     ui_manager.moveItemOutOfFolderRequested.connect(core_engine.move_item_out_of_folder)
     ui_manager.openPerformanceMonitorRequested.connect(performance_monitor.show)
     ui_manager.setRecAreaMethodSelected.connect(core_engine.set_recognition_area)
@@ -154,6 +151,7 @@ def main():
     ui_manager.show()
 
     if sys.platform != 'win32':
+        # Linux環境でのみ、UI表示後に初期化ダイアログを表示して対策を実行
         def run_initialization_dialog():
             try:
                 dialog = InitializationDialog(core_engine, logger, ui_manager)
@@ -163,6 +161,7 @@ def main():
             except Exception as e:
                 logger.log(f"初期化ダイアログの実行中にエラー: {e}")
         
+        # UIの表示とイベントループの開始を待ってから実行
         QTimer.singleShot(200, run_initialization_dialog)
 
     sys.exit(app.exec())

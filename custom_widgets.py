@@ -30,6 +30,7 @@ class ScaledPixmapLabel(QLabel):
 
 class InteractivePreviewLabel(QLabel):
     settingChanged = Signal(dict)
+    # ★★★ ここにシグナルを追加 ★★★
     roiSettingChanged = Signal(dict)
 
     def __init__(self, parent=None):
@@ -121,9 +122,11 @@ class InteractivePreviewLabel(QLabel):
             elif self.drawing_mode == 'range':
                 rect = QRect(self.start_pos, self.end_pos).normalized()
                 self.settingChanged.emit({'click_rect': [rect.left(), rect.top(), rect.right(), rect.bottom()]})
+            # ★★★ ここからが修正部分 ★★★
             elif self.drawing_mode == 'roi_variable':
                 rect = QRect(self.start_pos, self.end_pos).normalized()
                 self.roiSettingChanged.emit({'roi_rect_variable': [rect.left(), rect.top(), rect.right(), rect.bottom()]})
+            # ★★★ 修正部分ここまで ★★★
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -142,6 +145,9 @@ class InteractivePreviewLabel(QLabel):
             y = self.pixmap_display_rect.y() + img_pos[1] * self.scale_y
             return QPointF(x, y)
         
+        # --- 描画ロジックを大幅に修正 ---
+        
+        # 1. 保存済みのROIを描画
         if self.click_settings.get('roi_enabled'):
             roi_mode = self.click_settings.get('roi_mode', 'fixed')
             roi_rect_data = None
@@ -157,6 +163,7 @@ class InteractivePreviewLabel(QLabel):
                 painter.setBrush(QColor(0, 255, 0, 40))
                 painter.drawRect(QRectF(p1, p2))
 
+        # 2. 保存済みのクリック設定を描画
         if self.click_settings.get('point_click') and self.click_settings.get('click_position'):
             p = to_widget_coords(self.click_settings['click_position'])
             painter.setPen(QPen(QColor(255, 0, 0), 3))
@@ -170,6 +177,7 @@ class InteractivePreviewLabel(QLabel):
             painter.setBrush(Qt.NoBrush)
             painter.drawRect(QRectF(p1, p2))
             
+        # 3. ユーザーが現在描画中の図形を最前面に描画
         if self.is_drawing:
             p1 = to_widget_coords((self.start_pos.x(), self.start_pos.y()))
             p2 = to_widget_coords((self.end_pos.x(), self.end_pos.y()))
