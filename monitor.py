@@ -124,8 +124,14 @@ class PerformanceMonitor(QDialog):
             if self.ui_manager and self.ui_manager.core_engine:
                 countdown = self.ui_manager.core_engine.get_backup_click_countdown()
                 if countdown > 0:
-                    # ★★★ 5. カウントダウンも .format() を使用 ★★★
-                    self.backup_countdown_label.setText(lm("monitor_backup_countdown", s=countdown))
+                    # 1. まず翻訳キーからフォーマット文字列を取得
+                    countdown_format = lm("monitor_backup_countdown")
+                    try:
+                        # 2. 文字列の .format() メソッドを使って値を埋め込む
+                        self.backup_countdown_label.setText(countdown_format.format(s=countdown))
+                    except (KeyError, ValueError, TypeError):
+                        # .format() に失敗した場合のフォールバック表示
+                        self.backup_countdown_label.setText(f"(Backup in: {countdown:.0f}s)")
                 else:
                     self.backup_countdown_label.setText("")
 
