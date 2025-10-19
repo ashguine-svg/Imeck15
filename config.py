@@ -6,7 +6,9 @@ from pathlib import Path
 import os
 
 class ConfigManager:
-    def __init__(self, base_dir_name: str = "click_pic"):
+    # ★★★ 1. __init__ で logger を受け取る ★★★
+    def __init__(self, logger, base_dir_name: str = "click_pic"):
+        self.logger = logger # Loggerインスタンスを保持
         self.base_dir = Path.home() / base_dir_name
         self.base_dir.mkdir(exist_ok=True)
         self.folder_config_filename = "_folder_config.json"
@@ -31,7 +33,8 @@ class ConfigManager:
         
         image_extensions = ['.png', '.jpg', '.jpeg', '.bmp']
 
-        print("[INFO] 孤立したJSONファイルのクリーンアップを開始します...")
+        # ★★★ 2. print を self.logger.log に変更 (翻訳キー使用) ★★★
+        self.logger.log("log_cleanup_start")
         cleaned_count = 0
         try:
             for json_path in self.base_dir.rglob('*.json'):
@@ -51,18 +54,18 @@ class ConfigManager:
                 if not has_pair:
                     try:
                         json_path.unlink()
-                        print(f"[CLEANUP] 孤立したJSONファイルを削除しました: {json_path}")
+                        self.logger.log("log_cleanup_deleted", str(json_path))
                         cleaned_count += 1
                     except OSError as e:
-                        print(f"[ERROR] JSONファイルの削除に失敗しました: {json_path}, エラー: {e}")
+                        self.logger.log("log_cleanup_error_delete", str(json_path), str(e))
 
         except Exception as e:
-            print(f"[ERROR] クリーンアップ処理中に予期せぬエラーが発生しました: {e}")
+            self.logger.log("log_cleanup_error_general", str(e))
 
         if cleaned_count > 0:
-            print(f"[INFO] クリーンアップ完了。{cleaned_count}個の孤立したJSONファイルを削除しました。")
+            self.logger.log("log_cleanup_complete_deleted", cleaned_count)
         else:
-            print("[INFO] クリーンアップ完了。孤立したJSONファイルは見つかりませんでした。")
+            self.logger.log("log_cleanup_complete_none")
 
     def load_app_config(self) -> dict:
         default_config = {
@@ -87,7 +90,8 @@ class ConfigManager:
             },
             "eco_mode": {
                 "enabled": True
-            }
+            },
+            "language": "en_US" # ★★★ 3. 言語設定のデフォルトを追加 ★★★
         }
         if not self.app_config_path.exists():
             return default_config
@@ -105,7 +109,8 @@ class ConfigManager:
                                    config[key][sub_key] = sub_value
                 return config
         except (json.JSONDecodeError, Exception) as e:
-            print(f"アプリケーション設定の読み込みエラー: {e}")
+            # ★★★ 4. print を self.logger.log に変更 (翻訳キー使用) ★★★
+            self.logger.log("log_app_config_load_error", str(e))
             return default_config
 
     def save_app_config(self, config: dict):
@@ -113,7 +118,8 @@ class ConfigManager:
             with open(self.app_config_path, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"アプリケーション設定の保存エラー: {e}")
+            # ★★★ 5. print を self.logger.log に変更 (翻訳キー使用) ★★★
+            self.logger.log("log_app_config_save_error", str(e))
 
     def load_window_scales(self) -> dict:
         if not self.window_scales_path.exists():
@@ -122,7 +128,8 @@ class ConfigManager:
             with open(self.window_scales_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except (json.JSONDecodeError, Exception) as e:
-            print(f"ウィンドウ基準スケール設定の読み込みエラー: {e}")
+            # ★★★ 6. print を self.logger.log に変更 (翻訳キー使用) ★★★
+            self.logger.log("log_window_scales_load_error", str(e))
             return {}
 
     def save_window_scales(self, scales_data: dict):
@@ -130,7 +137,8 @@ class ConfigManager:
             with open(self.window_scales_path, 'w', encoding='utf-8') as f:
                 json.dump(scales_data, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"ウィンドウ基準スケール設定の保存エラー: {e}")
+            # ★★★ 7. print を self.logger.log に変更 (翻訳キー使用) ★★★
+            self.logger.log("log_window_scales_save_error", str(e))
 
     def _get_setting_path(self, item_path: Path) -> Path:
         if item_path.is_dir():
@@ -147,15 +155,14 @@ class ConfigManager:
                 'priority_timeout': 5,
             }
         else:
-            # ★★★ ここからが修正部分 ★★★
             default_setting = {
                 'image_path': str(item_path),
                 'click_position': None,
                 'click_rect': None,
                 'roi_enabled': False,
-                'roi_mode': 'fixed',  # 'fixed' または 'variable'
-                'roi_rect': None,  # 固定ROI(200x200)の計算結果用
-                'roi_rect_variable': None, # 可変ROIのユーザー指定座標
+                'roi_mode': 'fixed',
+                'roi_rect': None,
+                'roi_rect_variable': None, 
                 'point_click': True,
                 'range_click': False,
                 'random_click': False,
@@ -165,7 +172,6 @@ class ConfigManager:
                 'threshold': 0.8,
                 'debounce_time': 0.0
             }
-            # ★★★ 修正部分ここまで ★★★
         
         if not setting_path.exists():
             return default_setting
@@ -189,7 +195,8 @@ class ConfigManager:
                     setting.setdefault(key, value)
                 return setting
         except (json.JSONDecodeError, Exception) as e:
-            print(f"設定ファイル読み込みエラー ({setting_path}): {e}")
+            # ★★★ 8. print を self.logger.log に変更 (翻訳キー使用) ★★★
+            self.logger.log("log_item_setting_load_error", str(setting_path), str(e))
             return default_setting
 
     def save_item_setting(self, item_path: Path, setting: dict):
@@ -198,7 +205,8 @@ class ConfigManager:
             with open(setting_path, 'w', encoding='utf-8') as f:
                 json.dump(setting, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"設定ファイル保存エラー ({setting_path}): {e}")
+            # ★★★ 9. print を self.logger.log に変更 (翻訳キー使用) ★★★
+            self.logger.log("log_item_setting_save_error", str(setting_path), str(e))
 
     def load_image_order(self, folder_path=None) -> list:
         order_path = Path(folder_path) / self.sub_order_filename if folder_path else self.base_dir / self.image_order_filename
@@ -253,7 +261,8 @@ class ConfigManager:
                 self.save_image_order(order, order_file_owner)
 
         except Exception as e:
-            print(f"アイテムの削除中にエラーが発生しました: {e}")
+            # ★★★ 10. print を self.logger.log に変更 (翻訳キー使用) ★★★
+            self.logger.log("log_item_delete_error", str(e))
             raise
 
     def get_ordered_item_list(self) -> list:
@@ -309,18 +318,19 @@ class ConfigManager:
 
     def create_folder(self, folder_name: str):
         if not folder_name:
-            return False, "フォルダ名が空です。"
+            # ★★★ 11. ハードコードされた文字列を翻訳キーに変更 ★★★
+            return False, "log_create_folder_error_empty"
         try:
             folder_path = self.base_dir / folder_name
             if folder_path.exists():
-                return False, f"フォルダ '{folder_name}' は既に存在します。"
+                return False, self.logger.locale_manager.tr("log_create_folder_error_exists", folder_name)
             folder_path.mkdir()
             order = self.load_image_order()
             order.append(str(folder_path))
             self.save_image_order(order)
-            return True, f"フォルダ '{folder_name}' を作成しました。"
+            return True, self.logger.locale_manager.tr("log_create_folder_success", folder_name)
         except Exception as e:
-            return False, f"フォルダ作成中にエラーが発生しました: {e}"
+            return False, self.logger.locale_manager.tr("log_create_folder_error_general", str(e))
 
     def move_item(self, source_path_str: str, dest_folder_path_str: str):
         try:
@@ -328,11 +338,12 @@ class ConfigManager:
             dest_folder_path = Path(dest_folder_path_str)
             
             if not source_path.exists() or not dest_folder_path.is_dir():
-                return False, "移動元または移動先フォルダが存在しません。"
+                # ★★★ 12. ハードコードされた文字列を翻訳キーに変更 ★★★
+                return False, "log_move_item_error_not_exists"
 
             dest_path = dest_folder_path / source_path.name
             if dest_path.exists():
-                return False, f"移動先に同名のファイル/フォルダが既に存在します: {source_path.name}"
+                return False, self.logger.locale_manager.tr("log_move_item_error_exists", source_path.name)
             
             shutil.move(str(source_path), str(dest_path))
 
@@ -352,6 +363,6 @@ class ConfigManager:
             dest_order_list.append(item_key_dest)
             self.save_image_order(dest_order_list, None if dest_folder_path == self.base_dir else dest_folder_path)
             
-            return True, f"'{source_path.name}' を '{dest_folder_path.name}' に移動しました。"
+            return True, self.logger.locale_manager.tr("log_move_item_success", source_path.name, dest_folder_path.name)
         except Exception as e:
-            return False, f"移動中にエラーが発生しました: {e}"
+            return False, self.logger.locale_manager.tr("log_move_item_error_general", str(e))

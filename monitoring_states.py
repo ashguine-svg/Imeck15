@@ -1,4 +1,4 @@
-# monitoring_states.py (最終修正版)
+# monitoring_states.py (最終修正版・多言語対応版)
 
 import time
 from pathlib import Path
@@ -20,10 +20,8 @@ class IdleState(State):
     def handle(self, current_time, screen_data, last_match_time_map, pre_matches=None):
         context = self.context
         
-        # core.py でマッチング済みのため、pre_matches を使用する
         all_matches = pre_matches if pre_matches is not None else []
         
-        # pre_matches は既に Eco Modeの除外対象外のフィルタリングがされている
         normal_matches = [m for m in all_matches if m['path'] in context.normal_template_cache]
         backup_trigger_matches = [m for m in all_matches if m['path'] in context.backup_template_cache]
 
@@ -31,7 +29,6 @@ class IdleState(State):
             for match in normal_matches:
                 path = match['path']
                 cache_item = context.normal_template_cache.get(path)
-                # 優先画像検出による状態遷移 (Eco Mode解除後に実行される)
                 if cache_item and cache_item.get('folder_mode') == 'priority_image':
                     context.transition_to_image_priority(cache_item['folder_path'])
                     return
@@ -40,7 +37,6 @@ class IdleState(State):
         if was_clicked:
             return
 
-        # バックアップトリガー検出による状態遷移 (Eco Mode解除後に実行される)
         if backup_trigger_matches:
             best_backup_trigger = max(backup_trigger_matches, key=lambda m: m['confidence'])
             context.transition_to_countdown(best_backup_trigger)
@@ -58,33 +54,34 @@ class PriorityState(State):
         self.clicked_children = set()
         
         folder_name = Path(folder_path).name
+        
+        # ★★★ 1. ログを翻訳キーに置き換え ★★★
         if mode_type == 'timer':
             timeout_min = (timeout_time - time.time()) / 60
-            self.context.logger.log(f"フォルダ '{folder_name}' のタイマー優先監視を開始しました。(解除時間: {timeout_min:.1f}分)")
+            self.context.logger.log("log_priority_timer_started", folder_name, f"{timeout_min:.1f}")
         else:
-            self.context.logger.log(f"フォルダ '{folder_name}' の画像認識型優先監視を開始しました。")
+            self.context.logger.log("log_priority_image_started", folder_name)
 
     def handle(self, current_time, screen_data, last_match_time_map, pre_matches=None):
         if current_time >= self.timeout_time:
-            self.context.logger.log(f"フォルダ '{Path(self.folder_path).name}' の優先監視を終了しました。(タイムアウト)")
+            # ★★★ 2. ログを翻訳キーに置き換え ★★★
+            self.context.logger.log("log_priority_timeout", Path(self.folder_path).name)
             self.context.transition_to(IdleState(self.context))
             return
 
         def filter_by_folder(cache):
-            # 現在の優先フォルダ内のアイテムのみを抽出
             return {p: d for p, d in cache.items() if d.get('folder_path') == self.folder_path}
 
         priority_normal_cache = filter_by_folder(self.context.normal_template_cache)
         priority_backup_cache = filter_by_folder(self.context.backup_template_cache)
         
-        # pre_matchesではなく、優先キャッシュに対してマッチングを再実行
-        # (core._monitoring_loopでpre_matchesはIdleStateの除外対象外のみが返されるため)
         all_matches = self.context._find_best_match(*screen_data, priority_normal_cache)
         all_matches.extend(self.context._find_best_match(*screen_data, priority_backup_cache))
         
         if not all_matches and self.mode_type == 'image':
-            if current_time - self.no_match_since_time > 10: # タイムアウトは10秒固定とする
-                self.context.logger.log(f"フォルダ '{Path(self.folder_path).name}' の優先監視を終了しました。(タイムアウト)")
+            if current_time - self.no_match_since_time > 10:
+                # ★★★ 3. ログを翻訳キーに置き換え ★★★
+                self.context.logger.log("log_priority_image_timeout", Path(self.folder_path).name)
                 self.context.transition_to(IdleState(self.context))
                 return
         
@@ -95,7 +92,6 @@ class PriorityState(State):
             
             if clicked_in_sequence:
                 if self.mode_type == 'timer':
-                    # タイマーをリセット
                     folder_settings = self.context.config_manager.load_item_setting(Path(self.folder_path))
                     interval_seconds = folder_settings.get('priority_interval', 10) * 60
                     self.context.priority_timers[self.folder_path] = time.time() + interval_seconds
@@ -103,7 +99,8 @@ class PriorityState(State):
                 elif self.mode_type == 'image' and self.context._last_clicked_path:
                     self.clicked_children.add(self.context._last_clicked_path)
                     if self.clicked_children.issuperset(self.required_children):
-                        self.context.logger.log(f"フォルダ '{Path(self.folder_path).name}' の優先監視を終了しました。(完了)")
+                        # ★★★ 4. ログを翻訳キーに置き換え ★★★
+                        self.context.logger.log("log_priority_image_completed", Path(self.folder_path).name)
                         self.context.transition_to(IdleState(self.context))
                         return
 
@@ -116,23 +113,25 @@ class CountdownState(State):
         self.duration = trigger_match['settings'].get('backup_time', 300.0)
         
         path = trigger_match['path']
-        self.context.logger.log(f"バックアップ画像 '{Path(path).name}' を検出。{self.duration:.1f}秒のカウントダウンを開始します。")
+        # ★★★ 5. ログを翻訳キーに置き換え ★★★
+        self.context.logger.log("log_countdown_started", Path(path).name, f"{self.duration:.1f}")
 
     def handle(self, current_time, screen_data, last_match_time_map, pre_matches=None):
         context = self.context
         
-        # core.py でマッチング済みのため、pre_matches を使用する
         normal_matches = [m for m in (pre_matches if pre_matches is not None else []) if m['path'] in context.normal_template_cache]
         
         if normal_matches:
             context._process_matches_as_sequence(normal_matches, current_time, last_match_time_map)
-            context.logger.log("通常画像を検出したため、バックアップカウントダウンをキャンセルします。")
+            # ★★★ 6. ログを翻訳キーに置き換え ★★★
+            context.logger.log("log_countdown_cancelled")
             context.transition_to(IdleState(context))
             return
         
         elapsed_time = current_time - self.start_time
         if elapsed_time >= self.duration:
-            context.logger.log(f"{self.duration:.1f}秒が経過。バックアップクリックを実行します。")
+            # ★★★ 7. ログを翻訳キーに置き換え ★★★
+            context.logger.log("log_countdown_executing", f"{self.duration:.1f}")
             context._execute_final_backup_click(self.trigger_match['path'])
             context.transition_to(IdleState(context))
             context._cooldown_until = time.time() + 1.0

@@ -17,9 +17,11 @@ class FloatingWindow(QDialog):
     closeRequested = Signal()
     setRecAreaRequested = Signal()
 
-    def __init__(self, parent=None):
+    # ★★★ 1. __init__ に locale_manager を追加 ★★★
+    def __init__(self, locale_manager, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Imeck15 Minimal UI")
+        self.locale_manager = locale_manager
+        
         self.setWindowFlags(
             Qt.FramelessWindowHint |
             Qt.WindowStaysOnTopHint |
@@ -28,45 +30,42 @@ class FloatingWindow(QDialog):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setWindowOpacity(0.85)
         
-        # ★★★ ツールチップを常に有効にする設定を追加 ★★★
         self.setAttribute(Qt.WA_AlwaysShowToolTips, True)
 
         self.offset = None
 
-        # OSからタイトルバーの高さを取得
         title_bar_height = self.style().pixelMetric(QStyle.PM_TitleBarHeight)
-        
-        # ウィンドウ自体の高さをタイトルバーの高さに固定
         self.setFixedHeight(title_bar_height)
         
         layout = QHBoxLayout(self)
-        # レイアウトの余白を調整して高さいっぱいにウィジェットを配置
         margin = 2
         layout.setContentsMargins(margin * 2, margin, margin * 2, margin)
         layout.setSpacing(4)
 
-        self.start_button = QPushButton("▶")
-        self.stop_button = QPushButton("■")
-        self.capture_button = QPushButton("●")
-        self.set_rec_area_button = QPushButton("⌚")
-        self.toggle_ui_button = QPushButton("⇔")
-        self.close_button = QPushButton("×")
+        # ★★★ 2. ボタンのテキストを翻訳キーで設定 ★★★
+        lm = self.locale_manager.tr
+        self.setWindowTitle(lm("float_window_title"))
         
-        # ボタンの高さをタイトルバーの高さに合わせて調整
+        self.start_button = QPushButton(lm("float_button_start"))
+        self.stop_button = QPushButton(lm("float_button_stop"))
+        self.capture_button = QPushButton(lm("float_button_capture"))
+        self.set_rec_area_button = QPushButton(lm("float_button_rec_area"))
+        self.toggle_ui_button = QPushButton(lm("float_button_toggle_ui"))
+        self.close_button = QPushButton(lm("float_button_close"))
+        
         button_height = title_bar_height - (margin * 2)
         
         for btn in [self.start_button, self.stop_button, self.capture_button, self.set_rec_area_button, self.toggle_ui_button, self.close_button]:
-            btn.setFixedSize(button_height, button_height) # 幅も高さに合わせる
+            btn.setFixedSize(button_height, button_height)
             font = btn.font()
-            # フォントサイズも高さに合わせて調整
             font.setPointSize(int(button_height * 0.45))
             btn.setFont(font)
-            # 角丸の半径も調整
             btn.setStyleSheet(f"QPushButton {{ border-radius: {int(button_height / 2)}px; background-color: rgba(200, 200, 200, 150); color: black; }} QPushButton:hover {{ background-color: rgba(220, 220, 220, 200); }}")
         
         self.close_button.setStyleSheet(f"QPushButton {{ border-radius: {int(button_height / 2)}px; background-color: rgba(231, 76, 60, 180); color: white; font-weight: bold; }} QPushButton:hover {{ background-color: rgba(231, 76, 60, 230); }}")
 
-        self.perf_label = QLabel("---% ---fps")
+        # ★★★ 3. ラベルのテキストを翻訳キーで設定 ★★★
+        self.perf_label = QLabel(lm("float_label_perf_default"))
         font = self.perf_label.font()
         font.setBold(True)
         self.perf_label.setFont(font)
@@ -77,7 +76,7 @@ class FloatingWindow(QDialog):
         self.perf_label.setFixedWidth(max_width)
         self.perf_label.setAlignment(Qt.AlignCenter)
 
-        self.status_label = QLabel("待機中")
+        self.status_label = QLabel(lm("float_label_status_default"))
         font = self.status_label.font()
         font.setBold(True)
         self.status_label.setFont(font)
@@ -93,12 +92,13 @@ class FloatingWindow(QDialog):
         layout.addSpacerItem(QSpacerItem(10, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
         layout.addWidget(self.close_button)
 
-        self.start_button.setToolTip("監視開始")
-        self.stop_button.setToolTip("監視停止")
-        self.capture_button.setToolTip("画像キャプチャ")
-        self.set_rec_area_button.setToolTip("認識範囲を設定")
-        self.toggle_ui_button.setToolTip("メインUIを表示/非表示")
-        self.close_button.setToolTip("最小UIモードを終了")
+        # ★★★ 4. ツールチップを翻訳キーで設定 ★★★
+        self.start_button.setToolTip(lm("float_tooltip_start"))
+        self.stop_button.setToolTip(lm("float_tooltip_stop"))
+        self.capture_button.setToolTip(lm("float_tooltip_capture"))
+        self.set_rec_area_button.setToolTip(lm("float_tooltip_rec_area"))
+        self.toggle_ui_button.setToolTip(lm("float_tooltip_toggle_ui"))
+        self.close_button.setToolTip(lm("float_tooltip_close"))
 
         self.start_button.clicked.connect(self.startMonitoringRequested)
         self.stop_button.clicked.connect(self.stopMonitoringRequested)
@@ -108,9 +108,22 @@ class FloatingWindow(QDialog):
         self.set_rec_area_button.clicked.connect(self.setRecAreaRequested)
     
     def update_performance(self, cpu, fps):
-        self.perf_label.setText(f"{cpu:.0f}% {fps:.0f}fps")
+        # ★★★ ここを修正 ★★★
+        # perf_text = self.locale_manager.tr("float_perf_format", cpu=cpu, fps=fps) # ← 修正前
+        
+        # 修正後: tr() でフォーマット文字列を取得し、.format() を使う
+        format_string = self.locale_manager.tr("float_perf_format") 
+        try:
+            perf_text = format_string.format(cpu=cpu, fps=fps)
+        except KeyError: # .format() のキーが翻訳ファイルと合わない場合のエラー処理
+            print(f"[WARN] floating_window: フォーマットキーが 'float_perf_format' ('{format_string}') と一致しません。")
+            # フォールバック表示
+            perf_text = f"{cpu:.0f}% {fps:.0f}fps"
+            
+        self.perf_label.setText(perf_text)
 
     def update_status(self, text, color="green"):
+        # ★★★ 6. テキストは翻訳済みのものが渡される想定 (ui.py/core.py から) ★★★
         self.status_label.setText(text)
         self.status_label.setStyleSheet(f"color: {color}; background-color: transparent;")
 
@@ -119,7 +132,6 @@ class FloatingWindow(QDialog):
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setPen(Qt.NoPen)
         painter.setBrush(QColor(50, 50, 50, 200))
-        # 角丸の半径をウィンドウの高さの半分に設定
         radius = self.height() / 2.0
         painter.drawRoundedRect(self.rect(), radius, radius)
 
@@ -141,9 +153,7 @@ class FloatingWindow(QDialog):
         
         screen_rect = QApplication.primaryScreen().availableGeometry()
         pos = self.pos()
-        # ★★★ ここからが修正箇所 ★★★
-        snap_margin = 10 # 5pxから10pxに変更
-        # ★★★ 修正はここまで ★★★
+        snap_margin = 10
         
         new_pos = QPoint(pos.x(), pos.y())
         moved = False

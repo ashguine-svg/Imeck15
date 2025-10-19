@@ -11,21 +11,27 @@ from PySide6.QtCore import Qt, Signal, QTimer
 
 class RecAreaSelectionDialog(QDialog):
     selectionMade = Signal(str)
-    def __init__(self, parent=None):
+    # ★★★ 1. __init__ に locale_manager を追加 ★★★
+    def __init__(self, locale_manager, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("認識範囲設定")
+        self.locale_manager = locale_manager
+        lm = self.locale_manager.tr
+        
+        # ★★★ 2. UI文字列を翻訳キーに置き換え ★★★
+        self.setWindowTitle(lm("rec_area_dialog_title"))
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Popup)
         self.setFixedSize(200, 100)
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("設定方法を選択:"))
+        layout.addWidget(QLabel(lm("rec_area_dialog_prompt")))
         button_layout = QHBoxLayout()
-        self.rect_button = QPushButton("四角設定")
+        self.rect_button = QPushButton(lm("rec_area_dialog_rect_button"))
         self.rect_button.clicked.connect(lambda: self.on_select("rectangle"))
         button_layout.addWidget(self.rect_button)
-        self.window_button = QPushButton("ウィンドウ設定")
+        self.window_button = QPushButton(lm("rec_area_dialog_window_button"))
         self.window_button.clicked.connect(lambda: self.on_select("window"))
         button_layout.addWidget(self.window_button)
         layout.addLayout(button_layout)
+        
     def on_select(self, method):
         self.selectionMade.emit(method)
         self.accept()
@@ -35,17 +41,22 @@ class RecAreaSelectionDialog(QDialog):
 
 
 class FolderSettingsDialog(QDialog):
-    def __init__(self, folder_name, current_settings, parent=None):
+    # ★★★ 3. __init__ に locale_manager を追加 ★★★
+    def __init__(self, folder_name, current_settings, locale_manager, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(f"フォルダ設定: {folder_name}")
+        self.locale_manager = locale_manager
+        lm = self.locale_manager.tr
+        
+        # ★★★ 4. UI文字列を翻訳キーに置き換え ★★★
+        self.setWindowTitle(lm("folder_dialog_title", folder_name))
         self.layout = QVBoxLayout(self)
 
-        mode_box = QGroupBox("フォルダの動作モード")
+        mode_box = QGroupBox(lm("folder_dialog_group_mode"))
         mode_layout = QVBoxLayout()
-        self.radio_normal = QRadioButton("通常 (監視対象)")
-        self.radio_excluded = QRadioButton("検索停止 (監視対象外)")
-        self.radio_priority_image = QRadioButton("画像認識型優先")
-        self.radio_priority_timer = QRadioButton("タイマー付き優先")
+        self.radio_normal = QRadioButton(lm("folder_dialog_radio_normal"))
+        self.radio_excluded = QRadioButton(lm("folder_dialog_radio_excluded"))
+        self.radio_priority_image = QRadioButton(lm("folder_dialog_radio_priority_image"))
+        self.radio_priority_timer = QRadioButton(lm("folder_dialog_radio_priority_timer"))
         
         self.mode_group = QButtonGroup(self)
         self.mode_group.addButton(self.radio_normal, 0)
@@ -60,28 +71,28 @@ class FolderSettingsDialog(QDialog):
         mode_box.setLayout(mode_layout)
         self.layout.addWidget(mode_box)
         
-        self.image_priority_box = QGroupBox("画像認識型優先 の詳細設定")
+        self.image_priority_box = QGroupBox(lm("folder_dialog_group_image"))
         image_priority_layout = QGridLayout()
-        image_priority_layout.addWidget(QLabel("優先モードを解除する時間:"), 0, 0)
+        image_priority_layout.addWidget(QLabel(lm("folder_dialog_image_timeout")), 0, 0)
         self.priority_image_timeout_spin = QSpinBox()
         self.priority_image_timeout_spin.setRange(1, 999)
-        self.priority_image_timeout_spin.setSuffix(" 秒")
+        self.priority_image_timeout_spin.setSuffix(lm("folder_dialog_suffix_seconds"))
         image_priority_layout.addWidget(self.priority_image_timeout_spin, 0, 1)
         self.image_priority_box.setLayout(image_priority_layout)
         self.layout.addWidget(self.image_priority_box)
 
-        self.timer_priority_box = QGroupBox("タイマー付き優先 の詳細設定")
+        self.timer_priority_box = QGroupBox(lm("folder_dialog_group_timer"))
         timer_layout = QGridLayout()
-        timer_layout.addWidget(QLabel("有効になるまでの間隔:"), 0, 0)
+        timer_layout.addWidget(QLabel(lm("folder_dialog_timer_interval")), 0, 0)
         self.interval_spin = QSpinBox()
         self.interval_spin.setRange(1, 999)
-        self.interval_spin.setSuffix(" 分")
+        self.interval_spin.setSuffix(lm("folder_dialog_suffix_minutes_interval"))
         timer_layout.addWidget(self.interval_spin, 0, 1)
         
-        timer_layout.addWidget(QLabel("優先モードを解除する時間:"), 1, 0)
+        timer_layout.addWidget(QLabel(lm("folder_dialog_timer_timeout")), 1, 0)
         self.timeout_spin = QSpinBox()
         self.timeout_spin.setRange(1, 999)
-        self.timeout_spin.setSuffix(" 分")
+        self.timeout_spin.setSuffix(lm("folder_dialog_suffix_minutes_timeout"))
         timer_layout.addWidget(self.timeout_spin, 1, 1)
         self.timer_priority_box.setLayout(timer_layout)
         self.layout.addWidget(self.timer_priority_box)
@@ -89,26 +100,13 @@ class FolderSettingsDialog(QDialog):
         self.radio_priority_image.toggled.connect(self.image_priority_box.setEnabled)
         self.radio_priority_timer.toggled.connect(self.timer_priority_box.setEnabled)
         
-        image_tooltip = (
-            "<b>画像認識型優先モードの詳細:</b><br>"
-            "このフォルダ内の画像が<b>1つでも画面内に見つかる</b>と、このフォルダが優先モードになります。<br>"
-            "優先モードは、以下のいずれかの条件で解除されます。<br>"
-            "<ul>"
-            "<li>このフォルダ内の<b>すべての画像</b>が一度ずつクリックされた。</li>"
-            "<li>このフォルダ内の画像が一切見つからない状態が<b>『優先モードを解除する時間』</b>を経過した。</li>"
-            "</ul>"
-        )
+        image_tooltip = lm("folder_dialog_tooltip_image")
         self.radio_priority_image.setToolTip(image_tooltip)
         self.image_priority_box.setToolTip(image_tooltip)
         self.radio_priority_image.setToolTipDuration(-1)
         self.image_priority_box.setToolTipDuration(-1)
 
-        timer_tooltip = (
-            "<b>タイマー付き優先モードの詳細:</b><br>"
-            "設定した<b>『有効になるまでの間隔』</b>が経過すると、このフォルダ内の画像のみを優先的に探します。<br>"
-            "優先モードは、<b>『優先モードを解除する時間』</b>が経過すると解除されます。<br>"
-            "このフォルダ内の画像がクリックされると、有効化タイマーはリセットされます。"
-        )
+        timer_tooltip = lm("folder_dialog_tooltip_timer")
         self.radio_priority_timer.setToolTip(timer_tooltip)
         self.timer_priority_box.setToolTip(timer_tooltip)
         self.radio_priority_timer.setToolTipDuration(-1)
@@ -163,25 +161,27 @@ class InitializationDialog(QDialog):
     Linux環境でのUIフリーズ問題を回避するため、起動時に一時的に表示されるモーダルダイアログ。
     このダイアログの表示中に、UI操作をシミュレートしてOpenCLの再初期化を行う。
     """
-    def __init__(self, core_engine, logger, parent=None):
+    # ★★★ 5. __init__ に locale_manager を追加 ★★★
+    def __init__(self, core_engine, logger, locale_manager, parent=None):
         super().__init__(parent)
         self.core_engine = core_engine
         self.logger = logger
-        # parentはUIManagerのインスタンスであると想定
-
-        self.setWindowTitle("初期化中")
+        self.locale_manager = locale_manager
+        lm = self.locale_manager.tr
+        
+        # ★★★ 6. UI文字列を翻訳キーに置き換え ★★★
+        self.setWindowTitle(lm("init_dialog_title"))
         self.setModal(True)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
         
         layout = QVBoxLayout(self)
-        label = QLabel("最終初期化を実行中...")
+        label = QLabel(lm("init_dialog_text"))
         label.setStyleSheet("color: white; font-size: 14px; font-weight: bold; background-color: transparent;")
         layout.addWidget(label, 0, Qt.AlignmentFlag.AlignCenter)
         
         self.setStyleSheet("background-color: rgba(0, 0, 0, 180); border-radius: 10px; padding: 10px;")
         
-        # ダイアログが表示された直後に処理を開始するためのタイマー
         QTimer.singleShot(50, self.apply_workaround_and_close)
 
     def apply_workaround_and_close(self):
@@ -189,44 +189,39 @@ class InitializationDialog(QDialog):
         UI上のOpenCLチェックボックスのON/OFFをシミュレートし、ダイアログを閉じる。
         """
         if sys.platform == 'win32':
-            # Windowsではこの処理は不要
             QTimer.singleShot(50, self.accept)
             return
 
         try:
             ui_manager = self.parent()
             if not ui_manager:
-                self.logger.log("Linux UIフリーズ対策エラー: UIManagerが見つかりません。")
+                # ★★★ 7. ログを翻訳キーに置き換え ★★★
+                self.logger.log("log_linux_workaround_error_manager")
                 QTimer.singleShot(50, self.accept)
                 return
 
             opencl_checkbox = ui_manager.app_settings_widgets.get('use_opencl')
             if not opencl_checkbox or not opencl_checkbox.isEnabled():
-                self.logger.log("Linux UIフリーズ対策: OpenCLチェックボックスが無効なためスキップします。")
+                self.logger.log("log_linux_workaround_skip")
                 QTimer.singleShot(50, self.accept)
                 return
 
-            self.logger.log("Linux UIフリーズ対策: UI操作をシミュレートしてOpenCLを再初期化します。")
+            self.logger.log("log_linux_workaround_start")
             
-            # 1. ユーザーの元の設定を記憶
             original_state_checked = opencl_checkbox.isChecked()
             
-            # 2. プログラムがチェックボックスの状態を反転させる（1回目のクリック）
-            #    これにより、on_app_settings_changedから始まる一連のイベントがトリガーされる
             opencl_checkbox.setChecked(not original_state_checked)
-            
-            # 3. Qtのイベントループを強制的に処理させ、UIの変更を即座に反映させる
             QApplication.processEvents()
 
-            # 4. プログラムがチェックボックスを元の状態に戻す（2回目のクリック）
             opencl_checkbox.setChecked(original_state_checked)
             QApplication.processEvents()
 
-            final_state = "有効" if original_state_checked else "無効"
-            self.logger.log(f"UI操作のシミュレート完了。OpenCLの状態を「{final_state}」に復元しました。")
+            lm = self.locale_manager.tr
+            status_key = "log_linux_workaround_status_enabled" if original_state_checked else "log_linux_workaround_status_disabled"
+            final_state = lm(status_key)
+            self.logger.log("log_linux_workaround_complete", final_state)
 
         except Exception as e:
-            self.logger.log(f"Linux UIフリーズ対策の実行中にエラーが発生しました: {e}")
+            self.logger.log("log_linux_workaround_error", str(e))
         
-        # 処理が一瞬で終わってもユーザーが認識できるよう、少し待ってからダイアログを閉じる
         QTimer.singleShot(250, self.accept)

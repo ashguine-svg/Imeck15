@@ -17,17 +17,17 @@ if sys.platform == 'win32':
         block_input_func.argtypes = [ctypes.wintypes.BOOL]
         block_input_func.restype = ctypes.wintypes.BOOL
         INPUT_BLOCK_AVAILABLE = True
-        print("[INFO] User input blocking is available (requires admin rights).")
+        # ★★★ 1. print を削除 (Loggerがmain.pyで担当) ★★★
     except (ImportError, AttributeError, OSError):
         def block_input_func(block):
             pass
         INPUT_BLOCK_AVAILABLE = False
-        print("[WARN] User input blocking is not available on this system.")
+        # ★★★ 2. print を削除 (Loggerがmain.pyで担当) ★★★
 else:
     def block_input_func(block):
         pass
     INPUT_BLOCK_AVAILABLE = False
-    print("[INFO] User input blocking is disabled on non-Windows OS.")
+    # ★★★ 3. print を削除 (Loggerがmain.pyで担当) ★★★
 
 
 def block_input(block: bool):
@@ -39,6 +39,7 @@ def block_input(block: bool):
         try:
             block_input_func(block)
         except Exception as e:
+            # ★★★ 4. print を変更 (ただし、ここはLoggerが使えない低レベル関数のため print のまま) ★★★
             print(f"[ERROR] Failed to change input block state: {e}")
 
 class ActionManager:
@@ -82,15 +83,14 @@ class ActionManager:
 
             time.sleep(0.2) # ウィンドウが切り替わるのを少し待つ
             
+            # ★★★ 5. self.logger.log に変更 (翻訳キー使用) ★★★
             if win32gui.GetForegroundWindow() == target_hwnd:
-                self.logger.log(f"ウィンドウ '{win32gui.GetWindowText(target_hwnd)}' をアクティブ化しました。")
+                self.logger.log("log_activate_window_success", win32gui.GetWindowText(target_hwnd))
             else:
-                 self.logger.log(f"ウィンドウ '{win32gui.GetWindowText(target_hwnd)}' のアクティブ化を試みましたが、失敗した可能性があります。")
+                 self.logger.log("log_activate_window_failed", win32gui.GetWindowText(target_hwnd))
 
         except Exception as e:
-            # ★★★ ここからが修正部分 ★★★
-            self.logger.log(f"ウィンドウのアクティブ化中にエラーが発生しました: {e}")
-            # ★★★ 修正部分ここまで ★★★
+            self.logger.log("log_activate_window_error", str(e))
 
     def execute_click(self, match_info, recognition_area, target_hwnd, effective_capture_scale):
         """
@@ -165,30 +165,28 @@ class ActionManager:
             final_click_y = int(click_y_float)
             
             if not (1 <= final_click_x < screen_width - 1 and 1 <= final_click_y < screen_height - 1):
-                # ★★★ ここからが修正部分 ★★★
-                self.logger.log(f"警告: 計算されたクリック座標 ({final_click_x}, {final_click_y}) が画面の端すぎるためクリックを中止しました。")
-                # ★★★ 修正部分ここまで ★★★
+                # ★★★ 6. self.logger.log に変更 (翻訳キー使用) ★★★
+                self.logger.log("log_warn_click_out_of_bounds", final_click_x, final_click_y)
                 return {'success': False, 'path': str(path)}
             
             try:
                 pyautogui.click(final_click_x, final_click_y)
                 
-                log_msg = f"クリック: {path.name} @({final_click_x}, {final_click_y}) conf:{match_info['confidence']:.2f}"
+                # ★★★ 7. self.logger.log に変更 (翻訳キー使用) ★★★
+                log_msg = self.logger.locale_manager.tr("log_click_success", path.name, final_click_x, final_click_y, f"{match_info['confidence']:.2f}")
                 if 'scale' in match_info:
-                    log_msg += f" scale:{match_info['scale']:.3f}"
-                self.logger.log(log_msg)
+                    log_msg += self.logger.locale_manager.tr("log_click_success_scale", f"{match_info['scale']:.3f}")
+                self.logger.log(log_msg) # 翻訳済みのメッセージをそのまま渡す
                 return {'success': True, 'path': str(path)}
 
             except pyautogui.FailSafeException:
-                # ★★★ ここからが修正部分 ★★★
-                self.logger.log("PyAutoGUIのフェイルセーフが作動しました。ユーザーがマウスを画面の隅に移動したか、座標計算に問題がある可能性があります。")
-                # ★★★ 修正部分ここまで ★★★
+                # ★★★ 8. self.logger.log に変更 (翻訳キー使用) ★★★
+                self.logger.log("log_pyautogui_failsafe")
                 return {'success': False, 'path': str(path)}
 
         except Exception as e:
-            # ★★★ ここからが修正部分 ★★★
-            self.logger.log(f"クリック実行中にエラーが発生しました: {e}")
-            # ★★★ 修正部分ここまで ★★★
+            # ★★★ 9. self.logger.log に変更 (翻訳キー使用) ★★★
+            self.logger.log("log_click_error", str(e))
             return {'success': False, 'path': match_info.get('path', 'Unknown')}
         finally:
             block_input(False)

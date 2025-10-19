@@ -16,9 +16,10 @@ class TemplateManager:
     """
     画像ファイルを読み込み、認識用のテンプレートキャッシュを構築・管理するクラス。
     """
+    # ★★★ 1. __init__ で logger を受け取る ★★★
     def __init__(self, config_manager, logger):
         self.config_manager = config_manager
-        self.logger = logger
+        self.logger = logger # Loggerインスタンスを保持
 
     def build_cache(self, app_config, current_window_scale, effective_capture_scale, is_monitoring, existing_priority_timers):
         """
@@ -54,19 +55,20 @@ class TemplateManager:
                 steps = auto_scale_settings.get('steps', 5)
                 if steps > 1:
                     base_scales = np.linspace(center_scale - range_, center_scale + range_, steps)
-                self.logger.log(f"スケール検索有効: {len(base_scales)}段階で探索 (中心: {center_scale:.3f})。")
+                # ★★★ 2. ログを翻訳キーに置き換え ★★★
+                self.logger.log("log_scale_search_enabled", len(base_scales), f"{center_scale:.3f}")
             else:
                 base_scales = [center_scale]
         
         scales = [s * effective_capture_scale for s in base_scales]
 
         if effective_capture_scale != 1.0:
-            self.logger.log(f"全体キャプチャスケール（軽量化モード） {effective_capture_scale:.2f} を適用します。")
+            self.logger.log("log_capture_scale_applied", f"{effective_capture_scale:.2f}")
         if use_window_scale_base and current_window_scale is not None:
-            self.logger.log(f"ウィンドウスケール {current_window_scale:.3f} を適用します。")
+            self.logger.log("log_window_scale_applied", f"{current_window_scale:.3f}")
 
         log_scales = ", ".join([f"{s:.3f}" for s in scales])
-        self.logger.log(f"最終的なテンプレート検索スケール: [{log_scales}]")
+        self.logger.log("log_final_scales", log_scales)
         
         hierarchical_list = self.config_manager.get_hierarchical_list()
         
@@ -85,7 +87,7 @@ class TemplateManager:
                          priority_timers[folder_path] = time.time() + interval_seconds
                     elif folder_path not in existing_priority_timers:
                          priority_timers[folder_path] = time.time() + interval_seconds
-                    else: # 監視中の再構築でもタイマーを引き継ぐ
+                    else:
                          priority_timers[folder_path] = existing_priority_timers[folder_path]
                     
                 for child_data in item_data.get('children', []):
@@ -94,8 +96,9 @@ class TemplateManager:
             elif item_data['type'] == 'image':
                 self._process_item_for_cache(item_data, scales, None, 'normal', normal_cache, backup_cache)
         
-        self.logger.log(f"テンプレートキャッシュ構築完了。通常: {len(normal_cache)}件, バックアップ: {len(backup_cache)}件")
-        self.logger.log(f"タイマー付き優先フォルダ: {len(priority_timers)}件")
+        # ★★★ 3. ログを翻訳キーに置き換え ★★★
+        self.logger.log("log_cache_build_complete", len(normal_cache), len(backup_cache))
+        self.logger.log("log_priority_timers", len(priority_timers))
 
         return normal_cache, backup_cache, priority_timers, folder_children_map
 
@@ -115,12 +118,12 @@ class TemplateManager:
             original_image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
             if original_image is None:
-                self.logger.log(f"警告: '{Path(path).name}' の画像データが読み込めませんでした。")
+                # ★★★ 4. ログを翻訳キーに置き換え ★★★
+                self.logger.log("log_warn_image_load_failed", Path(path).name)
                 return
 
             image_to_process = original_image
             
-            # ★★★ ここからが修正部分 ★★★
             if settings.get('roi_enabled', False):
                 h, w = original_image.shape[:2]
                 
@@ -128,10 +131,8 @@ class TemplateManager:
                 rect_to_use = None
                 
                 if roi_mode == 'variable':
-                    # 可変モードの場合は 'roi_rect_variable' を使用する
                     rect_to_use = settings.get('roi_rect_variable')
-                else: # 'fixed' またはデフォルトの場合
-                    # 固定モードの場合は 'roi_rect' を使用する
+                else:
                     rect_to_use = settings.get('roi_rect')
                 
                 if rect_to_use:
@@ -139,10 +140,10 @@ class TemplateManager:
                     if x1 < x2 and y1 < y2:
                         image_to_process = original_image[y1:y2, x1:x2]
                     else:
-                        self.logger.log(f"警告: '{Path(path).name}' のROI領域が無効なため、フル画像を使用します。")
+                        # ★★★ 5. ログを翻訳キーに置き換え ★★★
+                        self.logger.log("log_warn_invalid_roi", Path(path).name)
                 else:
-                    self.logger.log(f"警告: '{Path(path).name}' のROIが有効ですが、領域が未設定です。")
-            # ★★★ 修正部分ここまで ★★★
+                    self.logger.log("log_warn_unset_roi", Path(path).name)
             
             use_opencl = OPENCL_AVAILABLE and cv2.ocl.useOpenCL()
 
@@ -165,7 +166,8 @@ class TemplateManager:
                             template_entry['image_umat'] = cv2.UMat(resized_image)
                             template_entry['gray_umat'] = cv2.UMat(resized_gray)
                         except Exception as e:
-                            self.logger.log(f"UMat変換エラー: {Path(path).name} - {e}")
+                            # ★★★ 6. ログを翻訳キーに置き換え ★★★
+                            self.logger.log("log_umat_convert_error", Path(path).name, str(e))
 
                     scaled_templates.append(template_entry)
 
@@ -181,4 +183,5 @@ class TemplateManager:
                 normal_cache[path] = cache_entry
 
         except Exception as e:
-            self.logger.log(f"キャッシュ作成失敗: {item_data.get('name')}, {e}")
+            # ★★★ 7. ログを翻訳キーに置き換え ★★★
+            self.logger.log("log_cache_create_failed", item_data.get('name'), str(e))

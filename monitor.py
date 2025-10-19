@@ -17,10 +17,11 @@ class PerformanceMonitor(QDialog):
     toggleMonitoringRequested = Signal()
     performanceUpdated = Signal(float, float)
     
-    def __init__(self, ui_manager, parent=None):
+    # ★★★ 1. __init__ に locale_manager を追加 ★★★
+    def __init__(self, ui_manager, locale_manager, parent=None):
         super().__init__(parent)
         self.ui_manager = ui_manager
-        self.setWindowTitle("パフォーマンスモニター")
+        self.locale_manager = locale_manager # LocaleManagerインスタンスを保持
         
         flags = Qt.Window | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint
         self.setWindowFlags(flags)
@@ -31,16 +32,21 @@ class PerformanceMonitor(QDialog):
         self.process = psutil.Process()
         self.process.cpu_percent(interval=None)
         self.current_fps = 0.0
-        # ★★★ 1. クリック回数を保持するための変数を追加 ★★★
         self.current_clicks = 0
         
-        self.setup_ui()
+        self.setup_ui() # UIのセットアップ
+        
         self.start_time = time.time()
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self.update_performance_info)
         self.update_timer.start(1000)
 
     def setup_ui(self):
+        # ★★★ 2. 翻訳キーでUIテキストを設定 ★★★
+        lm = self.locale_manager.tr
+        
+        self.setWindowTitle(lm("monitor_window_title"))
+        
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(4, 4, 4, 4)
         main_layout.setSpacing(4)
@@ -48,11 +54,11 @@ class PerformanceMonitor(QDialog):
         top_layout = QHBoxLayout()
         top_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.monitor_button = QPushButton("監視開始/停止")
-        self.monitor_button.setToolTip("右ダブルクリックで監視停止、右トリプルクリックで監視開始")
+        self.monitor_button = QPushButton(lm("monitor_button_toggle"))
+        self.monitor_button.setToolTip(lm("monitor_button_toggle_tooltip"))
         top_layout.addWidget(self.monitor_button)
 
-        self.rec_area_button = QPushButton("認識範囲設定")
+        self.rec_area_button = QPushButton(lm("monitor_button_rec_area"))
         top_layout.addWidget(self.rec_area_button)
 
         self.backup_countdown_label = QLabel("")
@@ -61,7 +67,7 @@ class PerformanceMonitor(QDialog):
 
         top_layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
         
-        self.perf_label = QLabel("CPU: --%  メモリ: --MB  FPS: --.-  クリック: 0  稼働: 00:00:00")
+        self.perf_label = QLabel(lm("monitor_label_perf_default"))
         self.perf_label.setStyleSheet("font-size: 14px;")
         top_layout.addWidget(self.perf_label)
 
@@ -77,16 +83,16 @@ class PerformanceMonitor(QDialog):
         if self.ui_manager:
             self.rec_area_button.clicked.connect(self.ui_manager.setRecAreaDialog)
             
-    def update_monitoring_status(self, status_text: str, color: str):
-        if status_text == "監視中...":
+    def update_monitoring_status(self, status_text_key: str, color: str):
+        # ★★★ 3. ステータスをキー (monitoring, idle) で受け取る ★★★
+        if status_text_key == "monitoring":
             self.monitor_button.setStyleSheet("background-color: #3399FF; color: white;")
         else:
-            self.monitor_button.setStyleSheet("") # デフォルトのスタイルに戻す
+            self.monitor_button.setStyleSheet("")
 
     def update_fps(self, fps):
         self.current_fps = fps
 
-    # ★★★ 2. CoreEngineからのクリック回数通知を受け取るための新しいスロット（メソッド）を追加 ★★★
     def update_click_count(self, count):
         self.current_clicks = count
         
@@ -94,14 +100,23 @@ class PerformanceMonitor(QDialog):
         try:
             cpu_percent = self.process.cpu_percent()
             mem_used = self.process.memory_info().rss / (1024 * 1024)
-            # ★★★ 3. 内部変数への直接アクセスをやめ、安全に保持している値を使用 ★★★
             clicks = self.current_clicks
             uptime_seconds = int(time.time() - self.start_time)
             hours, remainder = divmod(uptime_seconds, 3600)
             minutes, seconds = divmod(remainder, 60)
             
-            perf_text = (f"CPU: {cpu_percent:.1f}%  メモリ: {mem_used:.1f}MB  FPS: {self.current_fps:.1f}  "
-                         f"クリック: {clicks}  稼働: {hours:02d}:{minutes:02d}:{seconds:02d}")
+            # ★★★ 4. フォーマット文字列を翻訳キーから取得し、.format() で適用 ★★★
+            lm = self.locale_manager.tr
+            perf_text_format = lm("monitor_perf_format")
+            perf_text = perf_text_format.format(
+                cpu=cpu_percent, 
+                mem=mem_used, 
+                fps=self.current_fps, 
+                clicks=clicks, 
+                h=hours, 
+                m=minutes, 
+                s=seconds
+            )
             self.perf_label.setText(perf_text)
 
             self.performanceUpdated.emit(cpu_percent, self.current_fps)
@@ -109,15 +124,17 @@ class PerformanceMonitor(QDialog):
             if self.ui_manager and self.ui_manager.core_engine:
                 countdown = self.ui_manager.core_engine.get_backup_click_countdown()
                 if countdown > 0:
-                    self.backup_countdown_label.setText(f"(バックアップまで: {countdown:.0f}秒)")
+                    # ★★★ 5. カウントダウンも .format() を使用 ★★★
+                    self.backup_countdown_label.setText(lm("monitor_backup_countdown", s=countdown))
                 else:
                     self.backup_countdown_label.setText("")
 
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             self.update_timer.stop()
         except Exception as e:
-            if "core_engine" not in str(e):
-                print(f"パフォーマンス情報更新エラー: {e}")
+            if "core_engine" not in str(e) and self.ui_manager and self.ui_manager.logger:
+                # ★★★ 6. print を self.ui_manager.logger.log に変更 ★★★
+                self.ui_manager.logger.log("monitor_log_error", str(e))
 
     def update_log(self, message):
         self.log_text_edit.append(message)
