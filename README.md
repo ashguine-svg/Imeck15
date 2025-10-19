@@ -1,3 +1,7 @@
+*If you need exe/bin instead of Python, please download the version for your OS from Releases. *You can use the version compiled from Python to native language at the bottom of the page.
+*如果您需要 exe/bin 而不是 Python，请从“版本”下载适合您操作系统的版本。*您可以使用页面底部从 Python 编译为原生语言的版本。
+*Python이 아닌 exe/bin이 필요한 분은 Releases보다, 당신의 OS용의 것을 Download 해 주세요.
+
 # Imeck15 - 導入と使い方ガイド
 
 このガイドでは、Imeck15をダウンロードし、お使いのPCで実行するまでの手順を初心者の方にも分かりやすく解説します。
