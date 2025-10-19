@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QGridLayout, QSizePolicy, QSpacerItem, QToolButton, QFileDialog, QLineEdit,
     QTreeWidget, QTreeWidgetItem, QMenu, QTabWidget, QTextEdit, QDialog, QMessageBox,
     QComboBox, QDialogButtonBox, QRadioButton, QButtonGroup, QScrollArea, QAbstractItemView,
-    QProxyStyle, QStyle, QStyleOptionViewItem
+    QProxyStyle, QStyle, QStyleOptionViewItem, QToolTip
 )
 from PySide6.QtGui import (
     QIcon, QPixmap, QImage, QPainter, QColor, QFontMetrics, QPen, QCursor,
@@ -294,7 +294,7 @@ class UIManager(QMainWindow):
         self.app_settings_widgets = {}
         self.auto_scale_widgets = {}
 
-        self.setWindowTitle("Imeck15 v1.4.1 (D&D 統合版)") # バージョン情報は任意
+        self.setWindowTitle("Imeck15 v1.5.4") # バージョン情報は任意
         self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
 
         self.save_timer = QTimer(self); self.save_timer.setSingleShot(True); self.save_timer.setInterval(1000)
@@ -388,10 +388,14 @@ class UIManager(QMainWindow):
         # --- 右側のUI (変更なし) ---
         right_frame = QFrame(); right_layout = QVBoxLayout(right_frame)
         self.preview_tabs = QTabWidget()
-        main_preview_widget = QWidget(); main_preview_layout = QVBoxLayout(main_preview_widget)
+        
+        # ★★★ 変更点: main_preview_widget を self.main_preview_widget に変更 ★★★
+        self.main_preview_widget = QWidget()
+        main_preview_layout = QVBoxLayout(self.main_preview_widget)
         self.preview_label = InteractivePreviewLabel(); self.preview_label.setAlignment(Qt.AlignCenter)
         main_preview_layout.addWidget(self.preview_label)
-        self.preview_tabs.addTab(main_preview_widget, "画像プレビュー")
+        self.preview_tabs.addTab(self.main_preview_widget, "画像プレビュー")
+        
         rec_area_widget = QWidget(); rec_area_layout = QVBoxLayout(rec_area_widget)
         rec_area_buttons_layout = QHBoxLayout()
         self.set_rec_area_button_main_ui = QPushButton("認識範囲設定"); self.clear_rec_area_button_main_ui = QPushButton("クリア")
@@ -788,6 +792,9 @@ class UIManager(QMainWindow):
         self.perf_monitor_button.clicked.connect(self.openPerformanceMonitorRequested.emit)
         self.image_tree.itemSelectionChanged.connect(self.on_image_tree_selection_changed)
         
+        # ★★★ 変更点: itemClicked シグナルを追加 ★★★
+        self.image_tree.itemClicked.connect(self.on_image_tree_item_clicked)
+
         # itemClicked -> customContextMenuRequested
         self.image_tree.customContextMenuRequested.connect(self.on_tree_context_menu)
         # D&Dシグナルを追加
@@ -922,26 +929,66 @@ class UIManager(QMainWindow):
         # 選択変更を強制的に呼び出してプレビューを更新
         self.on_image_tree_selection_changed()
 
-    # ★★★ D&D変更点: on_tree_item_clicked を on_tree_context_menu に変更 ★★★
+    # ★★★ 変更点: on_tree_context_menu を修正 ★★★
     def on_tree_context_menu(self, pos):
         item = self.image_tree.itemAt(pos)
         if not item:
             return
 
         path_str = item.data(0, Qt.UserRole)
-        # フォルダ以外（画像アイテム）は無視
-        if not path_str or not Path(path_str).is_dir():
+        if not path_str:
             return
+            
+        path = Path(path_str)
 
-        # フォルダ設定ダイアログを開く
-        folder_path = Path(path_str)
-        current_settings = self.config_manager.load_item_setting(folder_path)
+        if path.is_dir():
+            # 既存のフォルダ設定ロジック
+            current_settings = self.config_manager.load_item_setting(path)
+            dialog = FolderSettingsDialog(path.name, current_settings, self)
+            if dialog.exec():
+                new_settings = dialog.get_settings()
+                self.config_manager.save_item_setting(path, new_settings)
+                self.folderSettingsChanged.emit()
+        
+        elif path.is_file():
+            # ★★★ 新機能: 画像ファイル情報をツールチップで表示 ★★★
+            try:
+                settings = self.config_manager.load_item_setting(path)
+                
+                # 1. クリックモードの判別
+                click_mode = "未設定"
+                if settings.get('point_click'):
+                    click_mode = "1点クリック"
+                elif settings.get('range_click'):
+                    if settings.get('random_click'):
+                        click_mode = "範囲内ランダム"
+                    else:
+                        click_mode = "範囲クリック"
+                
+                # 2. 認識精度とインターバル
+                threshold = settings.get('threshold', 0.8)
+                interval = settings.get('interval_time', 1.5)
+                
+                # 3. 画像サイズ
+                pixmap = QPixmap(path_str)
+                img_size_str = "読み込みエラー"
+                if not pixmap.isNull():
+                    img_size_str = f"画像px　{pixmap.width()} x {pixmap.height()}"
 
-        dialog = FolderSettingsDialog(folder_path.name, current_settings, self)
-        if dialog.exec():
-            new_settings = dialog.get_settings()
-            self.config_manager.save_item_setting(folder_path, new_settings)
-            self.folderSettingsChanged.emit()
+                # 4. ツールチップ文字列の作成
+                tooltip_text = (
+                    f"({click_mode})\n"
+                    f"認識精度 {threshold:.2f}：インターバル {interval:.1f}秒\n"
+                    f"{img_size_str}"
+                )
+                
+                # 5. グローバル座標を取得して表示
+                global_pos = self.image_tree.mapToGlobal(pos)
+                QToolTip.showText(global_pos, tooltip_text, self.image_tree)
+                
+            except Exception as e:
+                global_pos = self.image_tree.mapToGlobal(pos)
+                QToolTip.showText(global_pos, f"情報取得エラー: {e}", self.image_tree)
 
     def set_tree_enabled(self, enabled: bool):
         # (v1.4.1から変更なし)
@@ -958,7 +1005,22 @@ class UIManager(QMainWindow):
         selected_items = self.image_tree.selectedItems();
         if not selected_items: return None, None
         item = selected_items[0]; path = item.data(0, Qt.UserRole); name = item.text(0); return path, name
-        
+    
+    # ★★★ 変更点: on_image_tree_item_clicked メソッドを新設 ★★★
+    def on_image_tree_item_clicked(self, item, column):
+        """画像アイテムがクリックされたらプレビュータブに切り替える"""
+        if self.is_processing_tree_change or not item:
+            return
+            
+        path_str = item.data(0, Qt.UserRole)
+        if not path_str:
+            return
+
+        # フォルダでなければ（＝画像ファイルなら）タブを切り替える
+        if not Path(path_str).is_dir():
+            if self.preview_tabs.currentWidget() != self.main_preview_widget:
+                self.preview_tabs.setCurrentWidget(self.main_preview_widget)
+
     def on_image_tree_selection_changed(self):
         # (v1.4.1から変更なし)
         if self.is_processing_tree_change: return
@@ -1247,7 +1309,8 @@ class UIManager(QMainWindow):
         if cv_image is None or cv_image.size == 0:
             selected_path, _ = self.get_selected_item_path()
             if not (selected_path and Path(selected_path).is_dir()):
-                self.preview_label.setText("画像を選択してください")
+                # ★★★ 変更点: "画像を選択してください" -> "画像プレビュー" に変更 ★★★
+                self.preview_label.setText("画像プレビュー")
             self.preview_label.set_pixmap(None)
             return
             
