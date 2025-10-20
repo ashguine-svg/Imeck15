@@ -274,7 +274,7 @@
   "log_activate_window_failed": "尝试激活窗口 '%s'，但可能失败。",
   "log_activate_window_error": "窗口激活期间出错：%s",
   "log_warn_click_out_of_bounds": "警告：计算的单击坐标 (%s, %s) 太靠近屏幕边缘，取消单击。",
-  "log_click_success": "点击：%s @(%s, %s) 置信度：%s",
+  "log_click_success_full": "单击：%s @(%s, %s) 置信度：%s%s",
   "log_click_success_scale": " 比例：%s",
   "log_pyautogui_failsafe": "PyAutoGUI 安全保护已触发。用户可能已将鼠标移至屏幕角落，或者坐标计算可能有问题。",
   "log_click_error": "单击执行期间出错：%s",
@@ -293,6 +293,7 @@
   "log_item_delete_error": "项目删除期间发生错误：%s",
   "log_create_folder_error_empty": "文件夹名称为空。",
   "log_create_folder_error_exists": "文件夹 '%s' 已存在。",
+  "log_create_folder_success": "已创建文件夹 '%s'。",
   "log_create_folder_error_general": "文件夹创建期间发生错误：%s",
   "log_move_item_error_not_exists": "源文件夹或目标文件夹不存在。",
   "log_move_item_error_exists": "目标文件夹中已存在同名文件/文件夹：%s",
@@ -343,6 +344,8 @@
   "log_priority_image_timeout": "已结束对文件夹 '%s' 的图像识别优先监控。（超时）",
   "log_priority_image_completed": "已结束对文件夹 '%s' 的图像识别优先监控。（完成）",
   "log_countdown_started": "检测到备用图像 '%s'。开始 %s 秒倒计时。",
-  "log_countdown_cancelled": "检测到正常图像，取消备用倒计时。",
-  "log_countdown_executing": "%s 秒已过。执行备用单击。"
+  "log_countdown_cancelled": "检测到普通图像，取消备用倒计时。",
+  "log_countdown_executing": "%s 秒已过。执行备用单击。",
+  "log_image_saved_success": "已保存图像：%s",
+  "log_rec_area_cleared": "已清除识别区域。"
 }

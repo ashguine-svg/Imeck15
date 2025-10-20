@@ -1,4 +1,5 @@
 # monitor.py
+# ★★★ カウントダウン表示を .format() を使うように再修正 ★★★
 
 import sys
 import time
@@ -13,29 +14,29 @@ class PerformanceMonitor(QDialog):
     """
     リアルタイムのパフォーマンス情報を表示する独立したウィンドウ。
     """
-    
+
     toggleMonitoringRequested = Signal()
     performanceUpdated = Signal(float, float)
-    
+
     # ★★★ 1. __init__ に locale_manager を追加 ★★★
     def __init__(self, ui_manager, locale_manager, parent=None):
         super().__init__(parent)
         self.ui_manager = ui_manager
         self.locale_manager = locale_manager # LocaleManagerインスタンスを保持
-        
+
         flags = Qt.Window | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint
         self.setWindowFlags(flags)
-        
+
         self.resize(1024, 200)
         self.setMinimumSize(600, 100)
-        
+
         self.process = psutil.Process()
         self.process.cpu_percent(interval=None)
         self.current_fps = 0.0
         self.current_clicks = 0
-        
+
         self.setup_ui() # UIのセットアップ
-        
+
         self.start_time = time.time()
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self.update_performance_info)
@@ -44,9 +45,9 @@ class PerformanceMonitor(QDialog):
     def setup_ui(self):
         # ★★★ 2. 翻訳キーでUIテキストを設定 ★★★
         lm = self.locale_manager.tr
-        
+
         self.setWindowTitle(lm("monitor_window_title"))
-        
+
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(4, 4, 4, 4)
         main_layout.setSpacing(4)
@@ -66,7 +67,7 @@ class PerformanceMonitor(QDialog):
         top_layout.addWidget(self.backup_countdown_label)
 
         top_layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
-        
+
         self.perf_label = QLabel(lm("monitor_label_perf_default"))
         self.perf_label.setStyleSheet("font-size: 14px;")
         top_layout.addWidget(self.perf_label)
@@ -76,13 +77,13 @@ class PerformanceMonitor(QDialog):
         self.log_text_edit = QTextEdit()
         self.log_text_edit.setReadOnly(True)
         main_layout.addWidget(self.log_text_edit)
-        
+
     def connect_signals(self):
         """シグナルとスロットを接続します"""
         self.monitor_button.clicked.connect(self.toggleMonitoringRequested.emit)
         if self.ui_manager:
             self.rec_area_button.clicked.connect(self.ui_manager.setRecAreaDialog)
-            
+
     def update_monitoring_status(self, status_text_key: str, color: str):
         # ★★★ 3. ステータスをキー (monitoring, idle) で受け取る ★★★
         if status_text_key == "monitoring":
@@ -95,7 +96,7 @@ class PerformanceMonitor(QDialog):
 
     def update_click_count(self, count):
         self.current_clicks = count
-        
+
     def update_performance_info(self):
         try:
             cpu_percent = self.process.cpu_percent()
@@ -104,19 +105,23 @@ class PerformanceMonitor(QDialog):
             uptime_seconds = int(time.time() - self.start_time)
             hours, remainder = divmod(uptime_seconds, 3600)
             minutes, seconds = divmod(remainder, 60)
-            
+
             # ★★★ 4. フォーマット文字列を翻訳キーから取得し、.format() で適用 ★★★
             lm = self.locale_manager.tr
             perf_text_format = lm("monitor_perf_format")
-            perf_text = perf_text_format.format(
-                cpu=cpu_percent, 
-                mem=mem_used, 
-                fps=self.current_fps, 
-                clicks=clicks, 
-                h=hours, 
-                m=minutes, 
-                s=seconds
-            )
+            # .format() が失敗する可能性も考慮 (キー名が翻訳ファイルと違う場合)
+            try:
+                perf_text = perf_text_format.format(
+                    cpu=cpu_percent,
+                    mem=mem_used,
+                    fps=self.current_fps,
+                    clicks=clicks,
+                    h=hours,
+                    m=minutes,
+                    s=seconds
+                )
+            except KeyError:
+                 perf_text = f"CPU:{cpu_percent:.1f}% MEM:{mem_used:.0f}MB FPS:{self.current_fps:.1f} CLICKS:{clicks} UPTIME:{hours:02d}:{minutes:02d}:{seconds:02d} (ERR:FMT)" # Fallback
             self.perf_label.setText(perf_text)
 
             self.performanceUpdated.emit(cpu_percent, self.current_fps)
@@ -124,21 +129,24 @@ class PerformanceMonitor(QDialog):
             if self.ui_manager and self.ui_manager.core_engine:
                 countdown = self.ui_manager.core_engine.get_backup_click_countdown()
                 if countdown > 0:
-                    # 1. まず翻訳キーからフォーマット文字列を取得
-                    countdown_format = lm("monitor_backup_countdown")
+                    # ★★★ 修正: tr() でフォーマット文字列を取得し、.format() を使用 ★★★
+                    countdown_format_string = lm("monitor_backup_countdown")
                     try:
-                        # 2. 文字列の .format() メソッドを使って値を埋め込む
-                        self.backup_countdown_label.setText(countdown_format.format(s=countdown))
-                    except (KeyError, ValueError, TypeError):
-                        # .format() に失敗した場合のフォールバック表示
-                        self.backup_countdown_label.setText(f"(Backup in: {countdown:.0f}s)")
+                        # .0f で小数点以下を表示しない整数にする
+                        countdown_text = countdown_format_string.format(s=countdown)
+                    except KeyError: # 翻訳ファイルのキー名 {s} と一致しない場合
+                        countdown_text = f"(バックアップまで: {countdown:.0f}秒) (ERR:FMT)" # Fallback
+                    self.backup_countdown_label.setText(countdown_text)
                 else:
                     self.backup_countdown_label.setText("")
 
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             self.update_timer.stop()
+            self.perf_label.setText(self.locale_manager.tr("monitor_perf_error")) # エラー表示
+            self.backup_countdown_label.setText("")
         except Exception as e:
-            if "core_engine" not in str(e) and self.ui_manager and self.ui_manager.logger:
+            # core_engine がまだ存在しない等のエラーは無視
+            if hasattr(self, 'ui_manager') and self.ui_manager and self.ui_manager.logger:
                 # ★★★ 6. print を self.ui_manager.logger.log に変更 ★★★
                 self.ui_manager.logger.log("monitor_log_error", str(e))
 

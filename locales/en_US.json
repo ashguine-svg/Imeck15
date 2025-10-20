@@ -274,7 +274,7 @@
   "log_activate_window_failed": "Attempted to activate window '%s', but may have failed.",
   "log_activate_window_error": "Error during window activation: %s",
   "log_warn_click_out_of_bounds": "Warning: Calculated click coordinates (%s, %s) are too close to the screen edge, cancelling click.",
-  "log_click_success": "Click: %s @(%s, %s) conf:%s",
+  "log_click_success_full": "Click: %s @(%s, %s) conf:%s%s",
   "log_click_success_scale": " scale:%s",
   "log_pyautogui_failsafe": "PyAutoGUI fail-safe triggered. User may have moved mouse to screen corner, or coordinate calculation might be problematic.",
   "log_click_error": "Error during click execution: %s",
@@ -293,6 +293,7 @@
   "log_item_delete_error": "Error occurred during item deletion: %s",
   "log_create_folder_error_empty": "Folder name is empty.",
   "log_create_folder_error_exists": "Folder '%s' already exists.",
+  "log_create_folder_success": "Created folder '%s'.",
   "log_create_folder_error_general": "Error occurred during folder creation: %s",
   "log_move_item_error_not_exists": "Source or destination folder does not exist.",
   "log_move_item_error_exists": "File/folder with the same name already exists in destination: %s",
@@ -344,5 +345,7 @@
   "log_priority_image_completed": "Ended Image Recognition Priority monitoring for folder '%s'. (Completed)",
   "log_countdown_started": "Backup image '%s' detected. Starting %s second countdown.",
   "log_countdown_cancelled": "Normal image detected, cancelling backup countdown.",
-  "log_countdown_executing": "%s seconds elapsed. Executing backup click."
+  "log_countdown_executing": "%s seconds elapsed. Executing backup click.",
+  "log_image_saved_success": "Saved image: %s",
+  "log_rec_area_cleared": "Cleared recognition area."
 }

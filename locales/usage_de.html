@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+    body { font-family: sans-serif; font-size: 13px; }
+    h3 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px;}
+    h4 { color: #34495e; margin-top: 15px; margin-bottom: 5px; }
+    p, li { line-height: 1.6; }
+    b { color: #e74c3c; }
+    code { background-color: #f4f4f4; padding: 2px 4px; border-radius: 3px; font-family: monospace; }
+    .important { border-left: 3px solid #f39c12; padding-left: 10px; background-color: #fef9e7; margin: 10px 0;}
+</style>
+</head>
+<body>
+    <h3>Imeck15 Anleitung zur Klickeinstellung pro Bild</h3>
+    <p>
+        Diese Anleitung erklärt, wie Klick-Aktionen konfiguriert werden, wenn ein registriertes Bild gefunden wird. Sie ist primär für die Automatisierung von Vorgängen in Fenster-Anwendungen gedacht.
+    </p>
+
+    <h4>1. Wie man Bilder für den Klick registriert</h4>
+    <p>
+        Registrieren Sie zuerst das Bild, das als Klick-Ziel dienen soll. Die Verwendung der Funktion „Bild aufnehmen“ ist die grundlegende Methode.<br>
+        <b>Tipp:</b> Es wird empfohlen, <b>kleine Teile</b> wie Schaltflächen oder Symbole als Ziel zu erfassen.
+    </p>
+    <ul>
+        <li><b>Grund 1: Schnellere Verarbeitung</b><br>Die Suche nach einem kleinen Bild ist weniger anspruchsvoll für den PC als die Suche auf dem gesamten Bildschirm.</li>
+        <li><b>Grund 2: Präzises Klicken</b><br>Selbst wenn mehrere identische Schaltflächen auf dem Bildschirm existieren, erlaubt das Erfassen nur eines bestimmten Teils das präzise Klicken auf das beabsichtigte Ziel.</li>
+    </ul>
+
+    <h4>2. Wie man die Klick-Reihenfolge steuert (Intervall-Einstellung)</h4>
+    <p>
+        Das „Intervall“ ist die minimale Wartezeit (in Sekunden), nachdem auf ein Bild geklickt wurde, bevor <b>dasselbe Bild</b> erneut angeklickt werden kann.
+    </p>
+    <div class="important">
+        <b>[Wichtig] Klick-Prioritäts-Mechanismus</b><br>
+        Wenn während der Überwachung mehrere klickbare Bilder auf dem Bildschirm gefunden werden, priorisiert Imeck15 das Klicken auf das Bild mit der <b>kürzesten „Intervall“-Einstellung</b> und klickt nicht auf andere Bilder. Verwenden Sie diesen Mechanismus, um die Klick-Sequenz zu steuern.
+    </div>
+
+    <h4>3. Technik für das Klicken an mehreren Stellen auf einem Bildschirm</h4>
+    <p>
+        Durch Anwendung des „Intervall-Einstellungs“-Mechanismus können Sie festlegen, dass nacheinander auf mehrere Stellen auf einem einzigen Bildschirm geklickt wird.<br>
+        <b>Voraussetzung:</b> Das Bild oder der Text an der angeklickten Stelle muss sich nach dem Klicken ändern (verschwinden, ausgegraut werden usw.).
+    </p>
+    <p><b>Beispiel-Einrichtungsschritte:</b></p>
+    <ol>
+        <li>Registrieren Sie die Teile A, B und C, die Sie auf dem Bildschirm anklicken möchten, als separate Bilder.</li>
+        <li>Legen Sie kürzere Intervallzeiten für Bilder fest, die Sie früher anklicken möchten. (z. B. A: <code>1.5</code> Sek., B: <code>2.0</code> Sek., C: <code>2.5</code> Sek.)</li>
+        <li>Starten Sie die Überwachung. Zuerst wird <b>Teil A</b> mit dem kürzesten Intervall angeklickt.</li>
+        <li>Nach dem Klicken, wenn Teil A vom Bildschirm verschwindet, wird <b>Teil B</b> im nachfolgenden Überwachungszyklus zum nächsten Klick-Ziel.</li>
+        <li>Ebenso wird <b>Teil C</b> zuletzt angeklickt.</li>
+    </ol>
+
+    <h4>4. Wie man die Erkennungsgenauigkeit und den Bereich anpasst</h4>
+    <ul>
+        <li><b>Erkennungsschwellenwert:</b><br>Diese Einstellung bestimmt, wie ähnlich Bilder sein müssen, um als „Übereinstimmung“ betrachtet zu werden. Ein Wert um <code>0.8</code> ist normalerweise ausreichend, aber das Setzen auf <code>0.9</code> oder höher kann effektiv sein, um geringfügige Unterschiede wie Textvariationen streng zu unterscheiden.</li>
+        <li><b>Suchbereich (ROI-Einstellung):</b><br>Das Aktivieren von „ROI aktivieren“ beschränkt das Suchziel auf einen <b>200x200 Pixel großen Bereich</b>, zentriert auf der Klick-Koordinate. Dies beschleunigt die Verarbeitung erheblich und reduziert die Last auf dem PC stark. (Der variable ROI-Modus erlaubt das freie Festlegen des Bereichs).</li>
+        <li><b>ROI-Bereichs-Spezifikation:</b><br>Anstelle eines 200x200-Bereichs, zentriert auf der Klick-Position, erlaubt diese Funktion das Spezifizieren eines bestimmten Bereichs, auf den fokussiert werden soll, und das Festlegen einer separaten Klick-Position.</li>
+    </ul>
+
+    <h4>5. „Entprellung“ (Debounce) Einstellung für spezielle Situationen</h4>
+    <p>
+        „Entprellung“ wird für komplexe Vorgänge verwendet, wie z. B. „Klick auf Bild A mit kurzem Intervall, dann Klick auf ein anderes Bild B und nach einer kurzen Pause Klick auf Bild A erneut, um zum nächsten Bildschirm fortzufahren“.
+    </p>
+    <p>
+        <b>Mechanismus:</b> Das Festlegen einer Entprellzeit verlängert die Wartezeit für den zweiten Klick auf <b>„Intervall + Entprellzeit“</b>, wenn dasselbe Bild nacheinander als Ziel festgelegt wird. Dies schafft eine Gelegenheit, dass andere Bilder zuerst geklickt werden.
+    </p>
+</body>
+</html>

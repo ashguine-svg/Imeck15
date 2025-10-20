@@ -1,4 +1,9 @@
 # ui.py (D&D機能 統合版・多言語対応版・言語切り替え機能追加・インデント修正版・スプラッシュ画像対応版)
+# ★★★ Linux D&Dインジケータをダミーアイテム方式に修正 ★★★
+# ★★★ switch_to_preview_tab メソッドを追加 ★★★
+# ★★★ プレビュー描画更新タイミングを修正 ★★★
+# ★★★ 削除された setRecAreaDialog メソッドを復元 ★★★
+# ★★★ update_image_preview メソッドの存在を確認 ★★★
 
 import sys
 import json
@@ -35,51 +40,6 @@ try:
 except:
     OPENCL_AVAILABLE = False
 
-# --- CustomTreeStyle ---
-class CustomTreeStyle(QProxyStyle):
-    def drawControl(self, element, option, painter, widget=None):
-        if element == QStyle.CE_ItemViewItem and isinstance(widget, DraggableTreeWidget):
-            # Draw default item view first
-            super().drawControl(element, option, painter, widget)
-
-            tree_widget = widget
-            if isinstance(option, QStyleOptionViewItem):
-                index = option.index
-                item = tree_widget.itemFromIndex(index)
-
-                # Draw custom drop indicator if applicable
-                if item and item == tree_widget.drop_indicator_item and tree_widget.drop_indicator_pos:
-                    painter.save()
-                    try:
-                        pen = QPen(QColor("red"), 2)
-                        pen.setCapStyle(Qt.FlatCap)
-                        painter.setPen(pen)
-                        rect = option.rect
-
-                        if rect.isValid():
-                            # Calculate line position based on drop position
-                            y = rect.top() if tree_widget.drop_indicator_pos == QAbstractItemView.DropIndicatorPosition.AboveItem else rect.bottom()
-                            y += -1 if tree_widget.drop_indicator_pos == QAbstractItemView.DropIndicatorPosition.AboveItem else 1
-                            left = rect.left() + 1
-                            right = rect.right() - 1
-                            if left < right:
-                                painter.drawLine(left, y, right, y)
-                    finally:
-                        painter.restore()
-            else:
-                 # Fallback for unexpected option type
-                 super().drawControl(element, option, painter, widget)
-        else:
-            # Handle elements other than ItemViewItem
-            super().drawControl(element, option, painter, widget)
-
-    def drawPrimitive(self, element, option, painter, widget=None):
-        # Hide the default branch indicators (arrows)
-        if element == QStyle.PE_IndicatorBranch and isinstance(widget, DraggableTreeWidget):
-             return # Do nothing, effectively hiding them
-        # Draw other primitives normally
-        super().drawPrimitive(element, option, painter, widget)
-
 # --- DraggableTreeWidget ---
 class DraggableTreeWidget(QTreeWidget):
     orderUpdated = Signal()
@@ -90,10 +50,30 @@ class DraggableTreeWidget(QTreeWidget):
         self.last_highlighted_item = None
         self.highlight_color = QApplication.palette().highlight().color().lighter(150)
         self.config_manager = None # Must be set externally after initialization
-        self.dummy_indicator_item = None
-        self.drop_indicator_item = None # Item near which the indicator is shown
-        self.drop_indicator_pos = None  # Position relative to drop_indicator_item
-        self.setDropIndicatorShown(False) # Disable default indicator
+
+        # ★★★ ダミーインジケータアイテムを作成 ★★★
+        self.dummy_indicator_item = QTreeWidgetItem(["――――――――――"])
+        brush = QBrush(QColor("red"))
+        self.dummy_indicator_item.setForeground(0, brush)
+        # このアイテム自体はD&Dの対象外にする
+        flags = self.dummy_indicator_item.flags()
+        flags &= ~Qt.ItemIsDragEnabled
+        flags &= ~Qt.ItemIsDropEnabled
+        self.dummy_indicator_item.setFlags(flags)
+
+        self.setDropIndicatorShown(False) # 標準のインジケータは無効
+
+    def _remove_dummy_indicator(self):
+        """ツリーからダミーインジケータを削除します。"""
+        if self.dummy_indicator_item:
+            parent = self.dummy_indicator_item.parent()
+            if parent:
+                parent.removeChild(self.dummy_indicator_item)
+            else:
+                # トップレベルアイテムかどうかを確認
+                index = self.indexOfTopLevelItem(self.dummy_indicator_item)
+                if index != -1:
+                    self.takeTopLevelItem(index)
 
     def dragEnterEvent(self, event):
         # Accept drags originating from this widget itself
@@ -110,11 +90,13 @@ class DraggableTreeWidget(QTreeWidget):
 
         event.acceptProposedAction()
 
-        # Clear previous highlighting and custom indicator
+        # Clear previous highlighting
         if self.last_highlighted_item:
             self.last_highlighted_item.setBackground(0, QBrush(Qt.transparent))
             self.last_highlighted_item = None
-        self._remove_custom_indicator()
+
+        # ★★★ ダミーインジケータを削除 ★★★
+        self._remove_dummy_indicator()
 
         target_item = self.itemAt(event.position().toPoint())
         pos = self.dropIndicatorPosition() # Get potential drop position
@@ -126,26 +108,39 @@ class DraggableTreeWidget(QTreeWidget):
             if path_str and Path(path_str).is_dir():
                 target_item.setBackground(0, self.highlight_color)
                 self.last_highlighted_item = target_item
-                self.drop_indicator_item = None # No line indicator when highlighting folder
-                self.drop_indicator_pos = None
             else:
-                # Show indicator below non-folder items if dropping "on" them
-                self._update_custom_indicator(target_item, self.DropIndicatorPosition.BelowItem)
+                # ★★★ フォルダ以外 (OnItem) の場合はアイテムの下にインジケータを挿入 ★★★
+                parent = target_item.parent()
+                if parent:
+                    index = parent.indexOfChild(target_item)
+                    parent.insertChild(index + 1, self.dummy_indicator_item)
+                else:
+                    index = self.indexOfTopLevelItem(target_item)
+                    self.insertTopLevelItem(index + 1, self.dummy_indicator_item)
 
         elif pos in [self.DropIndicatorPosition.AboveItem, self.DropIndicatorPosition.BelowItem] and target_item:
-            # Show indicator above or below the target item
-            self._update_custom_indicator(target_item, pos)
+            # ★★★ アイテムの上または下にインジケータを挿入 ★★★
+            parent = target_item.parent()
+            index_offset = 1 if pos == self.DropIndicatorPosition.BelowItem else 0
+            if parent:
+                index = parent.indexOfChild(target_item)
+                parent.insertChild(index + index_offset, self.dummy_indicator_item)
+            else:
+                index = self.indexOfTopLevelItem(target_item)
+                self.insertTopLevelItem(index + index_offset, self.dummy_indicator_item)
 
         elif pos == self.DropIndicatorPosition.OnViewport:
-             # Show indicator at the bottom if dropping in empty space
-             self._update_custom_indicator(None, self.DropIndicatorPosition.BelowItem)
+             # ★★★ 空白領域 (末尾) にインジケータを挿入 ★★★
+             self.insertTopLevelItem(self.topLevelItemCount(), self.dummy_indicator_item)
 
     def dragLeaveEvent(self, event):
         # Clear highlighting and indicator when drag leaves the widget
         if self.last_highlighted_item:
             self.last_highlighted_item.setBackground(0, QBrush(Qt.transparent))
             self.last_highlighted_item = None
-        self._remove_custom_indicator()
+
+        # ★★★ ダミーインジケータを削除 ★★★
+        self._remove_dummy_indicator()
         super().dragLeaveEvent(event)
 
     def dropEvent(self, event):
@@ -153,7 +148,9 @@ class DraggableTreeWidget(QTreeWidget):
         if self.last_highlighted_item:
             self.last_highlighted_item.setBackground(0, QBrush(Qt.transparent))
             self.last_highlighted_item = None
-        self._remove_custom_indicator()
+
+        # ★★★ ダミーインジケータを削除 ★★★
+        self._remove_dummy_indicator()
 
         # Only handle drops from this widget
         if event.source() != self:
@@ -240,32 +237,6 @@ class DraggableTreeWidget(QTreeWidget):
         self.orderUpdated.emit()
         event.accept()
 
-    def _update_custom_indicator(self, target_item, pos):
-        """ Store item and position for custom drawing """
-        self.drop_indicator_item = target_item
-        self.drop_indicator_pos = pos
-        if target_item:
-            # Trigger repaint of the target item's area to draw the indicator
-            self.update(self.visualItemRect(target_item))
-        else:
-            # If target is None (viewport), update the whole widget maybe?
-            # Or calculate the rect for the last item if exists? Simpler to update all for now.
-             self.update()
-
-
-    def _remove_custom_indicator(self):
-        """ Clear indicator info and trigger repaint if needed """
-        if self.drop_indicator_item:
-            old_item = self.drop_indicator_item
-            self.drop_indicator_item = None
-            self.drop_indicator_pos = None
-            # Trigger repaint of the old item's area to remove the indicator
-            self.update(self.visualItemRect(old_item))
-        elif self.drop_indicator_pos: # Case where indicator was on viewport
-             self.drop_indicator_item = None
-             self.drop_indicator_pos = None
-             self.update()
-
 # --- UIManager ---
 class UIManager(QMainWindow):
     startMonitoringRequested = Signal(); stopMonitoringRequested = Signal(); openPerformanceMonitorRequested = Signal()
@@ -316,7 +287,7 @@ class UIManager(QMainWindow):
 
             if self.splash_pixmap and self.splash_pixmap.isNull():
                 self.splash_pixmap = None # Failed to load
-                
+
         except Exception as e:
             self.logger.log("log_error_splash_load", str(e))
             self.splash_pixmap = None
@@ -345,7 +316,7 @@ class UIManager(QMainWindow):
 
         # Adjust size after UI is potentially rendered
         QTimer.singleShot(100, self.adjust_initial_size)
-        
+
         # Initial preview update (for splash screen)
         QTimer.singleShot(0, lambda: self.update_image_preview(None, None))
 
@@ -407,7 +378,6 @@ class UIManager(QMainWindow):
         self.image_tree.setDragEnabled(True)
         self.image_tree.setAcceptDrops(True)
         self.image_tree.setDropIndicatorShown(False) # Use custom indicator
-        self.image_tree.setStyle(CustomTreeStyle(self.style())) # Apply custom style
         self.image_tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.image_tree.setStyleSheet("QTreeWidget { border: 1px solid darkgray; border-radius: 0px; }")
         self.image_tree.setHeaderHidden(True)
@@ -1249,8 +1219,13 @@ class UIManager(QMainWindow):
             return
         # If an image file is clicked, switch to the preview tab
         if not Path(path_str).is_dir():
-            if self.preview_tabs.currentWidget() != self.main_preview_widget:
-                self.preview_tabs.setCurrentWidget(self.main_preview_widget)
+            self.switch_to_preview_tab() # Use the new method
+
+
+    def switch_to_preview_tab(self):
+        """Switches the main tab widget to the image preview tab."""
+        if self.preview_tabs and self.main_preview_widget:
+            self.preview_tabs.setCurrentWidget(self.main_preview_widget)
 
     def on_image_tree_selection_changed(self):
         """Loads settings and preview when the tree selection changes."""
@@ -1416,51 +1391,48 @@ class UIManager(QMainWindow):
         for widget in all_widgets:
             widget.setEnabled(enable_widgets)
 
-        # If disabled or no data, reset widgets and preview
+        # If disabled or no data, reset widgets
         if not enable_widgets:
             for widget in all_widgets:
                 widget.blockSignals(True) # Prevent signals during reset
                 if isinstance(widget, QDoubleSpinBox): widget.setValue(0)
                 elif isinstance(widget, QCheckBox): widget.setChecked(False)
                 elif isinstance(widget, QRadioButton):
-                    # Temporarily disable auto-exclusivity for reliable unchecking
                     widget.setAutoExclusive(False); widget.setChecked(False); widget.setAutoExclusive(True)
-            self.preview_label.set_drawing_data(None)
-            
-            # --- Splash/Folder Preview Logic ---
-            # Show "Folder Selected" text or splash in preview if folder is selected
+            for widget in all_widgets: widget.blockSignals(False) # Re-enable signals
+
+            # Splash/Folder Preview Logic remains here...
             if is_folder:
                 if self.splash_pixmap:
                     self.preview_label.set_pixmap(self.splash_pixmap)
-                    self.preview_label.setText("") # Clear text
+                    self.preview_label.setText("")
                 else:
                     self.preview_label.setText(self.locale_manager.tr("preview_folder_selected"))
-                    self.preview_label.set_pixmap(None) # Clear pixmap
-            # --- End Splash/Folder Preview Logic ---
-                
-            for widget in all_widgets: widget.blockSignals(False) # Re-enable signals
+                    self.preview_label.set_pixmap(None)
 
-            # Sync preview mode manager even when disabled (to clear drawing mode)
+            # Sync preview mode manager even when disabled
             self.preview_mode_manager.sync_from_settings_data(None)
-            self._update_roi_widgets_state() # Ensure ROI button state is correct
+            self._update_roi_widgets_state()
+
+            # ★★★ Update preview data (explicitly pass None) ★★★
+            self.preview_label.set_drawing_data(None)
+            # update() は update_image_preview の最後で呼ばれる
             return
 
         # If data exists and it's not a folder, load settings into widgets
-        self.preview_label.set_drawing_data(settings_data) # Update preview overlays
+        # (preview_label.set_drawing_data is called at the end now)
         for key, value in settings_data.items():
             if key in self.item_settings_widgets:
                 widget = self.item_settings_widgets[key]
                 widget.blockSignals(True) # Prevent signals during loading
                 if isinstance(widget, (QDoubleSpinBox, QSpinBox)):
-                    # Use 0 as default if value is None
                     widget.setValue(value if value is not None else 0)
                 elif isinstance(widget, QCheckBox):
                     widget.setChecked(bool(value))
-                # Radio buttons handled below
                 widget.blockSignals(False) # Re-enable signals
 
         # Set ROI mode RadioButtons
-        roi_mode = settings_data.get('roi_mode', 'fixed') # Default to fixed
+        roi_mode = settings_data.get('roi_mode', 'fixed')
         self.item_settings_widgets['roi_mode_fixed'].blockSignals(True)
         self.item_settings_widgets['roi_mode_variable'].blockSignals(True)
         if roi_mode == 'variable':
@@ -1474,13 +1446,36 @@ class UIManager(QMainWindow):
         self.preview_mode_manager.sync_from_settings_data(settings_data)
         self._update_roi_widgets_state()
 
+        # ★★★ Update preview data with current settings ★★★
+        self.preview_label.set_drawing_data(settings_data) # Update preview overlays data
+        # update() は update_image_preview の最後で呼ばれる
+
+
     def on_item_settings_changed(self, *args):
         """Handles changes in item settings widgets."""
-        settings = self.get_current_item_settings()
-        self.imageSettingsChanged.emit(settings) # Notify core engine
-        self._update_roi_widgets_state() # Update dependent widgets (e.g., ROI button)
-        self.preview_label.set_drawing_data(settings) # Update preview overlays
-        self.request_save() # Trigger delayed save
+        # どのウィジェットが変更されたかを取得 (オプション)
+        # sender = self.sender()
+        # print(f"Settings changed by: {sender}")
+
+        # 現在のUIから設定を取得 (これによりチェックボックスの状態が反映される)
+        current_ui_settings = self.get_current_item_settings()
+
+        # CoreEngine に変更を通知 (CoreEngine 側で保持しているデータが更新される)
+        self.imageSettingsChanged.emit(current_ui_settings)
+
+        # 依存ウィジェットの状態を更新 (例: ROIボタンの有効/無効)
+        self._update_roi_widgets_state()
+
+        # ★★★ CoreEngine が保持する最新の設定データでプレビューを更新 ★★★
+        if self.core_engine and self.core_engine.current_image_settings:
+            # CoreEngine側のデータでプレビューの描画データを更新
+            # これにより、UI変更 -> CoreEngine更新 -> 最新データで描画、という流れになる
+            self.preview_label.set_drawing_data(self.core_engine.current_image_settings)
+            self.preview_label.update() # 明示的に再描画を要求
+
+        # 遅延保存を要求
+        self.request_save()
+
 
     def _update_roi_widgets_state(self):
         """Updates enable state of ROI mode and variable ROI button."""
@@ -1612,7 +1607,8 @@ class UIManager(QMainWindow):
 
     def update_image_preview(self, cv_image: np.ndarray, settings_data: dict = None):
         """Updates the image preview label with the given OpenCV image and settings."""
-        # First, update the settings display
+        # First, update the settings display (this also calls preview_label.set_drawing_data indirectly)
+        # set_settings_from_data にデータ設定と再描画要求を任せる
         self.set_settings_from_data(settings_data)
 
         # If image is None or empty, clear the preview or show splash
@@ -1620,7 +1616,7 @@ class UIManager(QMainWindow):
             selected_path, _ = self.get_selected_item_path()
             # Don't clear text if a folder is selected (handled in set_settings_from_data)
             if not (selected_path and Path(selected_path).is_dir()):
-                
+
                 # --- Splash Image Logic ---
                 if self.splash_pixmap:
                     self.preview_label.set_pixmap(self.splash_pixmap)
@@ -1629,7 +1625,9 @@ class UIManager(QMainWindow):
                     self.preview_label.setText(self.locale_manager.tr("preview_default_text"))
                     self.preview_label.set_pixmap(None) # Clear the pixmap
                 # --- End Splash Image Logic ---
-                    
+
+            # ★★★ 明示的に再描画 (画像がない場合) ★★★
+            self.preview_label.update()
             return
 
         # Convert OpenCV BGR image to QPixmap for display
@@ -1639,12 +1637,16 @@ class UIManager(QMainWindow):
             bytes_per_line = ch * w
             q_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
             pixmap = QPixmap.fromImage(q_image)
+            # Pixmap の設定のみを行う
             self.preview_label.set_pixmap(pixmap) # Display the image
             self.preview_label.setText("") # Clear any previous text
         except Exception as e:
             print(f"Error converting image for preview: {e}")
             self.preview_label.setText("Preview Error")
             self.preview_label.set_pixmap(None)
+
+        # ★★★ 明示的に再描画 (画像がある場合) ★★★
+        self.preview_label.update()
 
 
     def update_rec_area_preview(self, cv_image: np.ndarray):
@@ -1690,6 +1692,7 @@ class UIManager(QMainWindow):
         QApplication.instance().quit()
         event.accept()
 
+    # ★★★ 復元された setRecAreaDialog メソッド ★★★
     def setRecAreaDialog(self):
         """Shows the dialog to choose recognition area selection method."""
         # Pass locale manager to the dialog

@@ -1,4 +1,8 @@
 # core.py (D&D対応・右クリック動作変更・多言語対応・インデント修正版)
+# ★★★ 認識範囲設定と画像キャプチャのロジックを分離 ＆ AttributeError を修正 ★★★
+# ★★★ キャプチャプレビュー表示 ＆ 認識範囲設定後のUI再表示を修正 ★★★
+# ★★★ キャプチャプレビュー表示の確実性を向上 (タブ切り替え、遅延追加) ★★★
+# ★★★ リスナー再開処理を再度遅延させ、ログを追加 ★★★
 
 import sys
 import threading
@@ -66,7 +70,6 @@ class CoreEngine(QObject):
     clickCountUpdated = Signal(int)
 
     def __init__(self, ui_manager, capture_manager, config_manager, logger, performance_monitor, locale_manager):
-        # ★★★ ここから __init__ メソッドのインデントを修正 ★★★
         super().__init__()
         self.ui_manager = ui_manager
         self.capture_manager = capture_manager
@@ -159,7 +162,6 @@ class CoreEngine(QObject):
         self._last_log_time = 0
         # Filter uses keys directly now
         self._log_spam_filter = {"log_stability_hold_click", "log_eco_mode_standby"}
-        # ★★★ __init__ メソッドのインデント終了 ★★★
 
     def transition_to(self, new_state):
         self.state = new_state
@@ -270,23 +272,53 @@ class CoreEngine(QObject):
                 else:
                     self.logger.log("log_warn_activate_window_error", str(e))
 
+    # ★★★ 開始/停止ログを追加、開始前に既存リスナー停止処理を追加 ★★★
     def _start_global_mouse_listener(self):
         """Starts the global mouse listener if not already running."""
+        # 念のため、既存のリスナーが動作中なら停止を試みる
+        if self.mouse_listener and self.mouse_listener.is_alive():
+            self.logger.log("[DEBUG] Stopping existing listener before starting a new one.")
+            self._stop_global_mouse_listener() # Call the existing stop method
+            # time.sleep(0.1) # 必要なら短い待機を入れる (通常は不要)
+
         if self.mouse_listener is None:
+            self.logger.log("Attempting to start global mouse listener...") # 開始試行ログ
             try:
                 self.mouse_listener = mouse.Listener(on_click=self._on_global_click)
+                self.logger.log("[DEBUG] Listener object created. Calling start()...") # start() 呼び出し前ログ
                 self.mouse_listener.start()
+                # start() が完了したか、実際に動作しているか確認
+                if self.mouse_listener.is_alive():
+                    self.logger.log("Global mouse listener started successfully (is_alive() confirmed).") # 成功ログ
+                else:
+                    self.logger.log("[ERROR] Listener start() called but is_alive() is false! Listener might have failed silently.")
+                    self.mouse_listener = None # 失敗した場合はリセット
             except Exception as e:
-                self.logger.log("log_error_listener_start", str(e))
+                # start() 自体が例外を投げた場合
+                self.logger.log(f"log_error_listener_start: Exception during listener.start(): {e}", str(e)) # エラーログ
                 self.mouse_listener = None # Ensure listener is None if start fails
+        else:
+             self.logger.log("[WARN] Mouse listener object was not None before start attempt. State issue?")
 
+
+    # ★★★ 開始/停止ログを追加 ★★★
     def _stop_global_mouse_listener(self):
         """Stops the global mouse listener if running."""
         if self.mouse_listener and self.mouse_listener.is_alive():
+            self.logger.log("Attempting to stop global mouse listener...") # 停止試行ログ
             try:
+                # pynput の stop() は完了を待たないことがあるため、join() も試す
                 self.mouse_listener.stop()
+                # self.mouse_listener.join(timeout=0.5) # join を試す場合 (タイムアウト付き)
+                # is_alive で停止を確認
+                if not self.mouse_listener.is_alive():
+                    self.logger.log("Global mouse listener stopped successfully.") # 成功ログ
+                else:
+                    self.logger.log("[WARN] Listener stop() called but is_alive() is still true.")
             except Exception as e:
-                self.logger.log("log_warn_listener_stop", str(e))
+                self.logger.log("log_warn_listener_stop", str(e)) # 既存のエラーログ
+        # else:
+            # self.logger.log("Mouse listener is not running or already stopped.") # 実行中でない場合 (任意)
         self.mouse_listener = None # Clean up reference
 
 
@@ -310,7 +342,7 @@ class CoreEngine(QObject):
 
             # Handle triple-click immediately
             if self.right_click_count == 3:
-                self.logger.log("log_right_click_triple")
+                self.logger.log("log_right_click_triple") # 既存のログ
                 self.startMonitoringRequested.emit()
                 self.right_click_count = 0 # Reset after action
             else:
@@ -318,12 +350,13 @@ class CoreEngine(QObject):
                 self.click_timer = Timer(self.CLICK_INTERVAL, self._handle_click_timer)
                 self.click_timer.start()
 
+
     def _handle_click_timer(self):
         """Called after CLICK_INTERVAL to determine single vs double click."""
         if self.right_click_count == 1:
             pass # Ignore single click (likely for context menus)
         elif self.right_click_count == 2:
-            self.logger.log("log_right_click_double")
+            self.logger.log("log_right_click_double") # 既存のログ
             self.stopMonitoringRequested.emit()
 
         # Reset count and timer reference
@@ -1156,9 +1189,11 @@ class CoreEngine(QObject):
             self.last_successful_click_time = time.time() # Update time for Eco Mode
             self.clickCountUpdated.emit(self._click_count) # Notify UI/Monitor
 
-
     def set_recognition_area(self, method: str):
-        """Initiates the recognition area selection process (rectangle or window)."""
+        """
+        認識エリアまたは画像キャプチャのための選択プロセスを開始します。
+        _is_capturing_for_registration フラグに応じて動作を切り替えます。
+        """
         self.selectionProcessStarted.emit() # Notify UI to hide
         self.ui_manager.hide()
         if self.performance_monitor:
@@ -1166,18 +1201,28 @@ class CoreEngine(QObject):
         self._stop_global_mouse_listener() # Stop listener during selection
 
         if method == "rectangle":
-            # Reset window-related settings
-            self.target_hwnd = None
-            self.current_window_scale = None
-            self.windowScaleCalculated.emit(0.0) # Notify UI
-            self.logger.log("log_rec_area_set_rect")
+            # 認識範囲設定モードの場合のみ、ウィンドウ関連設定をリセット
+            if not self._is_capturing_for_registration:
+                self.target_hwnd = None
+                self.current_window_scale = None
+                self.windowScaleCalculated.emit(0.0) # Notify UI
+                self.logger.log("log_rec_area_set_rect")
+            else:
+                self.logger.log("log_capture_area_set_rect") # 画像キャプチャのための矩形選択
+
             # Create and show overlay for rectangle selection
             self.selection_overlay = SelectionOverlay()
             self.selection_overlay.selectionComplete.connect(self._areaSelectedForProcessing.emit)
             self.selection_overlay.selectionCancelled.connect(self._on_selection_cancelled)
             self.selection_overlay.showFullScreen()
+
         elif method == "window":
-            self.logger.log("log_rec_area_set_window")
+            # 認識範囲設定モードの場合のみ、ログを記録
+            if not self._is_capturing_for_registration:
+                self.logger.log("log_rec_area_set_window")
+            else:
+                self.logger.log("log_capture_area_set_window") # 画像キャプチャのためのウィンドウ選択
+
             # Start listeners for window click and ESC key
             self.window_selection_listener = WindowSelectionListener(self._handle_window_click_for_selection)
             self.window_selection_listener.start()
@@ -1200,11 +1245,12 @@ class CoreEngine(QObject):
             self.keyboard_selection_listener = None
         # Notify UI and restore visibility
         self.selectionProcessFinished.emit()
-        self._show_ui_safe()
-        if self.performance_monitor and not self.performance_monitor.isVisible():
-            # Check if monitor was visible before selection started (optional)
-            self.performance_monitor.show()
-        self._start_global_mouse_listener() # Restart listener
+        self._show_ui_safe() # 必ずUIを再表示
+        # パフォーマンスモニタの復元は UIManager 側で行う
+
+        # リスナー再開を遅延させ、タイマーセット直前にログを追加
+        self.logger.log("[DEBUG] Scheduling listener restart after cancellation (150ms delay)...")
+        QTimer.singleShot(150, self._start_global_mouse_listener)
 
     def _on_key_press_for_selection(self, key):
         """Handles ESC key press during window selection."""
@@ -1239,8 +1285,7 @@ class CoreEngine(QObject):
              self._on_selection_cancelled() # Cancel if not supported
              return # Skip restarting mouse listener
 
-        # Restart mouse listener after handling click
-        self._start_global_mouse_listener()
+        # リスナーの再開は handle_area_selection または _on_selection_cancelled で行う
 
     def _handle_window_click_for_selection_windows(self, x, y):
         """Gets window handle and client area rectangle on Windows."""
@@ -1250,13 +1295,15 @@ class CoreEngine(QObject):
                 self._on_selection_cancelled()
                 return # Clicked on desktop or invalid area
 
-            self.target_hwnd = hwnd
-            # If using DXCam, set its target HWND
-            if 'dxcam' in sys.modules and hasattr(self.capture_manager, 'dxcam_sct') and self.capture_manager.dxcam_sct:
-                try:
-                    self.capture_manager.dxcam_sct.target_hwnd = hwnd
-                except Exception as dxcam_err:
-                     self.logger.log(f"Error setting DXCam target HWND: {dxcam_err}")
+            # 認識範囲設定モードの場合のみ target_hwnd を設定
+            if not self._is_capturing_for_registration:
+                self.target_hwnd = hwnd
+                # If using DXCam, set its target HWND
+                if 'dxcam' in sys.modules and hasattr(self.capture_manager, 'dxcam_sct') and self.capture_manager.dxcam_sct:
+                    try:
+                        self.capture_manager.dxcam_sct.target_hwnd = hwnd
+                    except Exception as dxcam_err:
+                         self.logger.log(f"Error setting DXCam target HWND: {dxcam_err}")
 
 
             # Get client area rectangle relative to screen
@@ -1284,7 +1331,8 @@ class CoreEngine(QObject):
             # If just capturing for registration, emit coords and finish
             if self._is_capturing_for_registration:
                 self._areaSelectedForProcessing.emit(rect)
-                self.selectionProcessFinished.emit()
+                self.selectionProcessFinished.emit() # ここでUIを復元させるトリガー
+                # UI表示は selectionProcessFinished を受けた UIManager が行う
                 return
 
             # Process for setting recognition area (check base size, calculate scale)
@@ -1303,7 +1351,9 @@ class CoreEngine(QObject):
 
         except Exception as e:
             self.logger.log("log_window_get_rect_failed", str(e))
-            self.target_hwnd = None
+            # 認識範囲設定モードの場合のみ target_hwnd を None に
+            if not self._is_capturing_for_registration:
+                self.target_hwnd = None
             # Show UI and finish selection process on error
             self._showUiSignal.emit()
             self.selectionProcessFinished.emit()
@@ -1364,7 +1414,7 @@ class CoreEngine(QObject):
             # If just capturing for registration, emit coords and finish
             if self._is_capturing_for_registration:
                 self._areaSelectedForProcessing.emit(rect)
-                self.selectionProcessFinished.emit()
+                self.selectionProcessFinished.emit() # ここでUIを復元させるトリガー
                 return
 
             # Process for setting recognition area
@@ -1442,7 +1492,8 @@ class CoreEngine(QObject):
              # Clean up pending info only if not waiting for the apply scale prompt
             if not self._pending_scale_prompt_info:
                 self._pending_window_info = None
-                self._showUiSignal.emit(); self.selectionProcessFinished.emit()
+                # UI表示は handle_area_selection で行うため、ここでは emit しない
+                self.selectionProcessFinished.emit() # Finish シグナルのみ
 
 
     def process_apply_scale_prompt_response(self, apply_scale: bool):
@@ -1483,8 +1534,8 @@ class CoreEngine(QObject):
             # Clean up pending info and finish selection process
             self._pending_scale_prompt_info = None
             self._pending_window_info = None
-            self._showUiSignal.emit(); self.selectionProcessFinished.emit()
-
+            # UI表示は handle_area_selection で行うため、ここでは emit しない
+            self.selectionProcessFinished.emit() # Finish シグナルのみ
 
     def handle_area_selection(self, coords):
         """Handles the final selected coordinates (from overlay or window)."""
@@ -1493,20 +1544,24 @@ class CoreEngine(QObject):
             self._is_capturing_for_registration = False
             # Use QTimer to ensure capture happens after overlay is closed
             QTimer.singleShot(100, lambda: self._save_captured_image(coords))
+            # UI表示は _save_captured_image 内で行う
         else:
             # If setting recognition area, store coords and update preview
             self.recognition_area = coords
             self.logger.log("log_rec_area_set", str(coords))
             self._update_rec_area_preview()
-            # Finish selection process (UI already shown by process_..._response methods)
+            # Finish selection process
             self.selectionProcessFinished.emit()
-            # No need to show UI again here if it was handled in response methods
+            # 認識範囲設定完了後にUIを再表示
+            self._show_ui_safe()
 
         # Clean up overlay reference if it exists
         if hasattr(self, 'selection_overlay'):
             self.selection_overlay = None
-        # Restart global mouse listener if it wasn't already
-        self._start_global_mouse_listener()
+
+        # ★★★ リスナー再開を遅延させ、タイマーセット直前にログを追加 ★★★
+        self.logger.log("[DEBUG] Scheduling listener restart after selection completion (150ms delay)...")
+        QTimer.singleShot(150, self._start_global_mouse_listener)
 
 
     def _get_filename_from_user(self):
@@ -1546,30 +1601,43 @@ class CoreEngine(QObject):
         except Exception as e:
             # Show error and restore UI if preparation fails
             QMessageBox.critical(self.ui_manager, self.locale_manager.tr("error_title_capture_prepare_failed"), self.locale_manager.tr("error_message_capture_prepare_failed", str(e)))
-            self._show_ui_and_monitor() # Helper to show UI and monitor
+            self._show_ui_safe()
             self.selectionProcessFinished.emit()
 
 
     def _capture_and_prompt_for_save(self, region_coords):
-        """Captures the image and asks the user for a filename to save."""
+        """Captures the image, shows preview, and asks for filename."""
         try:
             # Capture the selected region
             captured_image = self.capture_manager.capture_frame(region=region_coords)
 
-            # Show captured image in preview temporarily
-            if captured_image is not None and captured_image.size > 0:
-                self._show_ui_and_monitor() # Show UI again before updating preview
-                # Update preview label (settings_data is None as it's not saved yet)
-                self.ui_manager.update_image_preview(captured_image, settings_data=None)
-            else:
+            if captured_image is None or captured_image.size == 0:
                  # Handle capture failure
-                 self._show_ui_and_monitor() # Show UI to display error
+                 self._show_ui_safe() # Show UI to display error
                  QMessageBox.warning(self.ui_manager, self.locale_manager.tr("warn_title_capture_failed"), self.locale_manager.tr("warn_message_capture_failed"))
                  self.selectionProcessFinished.emit()
                  return # Stop if capture failed
 
+            # Show UI, ensure preview tab is active, update preview, process events
+            self._show_ui_safe()
+            if hasattr(self.ui_manager, 'switch_to_preview_tab'):
+                self.ui_manager.switch_to_preview_tab() # プレビュータブに切り替え
+            self.ui_manager.update_image_preview(captured_image, settings_data=None)
+            QApplication.processEvents() # Force UI update
 
-            # Prompt user for filename
+            # 遅延後にファイル名入力ダイアログを表示する
+            QTimer.singleShot(50, lambda: self._prompt_and_save_image(captured_image))
+
+        except Exception as e:
+            # Show error and restore UI if this stage fails
+            QMessageBox.critical(self.ui_manager, self.locale_manager.tr("error_title_capture_save_failed"), self.locale_manager.tr("error_message_capture_save_failed", str(e)))
+            self._show_ui_safe()
+            self.selectionProcessFinished.emit()
+
+    def _prompt_and_save_image(self, captured_image):
+        """Prompts for filename and saves the image."""
+        try:
+            # Prompt user for filename (after preview is hopefully shown)
             file_name, ok = self._get_filename_from_user()
 
             if ok and file_name:
@@ -1588,36 +1656,29 @@ class CoreEngine(QObject):
                     if reply == QMessageBox.StandardButton.No:
                         self.ui_manager.set_tree_enabled(True) # Re-enable tree
                         self.selectionProcessFinished.emit() # Finish process
+                        self._show_ui_safe() # Ensure UI visible if cancelled here
                         return # Stop if overwrite cancelled
 
                 # Submit save task to thread pool
                 if self.thread_pool:
                     self.thread_pool.submit(self._save_image_task, captured_image, save_path).add_done_callback(self._on_save_image_done)
                 else:
-                     # Fallback if pool not available (shouldn't happen here)
+                     # Fallback if pool not available
                      self._on_save_image_done(None, success=False, message=self.locale_manager.tr("Error: Thread pool unavailable for saving."))
                      self.ui_manager.set_tree_enabled(True)
                      self.selectionProcessFinished.emit()
-
+                     self._show_ui_safe()
 
             else: # User cancelled filename input
                 self.selectionProcessFinished.emit()
+                # If cancelled, ensure UI is visible
+                self._show_ui_safe()
 
         except Exception as e:
-            # Show error and restore UI if saving process fails
+             # Show error and restore UI if saving process fails
             QMessageBox.critical(self.ui_manager, self.locale_manager.tr("error_title_capture_save_failed"), self.locale_manager.tr("error_message_capture_save_failed", str(e)))
-            self._show_ui_and_monitor()
+            self._show_ui_safe()
             self.selectionProcessFinished.emit()
-
-
-    def _show_ui_and_monitor(self):
-        """Helper method to safely show main UI and performance monitor."""
-        self._show_ui_safe() # Show main window
-        # Show performance monitor if it exists and isn't visible (and wasn't hidden intentionally before)
-        if self.performance_monitor and not self.performance_monitor.isVisible():
-            # Check if it was visible before selection started (using normal_ui_geometries)
-             if 'perf' in self.normal_ui_geometries:
-                self.performance_monitor.show()
 
 
     def _save_image_task(self, image, save_path):
@@ -1673,6 +1734,8 @@ class CoreEngine(QObject):
             # Always emit finished signal, unless cache build is pending
             if not (future and success and self.thread_pool):
                  self.selectionProcessFinished.emit()
+                 # Ensure UI is visible after save process completes (success or fail)
+                 self._show_ui_safe()
 
 
     def clear_recognition_area(self):
