@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Imeck15 Benutzerhandbuch (Überarbeitete Ausgabe)</title>
+<style>
+/* Basic Styles */
+:root {
+--main-bg-color: #f4f4f9;
+--content-bg-color: #ffffff;
+--text-color: #333;
+--header-color: #4a4a4a;
+--link-color: #007bff;
+--border-color: #e0e0e0;
+--code-bg-color: #e8e8e8;
+--important-bg-color: #fef9e7;
+--important-border-color: #f39c12;
+}
+html {
+scroll-behavior: smooth;
+}
+body {
+font-family: 'Segoe UI', Arial, sans-serif;
+background-color: var(--main-bg-color);
+color: var(--text-color);
+line-height: 1.7;
+margin: 0;
+padding: 20px;
+}
+/* Center content area with appropriate width */
+#main-content {
+background-color: var(--content-bg-color);
+max-width: 800px;
+margin: 0 auto;
+padding: 20px 40px;
+box-shadow: 0 0 10px rgba(0,0,0,0.1);
+border-radius: 8px;
+}
+
+/* Hide sidebar for screen display */
+#sidebar {
+display: none;
+}
+
+/* Table of Contents list style */
+#toc {
+list-style-type: none;
+padding-left: 0;
+border: 1px solid var(--border-color);
+padding: 15px;
+border-radius: 5px;
+background-color: #f9f9f9;
+}
+#toc > li > a {
+font-weight: bold;
+font-size: 1.1em;
+}
+#toc ul {
+list-style-type: none;
+padding-left: 20px;
+margin-top: 5px;
+margin-bottom: 15px;
+}
+#toc li a {
+text-decoration: none;
+color: var(--link-color);
+display: block;
+padding: 4px 0;
+}
+
+/* Heading styles */
+h1 {
+font-size: 2.5em;
+color: var(--header-color);
+border-bottom: 3px solid var(--link-color);
+padding-bottom: 15px;
+margin-top: 0;
+}
+h2 {
+font-size: 2em;
+color: var(--header-color);
+margin-top: 60px;
+border-left: 5px solid var(--link-color);
+padding-left: 15px;
+}
+h3 {
+font-size: 1.6em;
+color: var(--header-color);
+margin-top: 40px;
+border-bottom: 1px solid var(--border-color);
+padding-bottom: 8px;
+}
+h4 {
+font-size: 1.3em;
+color: #5a5a5a;
+margin-top: 30px;
+}
+ul, ol {
+padding-left: 25px;
+}
+li {
+margin-bottom: 10px;
+}
+strong, b {
+font-weight: 600;
+}
+code, .code-like {
+background-color: var(--code-bg-color);
+padding: 2px 6px;
+border-radius: 4px;
+font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+}
+.important {
+border-left: 4px solid var(--important-border-color);
+padding: 10px 15px;
+background-color: var(--important-bg-color);
+margin: 15px 0;
+border-radius: 4px;
+}
+
+/* ===== Print-only styles start here ===== */
+@page {
+size: A4;
+margin: 2.5cm;
+}
+
+@media print {
+body {
+background-color: #fff;
+padding: 0;
+font-size: 11pt; /* Font size suitable for printing */
+}
+#main-content {
+max-width: 100%;
+margin: 0;
+padding: 0;
+box-shadow: none;
+border-radius: 0;
+}
+/* Make links black and underlined for clarity */
+a {
+color: #000 !important;
+text-decoration: underline !important;
+}
+/* Page break before each section (h2) */
+section {
+page-break-before: always;
+}
+/* No page break for the first section after TOC */
+#section1 {
+page-break-before: auto;
+}
+/* Adjust to avoid page breaks in the middle of headings/lists */
+h2, h3, h4 {
+page-break-after: avoid;
+}
+ul, ol, p, .important {
+page-break-inside: avoid;
+}
+.code-like {
+border: 1px solid #ccc;
+}
+}
+/* ===== Print-only styles end here ===== */
+</style>
+</head>
+<body>
+<main id="main-content">
+<h1>Imeck15 Benutzerhandbuch</h1>
+
+<section id="table_of_contents">
+<h2>Inhaltsverzeichnis</h2>
+<ul id="toc">
+<li><a href="#section1">1. Einführung</a>
+<ul>
+<li><a href="#s1-1">Was ist Imeck15?</a></li>
+<li><a href="#s1-2">Hauptmerkmale</a></li>
+</ul>
+</li>
+<li><a href="#section2">2. Grundlegende Verwendung</a>
+<ul>
+<li><a href="#s2-1">Schritt 1: Bilder registrieren</a></li>
+<li><a href="#s2-2">Schritt 2: Erkennungsbereich festlegen</a></li>
+<li><a href="#s2-3">Schritt 3: Klick-Position festlegen</a></li>
+<li><a href="#s2-4">Schritt 4: Überwachung starten und stoppen</a></li>
+</ul>
+</li>
+<li><a href="#section3">3. Funktionen des Hauptbildschirms</a>
+<ul>
+<li><a href="#s3-1">Hauptsteuerungsbereich</a></li>
+<li><a href="#s3-2">Bereich der registrierten Bilder</a></li>
+<li><a href="#s3-3">Einstellungs- und Vorschau-Bereich</a></li>
+</ul>
+</li>
+<li><a href="#section4">4. Detaillierte Funktionen und Techniken</a>
+<ul>
+<li><a href="#s4-1">4.1. Vorteile der Festlegung des Erkennungsbereichs</a></li>
+<li><a href="#s4-2">4.2. Einstellungen pro Bild</a></li>
+<li><a href="#s4-3">4.3. Wie man die Klick-Reihenfolge steuert</a></li>
+<li><a href="#s4-4">4.4. Nutzung der Ordnerfunktion</a></li>
+<li><a href="#s4-5">4.5. Globale Anwendungseinstellungen</a></li>
+</ul>
+</li>
+<li><a href="#section5">5. Leistungsoptimierung</a>
+<ul>
+<li><a href="#s5-1">Grundlegende Optimierungsschritte</a></li>
+<li><a href="#s5-2">Über den Eco-Modus</a></li>
+</ul>
+</li>
+<li><a href="#section6">6. Verschiedene Fenster</a>
+<ul>
+<li><a href="#s6-1">Leistungsmonitor</a></li>
+<li><a href="#s6-2">Minimal-UI-Modus</a></li>
+</ul>
+</li>
+<li><a href="#section7">7. Häufig gestellte Fragen (FAQ)</a></li>
+<li><a href="#section8">8. Lizenzinformationen</a></li>
+</ul>
+</section>
+
+<section id="section1">
+<h2>1. Einführung</h2>
+<h3 id="s1-1">Was ist Imeck15?</h3>
+<p>Imeck15 ist ein Tool, das spezifische auf einem PC-Bildschirm angezeigte Bilder erkennt und automatisch auf voreingestellte Positionen klickt. Es ist primär für die Automatisierung von routinemäßigen, sich wiederholenden Aufgaben in PC-Spielen und -Anwendungen gedacht.</p>
+
+<h3 id="s1-2">Hauptmerkmale</h3>
+<ul>
+<li><b>Bilderkennung:</b> Erkennt, wenn ein registriertes Bild (Vorlage) auf dem Bildschirm erscheint.</li>
+<li><b>Automatisches Klicken:</b> Klickt automatisch auf eine bestimmte Koordinate oder einen Bereich, wenn ein Bild erkannt wird.</li>
+<li><b>Flexible Einstellungen:</b> Ermöglicht eine detaillierte Konfiguration für jedes Bild, wie z. B. Klick-Intervall, Erkennungsgenauigkeit und Klick-Position.</li>
+<li><b>Leistungsabstimmung:</b> Ausgestattet mit verschiedenen Optionen zur Anpassung der Verarbeitungsgeschwindigkeit und der PC-Last an die Betriebsumgebung.</li>
+<li><b>Ordnerfunktion:</b> Verwalten Sie Bilder in Ordnern, wodurch eine gruppenbasierte Betriebssteuerung möglich wird.</li>
+<li><b>Drag & Drop:</b> Ordnen Sie Elemente in der Bildliste intuitiv neu an oder verschieben Sie sie in Ordner.</li>
+</ul>
+</section>
+
+<section id="section2">
+<h2>2. Grundlegende Verwendung</h2>
+<p>Hier sind die vier grundlegenden Schritte, um mit Imeck15 zu beginnen.</p>
+
+<h3 id="s2-1">Schritt 1: Bilder registrieren</h3>
+<p>Registrieren Sie die Bilder, die als Auslöser für automatische Klicks dienen sollen.</p>
+<ol>
+<li>Drücken Sie die Schaltfläche <span class="code-like">[Bild aufnehmen]</span> auf dem Hauptbildschirm.</li>
+<li>Wenn der Dialog „Erkennungsbereich festlegen“ erscheint, wählen Sie <span class="code-like">[Rechteck festlegen]</span>.</li>
+<li>Der Bildschirm wird mit einer halbtransparenten Überlagerung bedeckt. Ziehen Sie die Maus, um das Ziel, das Sie anklicken möchten (wie eine Schaltfläche oder ein Symbol), zu umrahmen. Versuchen Sie, die Auswahl so klein wie möglich zu halten, während Sie die einzigartigen Merkmale erfassen.</li>
+<li>Wenn der Dateinamen-Eingabedialog erscheint, geben Sie einen beschreibenden Namen ein und speichern Sie es.</li>
+<li>Das gerade registrierte Bild wird der Liste „Registrierte Bilder“ auf der linken Seite hinzugefügt.</li>
+</ol>
+
+<h3 id="s2-2">Schritt 2: Erkennungsbereich festlegen</h3>
+<p>Geben Sie den Bereich an, in dem Imeck15 nach Bildern suchen soll. Die Begrenzung dieses Bereichs reduziert die Last auf Ihrem PC erheblich.</p>
+<ol>
+<li>Drücken Sie die Schaltfläche <span class="code-like">[Erkennungsbereich festlegen]</span> oben auf dem Hauptbildschirm.</li>
+<li><span class="code-like">[Rechteck festlegen]</span>: Wählen Sie dies, wenn Sie nur innerhalb einer bestimmten Region des gesamten Bildschirms suchen möchten.</li>
+<li><span class="code-like">[Fenster festlegen]</span>: Wählen Sie dies, wenn Sie nur innerhalb eines bestimmten Anwendungsfensters suchen möchten. Wenn Sie ein Fenster auswählen, berechnet es automatisch den Skalierungsfaktor basierend auf seiner Standardgröße, wodurch die Bilderkennungsgenauigkeit verbessert wird (Details siehe unten).</li>
+</ol>
+
+<h3 id="s2-3">Schritt 3: Klick-Position festlegen</h3>
+<p>Konfigurieren Sie, wohin geklickt werden soll, wenn das registrierte Bild gefunden wird.</p>
+<ol>
+<li>Wählen Sie das gewünschte Bild aus der Liste auf der linken Seite.</li>
+<li>Das Bild wird auf der Registerkarte „Bildvorschau“ auf der rechten Seite angezeigt.</li>
+<li>Aktivieren Sie im Bereich „Einstellungen pro Bild“ unten das Kontrollkästchen <span class="code-like">[Punkt-Klick]</span> oder <span class="code-like">[Bereichs-Klick]</span>.</li>
+<li>Der Mauszeiger ändert sich zu einem Fadenkreuz, wenn er sich über dem Vorschaubild befindet.</li>
+<ul>
+<li><b>Punkt-Klick:</b> Klicken Sie auf die genaue Stelle, die Sie anvisieren möchten. Sie wird mit einem roten Punkt markiert.</li>
+<li><b>Bereichs-Klick:</b> Ziehen Sie die Maus, um einen rechteckigen Bereich zu definieren. Er wird als blaues Feld angezeigt. Der Klick erfolgt irgendwo innerhalb dieses Bereichs (kann auch auf zufällig eingestellt werden).</li>
+</ul>
+</ol>
+
+<h3 id="s2-4">Schritt 4: Überwachung starten und stoppen</h3>
+<p>Sobald die Einstellungen abgeschlossen sind, starten Sie das automatische Klicken.</p>
+<ul>
+<li><b>Starten:</b> Drücken Sie die Schaltfläche <span class="code-like">[Überwachung starten]</span> oben links auf dem Hauptbildschirm. Der Status ändert sich zu „Überwachung läuft...“</li>
+<li><b>Stoppen:</b> Drücken Sie die Schaltfläche <span class="code-like">[Überwachung stoppen]</span>.</li>
+
+</ul>
+<b>Tastenkombinationen (Maus):</b>
+<ul>
+<li><b>Rechts-Doppelklick:</b> Überwachung <b>stoppen</b></li>
+<li><b>Rechts-Dreifachklick:</b> Überwachung <b>starten</b></li>
+</ul>
+</section>
+
+<section id="section3">
+<h2>3. Funktionen des Hauptbildschirms</h2>
+
+<h3 id="s3-1">Hauptsteuerungsbereich</h3>
+<p>Der Bedienbereich oben im Fenster, der immer sichtbar ist.</p>
+<ul>
+<li><span class="code-like">[Überwachung starten]</span>/<span class="code-like">[Überwachung stoppen]</span>: Schaltet das automatische Klicken ein und aus.</li>
+<li><span class="code-like">[Leistung]</span>: Öffnet den „Leistungsmonitor“, in dem Sie die CPU-Auslastung, FPS usw. überprüfen können.</li>
+<li><span class="code-like">[Erkennungsbereich festlegen]</span>: Legt den Bereich zum Suchen nach Bildern fest.</li>
+<li><span class="code-like">[Minimal-UI-Modus]</span>: Schaltet zu einem kleinen Fenster mit nur den wesentlichen Bedienelementen um.</li>
+<li><span class="code-like">[Bildordner]</span>: Öffnet den Ordner, in dem registrierte Bilder im Explorer gespeichert sind.</li>
+<li><b>Statusanzeige:</b> Zeigt den aktuellen Zustand an (Inaktiv, Überwachung läuft...).</li>
+</ul>
+
+<h3 id="s3-2">Bereich der registrierten Bilder (Links)</h3>
+<p>Der Bereich zum Verwalten registrierter Bilder und Ordner.</p>
+<ul>
+<li><b>Bildliste:</b>
+<ul>
+<li>Registrierte Bilder und Ordner werden in einem Baumformat angezeigt.</li>
+<li>Sie können Elemente per <b>Drag & Drop</b> verschieben, um ihre Reihenfolge zu ändern oder sie in Ordner zu verschieben.</li>
+<li>Sie können mehrere Elemente auswählen, indem Sie beim Klicken <b>Umschalt</b> oder <b>Strg</b> gedrückt halten.</li>
+</ul>
+</li>
+<li><span class="code-like">[▲ Nach oben]</span> / <span class="code-like">[▼ Nach unten]</span>: Verschiebt das ausgewählte Element in der Liste nach oben oder unten.</li>
+<li><span class="code-like">[Bild hinzufügen]</span>: Fügt der Liste vorhandene Bilddateien (png, jpg usw.) hinzu.</li>
+<li><span class="code-like">[Bild aufnehmen]</span>: Erfasst einen neuen Teil des Bildschirms zur Registrierung.</li>
+<li><span class="code-like">[Ausgewählte löschen]</span>: Löscht die aktuell ausgewählten Elemente.</li>
+<li><span class="code-like">[Ordner erstellen]</span>: Erstellt einen Ordner, um Bilder zu organisieren.</li>
+<li><span class="code-like">[In/Aus Ordner verschieben]</span>: Verschiebt Bilder in und aus Ordnern.</li>
+<li><b>Rechtsklick auf Ordner:</b> Ein Rechtsklick auf einen Ordner öffnet ein Menü, um dessen Verhaltensmodus festzulegen.</li>
+</ul>
+
+<h3 id="s3-3">Einstellungs- und Vorschau-Bereich (Rechts)</h3>
+<p>Greifen Sie auf verschiedene Informationen und Einstellungen zu, indem Sie die Registerkarten wechseln.</p>
+<ul>
+<li><b>Bildvorschau:</b> Ermöglicht die Vorschau des ausgewählten Bildes und die Festlegung der Klick-Position.</li>
+<li><b>Erkennungsbereich:</b> Zeigt eine Vorschau des aktuell festgelegten Erkennungsbereichs an.</li>
+<li><b>Protokoll:</b> Zeigt Betriebs-Protokolle an.</li>
+<li><b>Auto-Skalierung:</b> Konfiguriert die Bildskalierungseinstellungen basierend auf der Fenstergröße.</li>
+<li><b>App-Einstellungen:</b> Konfiguriert das allgemeine Verhalten von Imeck15.</li>
+<li><b>Anleitung:</b> Zeigt eine detaillierte Anleitung zu den Einstellungen pro Bild an.</li>
+<li><b>Einstellungen pro Bild (Unten):</b> Konfiguriert individuelle Einstellungen für das in der linken Liste ausgewählte Bild.</li>
+</ul>
+</section>
+
+<section id="section4">
+<h2>4. Detaillierte Funktionen und Techniken</h2>
+
+<h3 id="s4-1">4.1. Vorteile der Festlegung des Erkennungsbereichs</h3>
+<p>Die Verwendung von <span class="code-like">[Fenster festlegen]</span> zur Definition des Erkennungsbereichs bietet neben der Reduzierung der PC-Last zwei Hauptvorteile.</p>
+
+<h4>1. Automatische Größenanpassung mit Fensterskalierung</h4>
+<p>Selbst wenn sich die Größe des Zielfensters ändert, behält diese Funktion die Erkennungsgenauigkeit bei, indem sie den Maßstab des Vorlagenbildes automatisch berechnet.</p>
+<b>Funktionsweise:</b>
+<ul>
+<li><b>Speichern der Basisgröße:</b> Wenn Sie ein bestimmtes Fenster zum ersten Mal angeben, werden Sie aufgefordert, dessen aktuelle Größe als „Basisgröße (1.0x-Maßstab)“ zu speichern.</li>
+<li><b>Automatische Maßstabsberechnung:</b> Anschließend, wenn Sie dasselbe Fenster angeben, vergleicht es die Basisgröße mit der aktuellen Größe und berechnet automatisch den Skalierungsfaktor (z. B. 1.2x).</li>
+<li><b>Hochpräzise Übereinstimmung:</b> Dieser berechnete Maßstab wird auf die Vorlagenübereinstimmung angewendet, wodurch eine genaue Erkennung gewährleistet wird, auch wenn sich die Fenstergröße geändert hat.</li>
+</ul>
+
+<h4>2. Automatische Fensteraktivierung vor dem Klicken</h4>
+<p>Kurz vor dem Ausführen eines Klicks prüft diese Funktion, ob sich das Zielfenster im Vordergrund (aktiv) befindet, und aktiviert es automatisch, falls dies nicht der Fall ist.</p>
+<b>Funktionsweise:</b>
+<ul>
+<li><b>Überprüfung des aktiven Zustands:</b> Unmittelbar vor dem Klicken wird überprüft, ob das Zielfenster das aktive Vordergrundfenster ist.</li>
+<li><b>Erzwungene Aktivierung:</b> Wenn das Fenster hinter einem anderen versteckt oder minimiert ist, stellt es das Fenster wieder her und bringt es vor dem Ausführen des Klicks in den Vordergrund.</li>
+<li><b>Verhindert Fehlschläge:</b> Diese Funktion verhindert versehentliche Klicks auf andere Fenster und verbessert die Zuverlässigkeit des Automatisierungsprozesses erheblich.</li>
+</ul>
+
+<h3 id="s4-2">4.2. Einstellungen pro Bild</h3>
+<p>Konfigurieren Sie individuelle Verhaltensweisen für das in der Liste ausgewählte Bild.</p>
+<ul>
+<li><b>Erkennungsgenauigkeit (Schwellenwert):</b> Legt fest, wie ähnlich ein Bild sein muss, um als „Übereinstimmung“ betrachtet zu werden. 0.8 ist Standard; das Erhöhen des Wertes macht die Prüfung strenger (1.0 ist eine perfekte Übereinstimmung).</li>
+<li><b>ROI aktivieren (Suchbereich begrenzen):</b> Wenn diese Option aktiviert ist, wird die Verarbeitung beschleunigt, indem nur in einem kleinen, definierten Bereich gesucht wird.
+<ul>
+<li><b>Fest:</b> Legt automatisch einen <b>200x200 Pixel</b> großen Bereich, zentriert auf der Klick-Koordinate, als ROI fest.</li>
+<li><b>Variabel:</b> Ermöglicht Ihnen, den Suchbereich (ROI) durch Ziehen auf dem Vorschaubildschirm <b>frei festzulegen</b>. Drücken Sie die Schaltfläche <span class="code-like">[ROI-Bereich festlegen]</span>, um das Zeichnen des Bereichs in der Vorschau zu aktivieren.</li>
+</ul>
+</li>
+<li><b>Backup-Klick:</b> Funktioniert als letztes Mittel. Wenn für die angegebene Dauer (in Sekunden) keine anderen normalen Bilder gefunden werden, wird dieses Bild angeklickt.</li>
+<li><b>Intervall (Sek.):</b> Die minimale Wartezeit nach einem Klick, bevor *dasselbe Bild* erneut angeklickt werden kann. <b>Dieser Wert bestimmt die Klick-Priorität (ein kleinerer Wert bedeutet höhere Priorität).</b></li>
+<li><b>Entprellung (Sek.):</b> Wenn dasselbe Bild nacheinander zum Klicken anvisiert wird, verlängert dies die Wartezeit für den zweiten Klick auf „Intervall + Entprellzeit“. Dies schafft eine Gelegenheit, dass andere Bilder zuerst geklickt werden.</li>
+<li><b>Klick-Typ:</b> Wählen Sie zwischen <span class="code-like">[Punkt-Klick]</span>, <span class="code-like">[Bereichs-Klick]</span> und <span class="code-like">[Zufällig im Bereich]</span>.</li>
+</ul>
+
+<h3 id="s4-3">4.3. Wie man die Klick-Reihenfolge steuert</h3>
+<p>Wenn mehrere Bilder gleichzeitig auf dem Bildschirm gefunden werden, priorisiert Imeck15 das Klicken auf das Bild mit dem <b>kleinsten „Intervall“-Wert</b>. Sie können diesen Mechanismus verwenden, um die Prioritätsreihenfolge des Klicks zu steuern.</p>
+<p><b>Beispiel:</b></p>
+<ul>
+<li>Setzen Sie das Intervall von Bild A auf <b>1.5</b></li>
+<li>Setzen Sie das Intervall von Bild B auf <b>2.0</b></li>
+</ul>
+<p>→ Selbst wenn A und B gleichzeitig auf dem Bildschirm sind, wird immer <b>Bild A</b> (mit dem kürzeren Intervall) zuerst angeklickt.</p>
+<div class="important">
+<b>Fortgeschrittene Technik:</b><br>
+Auf einem Bildschirm mit mehreren Schaltflächen, deren Zustand sich nach dem Klicken ändert (verschwinden, ausgegraut werden usw.), können Sie eine Abfolge von Vorgängen automatisieren, indem Sie die Intervalle in der Reihenfolge festlegen, in der sie angeklickt werden sollen (z. B. 1.5, 2.0, 2.5...).
+</div>
+
+<h3 id="s4-4">4.4. Nutzung der Ordnerfunktion</h3>
+<p>Das Organisieren von Bildern in Ordnern ermöglicht es Ihnen, deren Verhalten als Gruppe zu steuern. Klicken Sie mit der <b>rechten Maustaste</b> auf einen Ordner, um dessen Einstellungsfenster zu öffnen.</p>
+<ul>
+<li><b>Normal:</b> Bilder im Ordner werden normal durchsucht.</li>
+<li><b>Suche stoppen (Ausgeschlossen):</b> Alle Bilder im Ordner sind von der Suche ausgeschlossen. Nützlich, um eine Gruppe von Bildern vorübergehend zu deaktivieren.</li>
+<li><b>Timer-Priorität:</b> Nachdem eine bestimmte Zeit (in Minuten) verstrichen ist, wechselt der Modus zur Suche *nur* nach Bildern innerhalb dieses Ordners. Nützlich zum Gruppieren einer Reihe von Aktionen, die nur in bestimmten Intervallen ausgeführt werden sollen.</li>
+</ul>
+
+<h4>Bilderkennungs-Prioritätsmodus</h4>
+<p>Dies ist eine leistungsstarke Funktion zur Automatisierung einer Reihe von Vorgängen, die auf eine bestimmte Situation reagieren (z. B. ein Pop-up-Fenster).</p>
+<p><b>Funktionsweise:</b></p>
+<ol>
+<li><b>Auslöser:</b> Der Prioritätsmodus startet, wenn <b>auch nur ein Bild</b>, das zu diesem Ordner gehört, auf dem Bildschirm gefunden wird.</li>
+<li><b>Verhalten:</b> Im Prioritätsmodus werden <b>nur Bilder innerhalb dieses Ordners</b> gesucht und angeklickt.</li>
+<li><b>Deaktivierungsbedingungen:</b> Der Prioritätsmodus wird automatisch deaktiviert und kehrt zur normalen Überwachung zurück, wenn eine der folgenden Bedingungen erfüllt ist:
+<ul>
+<li><b>Alle Bilder</b> im Ordner wurden mindestens einmal angeklickt (Abschluss).</li>
+<li>Für eine festgelegte <b>Zeitüberschreitungsdauer (Sekunden)</b> wurden keine Bilder aus dem Ordner gefunden.</li>
+</ul>
+</li>
+</ol>
+<div class="important">
+<b>Anwendungsbeispiel:</b><br>
+Betrachten Sie ein im Spiel erscheinendes Fenster „Inventar voll“.
+<ol>
+<li>Erfassen Sie alle zugehörigen Bilder: den Titel „Inventar voll“, die Schaltfläche „OK“, die Schaltfläche „Abbrechen“ usw.</li>
+<li>Fügen Sie diese Bilder einem neuen Ordner mit dem Namen „Inventar voll behandeln“ hinzu und stellen Sie dessen Modus auf <b>„Bilderkennungs-Priorität“</b> ein.</li>
+<li>Passen Sie die Intervalle der Bilder im Ordner so an, dass die Schaltfläche „OK“ zuletzt angeklickt wird.</li>
+</ol>
+Mit dieser Einrichtung wird der Ordner „Inventar voll behandeln“ normalerweise ignoriert. Aber in dem Moment, in dem das Inventarfenster erscheint, erkennt Imeck15 es, führt automatisch die notwendigen Aktionen durch (z. B. Klicken auf „OK“) und kehrt dann nach Abschluss zur normalen Überwachung zurück.
+</div>
+
+<h3 id="s4-5">4.5. Globale Anwendungseinstellungen</h3>
+<p>Passen Sie das allgemeine Verhalten von Imeck15 auf der Registerkarte „App-Einstellungen“ an.</p>
+<ul>
+<li><b>Graustufen-Übereinstimmung:</b> Vergleicht Bilder in Schwarz-Weiß. Schneller, kann aber keine Farben unterscheiden.</li>
+<li><b>DXCam verwenden:</b> Eine schnellere Methode zur Bildschirmaufnahme. Wirksam beim Erfassen von Spielbildschirmen, funktioniert jedoch möglicherweise nicht in allen Umgebungen.</li>
+<li><b>Frame-Überspringen:</b> Ein höherer Wert senkt die Häufigkeit der Bildschirmprüfung, wodurch die PC-Last reduziert wird, aber auch die Reaktionszeit verlangsamt wird.</li>
+<li><b>OpenCL verwenden (GPU-Beschleunigung):</b> Kann die Bildverarbeitung beschleunigen, wenn eine kompatible GPU vorhanden ist.</li>
+<li><b>Bildschirm-Stabilitätsprüfung:</b> Erkennt Bildschirm-Rendering oder -Effekte und hält Klicks zurück, bis der Bildschirm stabil ist. Passen Sie den Schwellenwert an, um die Empfindlichkeit der Prüfung zu ändern.</li>
+<li><b>Leichtgewicht-Modus:</b> Reduziert die PC-Last drastisch, indem die Auflösung der Bildschirmaufnahme gesenkt wird. Sie können aus Voreinstellungen (Standard, Leistung, Ultra) wählen.</li>
+</ul>
+</section>
+
+<section id="section5">
+<h2>5. Leistungsoptimierung</h2>
+<p>Wenn sich Imeck15 träge anfühlt oder Ihr PC verzögert, überprüfen Sie die folgenden Einstellungen.</p>
+
+<h3 id="s5-1">Grundlegende Optimierungsschritte</h3>
+<p>Aufgelistet in der Reihenfolge der Wirksamkeit.</p>
+<ol>
+<li><b>Erkennungsbereich begrenzen:</b> <b>Dies ist die effektivste Methode.</b> Verwenden Sie Fenster- oder Rechteckseinstellungen, um den Suchbereich auf das absolute Minimum einzugrenzen.</li>
+<li><b>Leichtgewicht-Modus aktivieren:</b> Aktivieren Sie dies auf der Registerkarte „App-Einstellungen“. Es verbessert die PC-Last drastisch.</li>
+<li><b>ROI pro Bild aktivieren:</b> Dies macht die Verarbeitung sehr schnell, da die App nur in dem kleinen Bereich um das Klick-Ziel sucht.</li>
+<li><b>Frame-Überspring-Wert erhöhen:</b> Dies ist ein Kompromiss mit der Reaktionsgeschwindigkeit, aber es wird die Last reduzieren.</li>
+<li><b>DXCam verwenden:</b> Wenn Ihre Umgebung es unterstützt, bietet dies eine schnelle Erfassung mit geringer CPU-Last.</li>
+</ol>
+
+<h3 id="s5-2">Über den Eco-Modus</h3>
+<p>Der <span class="code-like">[Eco-Modus]</span> in der Registerkarte „App-Einstellungen“ ist eine Funktion zur weiteren Reduzierung der PC-Last.</p>
+<b>Funktionsweise:</b>
+<ul>
+<li><b>Aktivierung:</b> Wird automatisch aktiviert, wenn nach dem letzten Klick <b>5 Sekunden</b> lang kein erkennbares Bild gefunden wird.</li>
+<li><b>Verhalten:</b> Bei Aktivierung sinkt die Häufigkeit der Bildschirmprüfung auf <b>etwa einmal pro Sekunde</b>, wodurch die CPU-Auslastung erheblich reduziert wird.</li>
+<li><b>Deaktivierung:</b> Wenn während des Eco-Modus ein Bild erkannt und ein Klick ausgeführt wird, wird er automatisch deaktiviert und kehrt zur normalen Überwachungshäufigkeit zurück.</li>
+</ul>
+<div class="important">
+Diese Funktion ist besonders nützlich bei der Automatisierung von Aufgaben mit langen Wartezeiten. Sie ist standardmäßig aktiviert, Sie können sie jedoch ausschalten, wenn Sie immer die schnellstmögliche Reaktion benötigen.
+</div>
+</section>
+
+<section id="section6">
+<h2>6. Verschiedene Fenster</h2>
+<h3 id="s6-1">Leistungsmonitor</h3>
+<p>Wird über die Schaltfläche <span class="code-like">[Leistung]</span> auf dem Hauptbildschirm geöffnet. Er ermöglicht Ihnen, die CPU-/RAM-Auslastung, FPS (Frames pro Sekunde), die Gesamtzahl der Klicks und andere Informationen in Echtzeit zu überprüfen. Sie können auch die Überwachung starten/stoppen oder den Erkennungsbereich über die Schaltflächen oben festlegen. Tastenkombinationen sind verfügbar: <b>Rechts-Doppelklick zum Stoppen der Überwachung, Rechts-Dreifachklick zum Starten der Überwachung</b>.</p>
+
+<h3 id="s6-2">Minimal-UI-Modus</h3>
+<p>Wird über die Schaltfläche <span class="code-like">[Minimal-UI-Modus]</span> umgeschaltet. Dadurch wird das Hauptfenster ausgeblendet und ein kleines Fenster mit wesentlichen Bedienelementen wie Start/Stopp der Überwachung angezeigt.</p>
+</section>
+
+<section id="section7">
+<h2>7. Häufig gestellte Fragen (FAQ)</h2>
+<p><b>F: Bilder werden nicht korrekt gefunden.</b></p>
+<p>A: Bitte überprüfen Sie folgende Punkte:</p>
+<ul>
+<li>Ist der „Erkennungsbereich“ korrekt festgelegt?</li>
+<li>Ist die „Erkennungsgenauigkeit“ in den „Einstellungen pro Bild“ zu hoch? Versuchen Sie, sie leicht zu senken.</li>
+<li>Hat sich die Fenstergröße Ihres Spiels oder Ihrer Anwendung geändert? Überprüfen Sie die Einstellungen in der Registerkarte „Auto-Skalierung“ oder versuchen Sie, das Bild neu aufzunehmen.</li>
+</ul>
+<p><b>F: Die Anwendung ist träge und mein PC verzögert sich.</b></p>
+<p>A: Bitte beachten Sie den Abschnitt „<a href="#section5">5. Leistungsoptimierung</a>“ oben und überprüfen Sie Ihre Einstellungen.</p>
+<p><b>F: Es klickt mitten in einem Bildschirmübergang.</b></p>
+<p>A: Überprüfen Sie, ob die „Bildschirm-Stabilitätsprüfung“ in der Registerkarte „App-Einstellungen“ aktiviert ist. Wenn ja, versuchen Sie, den „Schwellenwert“ leicht zu senken, um die Prüfung strenger zu machen.</p>
+</section>
+
+<section id="section8">
+<h2>8. Lizenzinformationen</h2>
+<p>Imeck15 wurde unter Verwendung mehrerer Open-Source-Bibliotheken entwickelt. Bei der Weitergabe dieser Anwendung müssen Sie die Lizenzbedingungen dieser Bibliotheken einhalten. Bitte überprüfen Sie den Inhalt der beigefügten Datei THIRD-PARTY-NOTICES.txt und des Ordners „licenses“.</p>
+</main>
+</body>
+</html>

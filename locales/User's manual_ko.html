@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Imeck15 사용자 매뉴얼 (개정판)</title>
+<style>
+/* 기본 스타일 */
+:root {
+--main-bg-color: #f4f4f9;
+--content-bg-color: #ffffff;
+--text-color: #333;
+--header-color: #4a4a4a;
+--link-color: #007bff;
+--border-color: #e0e0e0;
+--code-bg-color: #e8e8e8;
+--important-bg-color: #fef9e7;
+--important-border-color: #f39c12;
+}
+html {
+scroll-behavior: smooth;
+}
+body {
+font-family: 'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; /* 한국어 환경에 맞는 글꼴 추가 */
+background-color: var(--main-bg-color);
+color: var(--text-color);
+line-height: 1.7;
+margin: 0;
+padding: 20px;
+}
+/* 콘텐츠 영역 중앙 정렬 및 적절한 너비 설정 */
+#main-content {
+background-color: var(--content-bg-color);
+max-width: 800px;
+margin: 0 auto;
+padding: 20px 40px;
+box-shadow: 0 0 10px rgba(0,0,0,0.1);
+border-radius: 8px;
+}
+
+/* 화면 표시용 사이드바 숨기기 */
+#sidebar {
+display: none;
+}
+
+/* 목차 목록 스타일 */
+#toc {
+list-style-type: none;
+padding-left: 0;
+border: 1px solid var(--border-color);
+padding: 15px;
+border-radius: 5px;
+background-color: #f9f9f9;
+}
+#toc > li > a {
+font-weight: bold;
+font-size: 1.1em;
+}
+#toc ul {
+list-style-type: none;
+padding-left: 20px;
+margin-top: 5px;
+margin-bottom: 15px;
+}
+#toc li a {
+text-decoration: none;
+color: var(--link-color);
+display: block;
+padding: 4px 0;
+}
+
+/* 제목 스타일 */
+h1 {
+font-size: 2.5em;
+color: var(--header-color);
+border-bottom: 3px solid var(--link-color);
+padding-bottom: 15px;
+margin-top: 0;
+}
+h2 {
+font-size: 2em;
+color: var(--header-color);
+margin-top: 60px;
+border-left: 5px solid var(--link-color);
+padding-left: 15px;
+}
+h3 {
+font-size: 1.6em;
+color: var(--header-color);
+margin-top: 40px;
+border-bottom: 1px solid var(--border-color);
+padding-bottom: 8px;
+}
+h4 {
+font-size: 1.3em;
+color: #5a5a5a;
+margin-top: 30px;
+}
+ul, ol {
+padding-left: 25px;
+}
+li {
+margin-bottom: 10px;
+}
+strong, b {
+font-weight: 600;
+}
+code, .code-like {
+background-color: var(--code-bg-color);
+padding: 2px 6px;
+border-radius: 4px;
+font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+}
+.important {
+border-left: 4px solid var(--important-border-color);
+padding: 10px 15px;
+background-color: var(--important-bg-color);
+margin: 15px 0;
+border-radius: 4px;
+}
+
+/* ===== 인쇄 전용 스타일 시작 ===== */
+@page {
+size: A4;
+margin: 2.5cm;
+}
+
+@media print {
+body {
+background-color: #fff;
+padding: 0;
+font-size: 11pt; /* 인쇄에 적합한 글꼴 크기 */
+}
+#main-content {
+max-width: 100%;
+margin: 0;
+padding: 0;
+box-shadow: none;
+border-radius: 0;
+}
+/* 링크를 검정색으로 하고 밑줄을 추가하여 명확하게 함 */
+a {
+color: #000 !important;
+text-decoration: underline !important;
+}
+/* 각 섹션(h2) 앞에서 페이지 나누기 */
+section {
+page-break-before: always;
+}
+/* 목차 뒤 첫 번째 섹션은 페이지 나누기 안 함 */
+#section1 {
+page-break-before: auto;
+}
+/* 제목/목록 중간에서 페이지 나누기 방지 */
+h2, h3, h4 {
+page-break-after: avoid;
+}
+ul, ol, p, .important {
+page-break-inside: avoid;
+}
+.code-like {
+border: 1px solid #ccc;
+}
+}
+/* ===== 인쇄 전용 스타일 끝 ===== */
+</style>
+</head>
+<body>
+<main id="main-content">
+<h1>Imeck15 사용자 매뉴얼</h1>
+
+<section id="table_of_contents">
+<h2>목차</h2>
+<ul id="toc">
+<li><a href="#section1">1. 소개</a>
+<ul>
+<li><a href="#s1-1">Imeck15란?</a></li>
+<li><a href="#s1-2">주요 기능</a></li>
+</ul>
+</li>
+<li><a href="#section2">2. 기본 사용법</a>
+<ul>
+<li><a href="#s2-1">1단계: 이미지 등록</a></li>
+<li><a href="#s2-2">2단계: 인식 영역 설정</a></li>
+<li><a href="#s2-3">3단계: 클릭 위치 설정</a></li>
+<li><a href="#s2-4">4단계: 모니터링 시작 및 중지</a></li>
+</ul>
+</li>
+<li><a href="#section3">3. 메인 화면 기능</a>
+<ul>
+<li><a href="#s3-1">메인 컨트롤 영역</a></li>
+<li><a href="#s3-2">등록된 이미지 영역</a></li>
+<li><a href="#s3-3">설정 및 미리보기 영역</a></li>
+</ul>
+</li>
+<li><a href="#section4">4. 상세 기능 및 기법</a>
+<ul>
+<li><a href="#s4-1">4.1. 인식 영역 설정의 이점</a></li>
+<li><a href="#s4-2">4.2. 개별 이미지 설정 항목</a></li>
+<li><a href="#s4-3">4.3. 클릭 순서 제어 방법</a></li>
+<li><a href="#s4-4">4.4. 폴더 기능 활용</a></li>
+<li><a href="#s4-5">4.5. 전역 애플리케이션 설정</a></li>
+</ul>
+</li>
+<li><a href="#section5">5. 성능 최적화</a>
+<ul>
+<li><a href="#s5-1">기본 최적화 단계</a></li>
+<li><a href="#s5-2">절전 모드 정보</a></li>
+</ul>
+</li>
+<li><a href="#section6">6. 다양한 창</a>
+<ul>
+<li><a href="#s6-1">성능 모니터</a></li>
+<li><a href="#s6-2">최소 UI 모드</a></li>
+</ul>
+</li>
+<li><a href="#section7">7. 자주 묻는 질문 (FAQ)</a></li>
+<li><a href="#section8">8. 라이선스 정보</a></li>
+</ul>
+</section>
+
+<section id="section1">
+<h2>1. 소개</h2>
+<h3 id="s1-1">Imeck15란?</h3>
+<p>Imeck15는 PC 화면에 표시되는 특정 이미지를 인식하여 미리 설정된 위치를 자동으로 클릭하는 도구입니다. 주로 PC 게임 및 응용 프로그램에서 일상적이고 반복적인 작업을 자동화하기 위한 것입니다.</p>
+
+<h3 id="s1-2">주요 기능</h3>
+<ul>
+<li><b>이미지 인식:</b> 등록된 이미지(템플릿)가 화면에 나타나는 시점을 감지합니다.</li>
+<li><b>자동 클릭:</b> 이미지가 감지되면 지정된 좌표 또는 영역을 자동으로 클릭합니다.</li>
+<li><b>유연한 설정:</b> 클릭 간격, 인식 정확도, 클릭 위치 등 각 이미지에 대한 상세한 구성이 가능합니다.</li>
+<li><b>성능 튜닝:</b> 운영 환경에 따라 처리 속도와 PC 부하를 조정할 수 있는 다양한 옵션을 갖추고 있습니다.</li>
+<li><b>폴더 기능:</b> 이미지를 폴더로 관리하여 그룹 기반의 운영 제어를 가능하게 합니다.</li>
+<li><b>드래그 앤 드롭:</b> 이미지 목록의 항목을 직관적으로 재정렬하거나 폴더로 이동할 수 있습니다.</li>
+</ul>
+</section>
+
+<section id="section2">
+<h2>2. 기본 사용법</h2>
+<p>Imeck15를 시작하기 위한 네 가지 기본 단계입니다.</p>
+
+<h3 id="s2-1">1단계: 이미지 등록</h3>
+<p>자동 클릭의 트리거 역할을 할 이미지를 등록합니다.</p>
+<ol>
+<li>메인 화면에서 <span class="code-like">[이미지 캡처]</span> 버튼을 누릅니다.</li>
+<li>"인식 영역 설정" 대화 상자가 나타나면 <span class="code-like">[사각형 설정]</span>을 선택합니다.</li>
+<li>화면이 반투명 오버레이로 덮입니다. 클릭하려는 대상(버튼 또는 아이콘 등) 주위로 마우스를 드래그하여 선택합니다. 고유한 특징을 캡처하면서 선택 영역을 가능한 한 작게 만드십시오.</li>
+<li>파일명 입력 대화 상자가 나타나면 설명적인 이름을 지정하고 저장합니다.</li>
+<li>방금 등록한 이미지가 왼쪽의 "등록된 이미지" 목록에 추가됩니다.</li>
+</ol>
+
+<h3 id="s2-2">2단계: 인식 영역 설정</h3>
+<p>Imeck15가 이미지를 검색할 영역을 지정합니다. 이 영역을 제한하면 PC 부하를 크게 줄일 수 있습니다.</p>
+<ol>
+<li>메인 화면 상단의 <span class="code-like">[인식 영역 설정]</span> 버튼을 누릅니다.</li>
+<li><span class="code-like">[사각형 설정]</span>: 전체 화면의 특정 영역 내에서만 검색하려는 경우 선택합니다.</li>
+<li><span class="code-like">[창 설정]</span>: 특정 응용 프로그램 창 내에서만 검색하려는 경우 선택합니다. 창을 선택하면 표준 크기를 기준으로 배율을 자동으로 계산하여 이미지 인식 정확도를 향상시킵니다 (자세한 내용은 아래 참조).</li>
+</ol>
+
+<h3 id="s2-3">3단계: 클릭 위치 설정</h3>
+<p>등록된 이미지를 찾았을 때 클릭할 위치를 구성합니다.</p>
+<ol>
+<li>왼쪽 목록에서 원하는 이미지를 선택합니다.</li>
+<li>이미지가 오른쪽의 "이미지 미리보기" 탭에 표시됩니다.</li>
+<li>하단의 "개별 이미지 설정" 영역에서 <span class="code-like">[점 클릭]</span> 또는 <span class="code-like">[범위 클릭]</span> 체크박스를 선택합니다.</li>
+<li>미리보기 이미지 위에서 마우스 커서가 십자 모양으로 변경됩니다.</li>
+<ul>
+<li><b>점 클릭:</b> 타겟팅하려는 정확한 지점을 클릭합니다. 빨간 점으로 표시됩니다.</li>
+<li><b>범위 클릭:</b> 마우스를 드래그하여 사각형 영역을 정의합니다. 파란색 상자로 표시됩니다. 클릭은 이 영역 내 어딘가에서 발생합니다 (무작위로 설정할 수도 있음).</li>
+</ul>
+</ol>
+
+<h3 id="s2-4">4단계: 모니터링 시작 및 중지</h3>
+<p>설정이 완료되면 자동 클릭을 시작합니다.</p>
+<ul>
+<li><b>시작:</b> 메인 화면 왼쪽 상단의 <span class="code-like">[모니터링 시작]</span> 버튼을 누릅니다. 상태가 "모니터링 중..."으로 변경됩니다.</li>
+<li><b>중지:</b> <span class="code-like">[모니터링 중지]</span> 버튼을 누릅니다.</li>
+
+</ul>
+<b>단축키 (마우스):</b>
+<ul>
+<li><b>오른쪽 더블클릭:</b> 모니터링 <b>중지</b></li>
+<li><b>오른쪽 트리플클릭:</b> 모니터링 <b>시작</b></li>
+</ul>
+</section>
+
+<section id="section3">
+<h2>3. 메인 화면 기능</h2>
+
+<h3 id="s3-1">메인 컨트롤 영역</h3>
+<p>창 상단에 항상 표시되는 작업 영역입니다.</p>
+<ul>
+<li><span class="code-like">[모니터링 시작]</span>/<span class="code-like">[모니터링 중지]</span>: 자동 클릭을 켜고 끕니다.</li>
+<li><span class="code-like">[성능]</span>: CPU 사용량, FPS 등을 확인할 수 있는 "성능 모니터"를 엽니다.</li>
+<li><span class="code-like">[인식 영역 설정]</span>: 이미지를 검색할 영역을 설정합니다.</li>
+<li><span class="code-like">[최소 UI 모드]</span>: 필수 컨트롤만 있는 작은 창으로 전환합니다.</li>
+<li><span class="code-like">[이미지 폴더]</span>: 등록된 이미지가 저장된 폴더를 탐색기에서 엽니다.</li>
+<li><b>상태 표시:</b> 현재 상태(대기 중, 모니터링 중...)를 표시합니다.</li>
+</ul>
+
+<h3 id="s3-2">등록된 이미지 영역 (왼쪽)</h3>
+<p>등록된 이미지 및 폴더를 관리하는 영역입니다.</p>
+<ul>
+<li><b>이미지 목록:</b>
+<ul>
+<li>등록된 이미지와 폴더가 트리 형식으로 표시됩니다.</li>
+<li>항목을 <b>드래그 앤 드롭</b>하여 순서를 변경하거나 폴더로 이동할 수 있습니다.</li>
+<li><b>Shift</b> 또는 <b>Ctrl</b> 키를 누른 상태에서 클릭하여 여러 항목을 선택할 수 있습니다.</li>
+</ul>
+</li>
+<li><span class="code-like">[▲ 위로]</span> / <span class="code-like">[▼ 아래로]</span>: 선택한 항목을 목록에서 위 또는 아래로 이동합니다.</li>
+<li><span class="code-like">[이미지 추가]</span>: 기존 이미지 파일(png, jpg 등)을 목록에 추가합니다.</li>
+<li><span class="code-like">[이미지 캡처]</span>: 화면의 새 부분을 캡처하여 등록합니다.</li>
+<li><span class="code-like">[선택 항목 삭제]</span>: 현재 선택된 항목을 삭제합니다.</li>
+<li><span class="code-like">[폴더 생성]</span>: 이미지를 정리할 폴더를 만듭니다.</li>
+<li><span class="code-like">[폴더로 이동/폴더 밖으로 이동]</span>: 이미지를 폴더 안팎으로 이동합니다.</li>
+<li><b>폴더 오른쪽 클릭:</b> 폴더를 오른쪽 클릭하면 해당 폴더의 동작 모드를 설정하는 메뉴가 열립니다.</li>
+</ul>
+
+<h3 id="s3-3">설정 및 미리보기 영역 (오른쪽)</h3>
+<p>탭을 전환하여 다양한 정보와 설정에 액세스합니다.</p>
+<ul>
+<li><b>이미지 미리보기:</b> 선택한 이미지를 미리 보고 클릭 위치를 설정할 수 있습니다.</li>
+<li><b>인식 영역:</b> 현재 설정된 인식 영역의 미리보기를 표시합니다.</li>
+<li><b>로그:</b> 작업 로그를 표시합니다.</li>
+<li><b>자동 스케일:</b> 창 크기에 따른 이미지 스케일링 설정을 구성합니다.</li>
+<li><b>앱 설정:</b> Imeck15의 전체적인 동작을 구성합니다.</li>
+<li><b>사용법:</b> 개별 이미지 설정에 대한 상세 가이드를 표시합니다.</li>
+<li><b>개별 이미지 설정 (하단):</b> 왼쪽 목록에서 선택한 이미지의 개별 설정을 구성합니다.</li>
+</ul>
+</section>
+
+<section id="section4">
+<h2>4. 상세 기능 및 기법</h2>
+
+<h3 id="s4-1">4.1. 인식 영역 설정의 이점</h3>
+<p><span class="code-like">[창 설정]</span>을 사용하여 인식 영역을 정의하면 PC 부하 감소 외에 두 가지 주요 이점이 있습니다.</p>
+
+<h4>1. 창 기반 스케일링을 통한 자동 크기 조정</h4>
+<p>대상 창의 크기가 변경되더라도 이 기능은 템플릿 이미지의 스케일을 자동으로 계산하여 인식 정확도를 유지합니다.</p>
+<b>작동 방식:</b>
+<ul>
+<li><b>기본 크기 저장:</b> 특정 창을 처음 지정할 때 현재 크기를 "기본 크기(1.0배 스케일)"로 저장하라는 메시지가 표시됩니다.</li>
+<li><b>자동 스케일 계산:</b> 이후 동일한 창을 지정하면 기본 크기와 현재 크기를 비교하여 스케일링 팩터(예: 1.2배)를 자동으로 계산합니다.</li>
+<li><b>고정밀 매칭:</b> 이 계산된 스케일이 템플릿 매칭에 적용되어 창 크기가 변경되더라도 정확한 인식을 보장합니다.</li>
+</ul>
+
+<h4>2. 클릭 전 자동 창 활성화</h4>
+<p>클릭을 수행하기 직전에 이 기능은 대상 창이 전경(활성)에 있는지 확인하고 그렇지 않은 경우 자동으로 활성화합니다.</p>
+<b>작동 방식:</b>
+<ul>
+<li><b>활성 상태 확인:</b> 클릭 직전에 대상 창이 활성 전경 창인지 확인합니다.</li>
+<li><b>강제 활성화:</b> 창이 다른 창 뒤에 숨겨져 있거나 최소화된 경우 클릭을 실행하기 전에 창을 복원하고 전면으로 가져옵니다.</li>
+<li><b>오작동 방지:</b> 이 기능은 다른 창에 대한 우발적인 클릭을 방지하여 자동화 프로세스의 신뢰성을 크게 향상시킵니다.</li>
+</ul>
+
+<h3 id="s4-2">4.2. 개별 이미지 설정 항목</h3>
+<p>목록에서 선택한 이미지에 대한 개별 동작을 구성합니다.</p>
+<ul>
+<li><b>인식 정확도 (임계값):</b> 이미지가 "일치"로 간주되기 위해 얼마나 유사해야 하는지 설정합니다. 0.8이 표준이며, 값을 높이면 검사가 더 엄격해집니다(1.0은 완벽 일치).</li>
+<li><b>ROI 활성화 (검색 영역 제한):</b> 켜면 작고 정의된 영역만 검색하여 처리를 가속화합니다.
+<ul>
+<li><b>고정:</b> 클릭 좌표를 중심으로 한 <b>200x200 픽셀</b> 영역을 ROI로 자동 설정합니다.</li>
+<li><b>가변:</b> 미리보기 화면에서 드래그하여 검색 영역(ROI)을 <b>자유롭게 설정</b>할 수 있습니다. <span class="code-like">[ROI 영역 설정]</span> 버튼을 눌러 미리보기에서 영역 그리기를 활성화합니다.</li>
+</ul>
+</li>
+<li><b>백업 클릭:</b> 최후의 수단으로 작동합니다. 지정된 기간(초) 동안 다른 일반 이미지를 찾지 못하면 이 이미지가 클릭됩니다.</li>
+<li><b>간격 (초):</b> 클릭 후 *동일한 이미지*를 다시 클릭할 수 있을 때까지의 최소 대기 시간입니다. <b>이 값은 클릭 우선 순위를 결정합니다(값이 작을수록 우선 순위가 높음).</b></li>
+<li><b>디바운스 (초):</b> 동일한 이미지가 연속적으로 클릭 대상으로 지정될 경우, 두 번째 클릭 대기 시간을 "간격 + 디바운스 시간"으로 연장합니다. 이는 다른 이미지가 클릭될 기회를 만듭니다.</li>
+<li><b>클릭 유형:</b> <span class="code-like">[점 클릭]</span>, <span class="code-like">[범위 클릭]</span>, <span class="code-like">[범위 내 무작위]</span> 중에서 선택합니다.</li>
+</ul>
+
+<h3 id="s4-3">4.3. 클릭 순서 제어 방법</h3>
+<p>화면에 여러 이미지가 동시에 발견되면 Imeck15는 <b>"간격" 값이 가장 작은</b> 이미지를 우선적으로 클릭합니다. 이 메커니즘을 사용하여 클릭 우선 순위 순서를 제어할 수 있습니다.</p>
+<p><b>예:</b></p>
+<ul>
+<li>이미지 A의 간격을 <b>1.5</b>로 설정</li>
+<li>이미지 B의 간격을 <b>2.0</b>으로 설정</li>
+</ul>
+<p>→ 화면에 A와 B가 동시에 있더라도 <b>이미지 A</b>(간격이 짧음)가 항상 먼저 클릭됩니다.</p>
+<div class="important">
+<b>고급 기법:</b><br>
+클릭 후 상태가 변경되는(사라지거나 회색으로 변하는 등) 여러 버튼이 있는 화면에서는 클릭하려는 순서대로 간격을 설정하여(예: 1.5, 2.0, 2.5...) 일련의 작업을 자동화할 수 있습니다.
+</div>
+
+<h3 id="s4-4">4.4. 폴더 기능 활용</h3>
+<p>이미지를 폴더로 정리하면 그룹으로 동작을 제어할 수 있습니다. 폴더를 <b>오른쪽 클릭</b>하여 설정 창을 엽니다.</p>
+<ul>
+<li><b>정상:</b> 폴더 내 이미지는 정상적으로 검색됩니다.</li>
+<li><b>검색 중지 (제외됨):</b> 폴더 내 모든 이미지는 검색에서 제외됩니다. 일시적으로 이미지 그룹을 비활성화하는 데 유용합니다.</li>
+<li><b>타이머 우선:</b> 지정된 시간(분)이 지나면 이 폴더 내의 이미지*만* 검색하는 모드로 전환됩니다. 특정 간격으로만 실행해야 하는 일련의 작업을 그룹화하는 데 유용합니다.</li>
+</ul>
+
+<h4>이미지 인식 우선 모드</h4>
+<p>특정 상황(예: 팝업 창)에 대응하는 일련의 작업을 자동화하는 데 매우 강력한 기능입니다.</p>
+<p><b>작동 방식:</b></p>
+<ol>
+<li><b>트리거:</b> 화면에서 이 폴더에 속한 이미지가 <b>하나라도</b> 발견되면 우선 모드가 시작됩니다.</li>
+<li><b>동작:</b> 우선 모드 중에는 <b>이 폴더 내의 이미지만</b> 검색되고 클릭됩니다.</li>
+<li><b>비활성화 조건:</b> 다음 조건 중 하나가 충족되면 우선 모드가 자동으로 비활성화되고 일반 모니터링으로 돌아갑니다:
+<ul>
+<li>폴더 내 <b>모든 이미지</b>가 최소 한 번 클릭되었습니다 (완료).</li>
+<li>지정된 <b>시간 초과 기간(초)</b> 동안 해당 폴더의 이미지가 발견되지 않았습니다.</li>
+</ul>
+</li>
+</ol>
+<div class="important">
+<b>사용 예:</b><br>
+게임에서 나타나는 "인벤토리 가득 참" 창을 고려해 봅시다.
+<ol>
+<li>모든 관련 이미지 캡처: "인벤토리 가득 참" 제목, "확인" 버튼, "취소" 버튼 등.</li>
+<li>이 이미지들을 "인벤토리 처리"라는 새 폴더에 넣고 모드를 <b>"이미지 인식 우선"</b>으로 설정합니다.</li>
+<li>폴더 내 이미지의 간격을 조정하여 "확인" 버튼이 마지막에 클릭되도록 합니다.</li>
+</ol>
+이 설정을 사용하면 "인벤토리 처리" 폴더는 일반적으로 무시됩니다. 하지만 인벤토리 창이 나타나는 순간 Imeck15가 이를 감지하여 필요한 작업(예: "확인" 클릭)을 자동으로 수행한 다음 완료 후 일반 모니터링으로 돌아갑니다.
+</div>
+
+<h3 id="s4-5">4.5. 전역 애플리케이션 설정</h3>
+<p>"앱 설정" 탭에서 Imeck15의 전체적인 동작을 조정합니다.</p>
+<ul>
+<li><b>그레이스케일 매칭:</b> 이미지를 흑백으로 비교합니다. 더 빠르지만 색상을 구별할 수 없습니다.</li>
+<li><b>DXCam 사용:</b> 더 빠른 화면 캡처 방법입니다. 게임 화면 캡처에 효과적이지만 모든 환경에서 작동하지 않을 수 있습니다.</li>
+<li><b>프레임 건너뛰기:</b> 값이 높을수록 화면 확인 빈도가 낮아져 PC 부하가 줄어들지만 응답 시간도 느려집니다.</li>
+<li><b>OpenCL 사용 (GPU 가속):</b> 호환되는 GPU가 있는 경우 이미지 처리 속도를 높일 수 있습니다.</li>
+<li><b>화면 안정성 검사:</b> 화면 렌더링 또는 효과를 감지하고 화면이 안정될 때까지 클릭을 보류합니다. 임계값을 조정하여 검사 감도를 변경합니다.</li>
+<li><b>경량 모드:</b> 화면 캡처 해상도를 낮춰 PC 부하를 대폭 줄입니다. 프리셋(표준, 성능, 울트라) 중에서 선택할 수 있습니다.</li>
+</ul>
+</section>
+
+<section id="section5">
+<h2>5. 성능 최적화</h2>
+<p>Imeck15가 느리게 느껴지거나 PC가 지연되는 경우 다음 설정을 검토하십시오.</p>
+
+<h3 id="s5-1">기본 최적화 단계</h3>
+<p>효과 순서대로 나열되어 있습니다.</p>
+<ol>
+<li><b>인식 영역 제한:</b> <b>가장 효과적인 방법입니다.</b> 창 또는 사각형 설정을 사용하여 검색 영역을 최소한으로 좁히십시오.</li>
+<li><b>경량 모드 활성화:</b> "앱 설정" 탭에서 이 기능을 활성화합니다. PC 부하를 극적으로 개선합니다.</li>
+<li><b>개별 이미지 ROI 활성화:</b> 앱이 클릭 대상 주변의 작은 영역만 검색하므로 처리가 매우 빨라집니다.</li>
+<li><b>프레임 건너뛰기 값 증가:</b> 응답 속도와의 절충안이지만 부하를 줄일 수 있습니다.</li>
+<li><b>DXCam 사용:</b> 환경이 지원하는 경우 빠르고 CPU 부하가 낮은 캡처를 제공합니다.</li>
+</ol>
+
+<h3 id="s5-2">절전 모드 정보</h3>
+<p>"앱 설정" 탭의 <span class="code-like">[절전 모드]</span>는 PC 부하를 더욱 줄이기 위한 기능입니다.</p>
+<b>작동 방식:</b>
+<ul>
+<li><b>활성화:</b> 마지막 클릭 후 <b>5초</b> 동안 인식 가능한 이미지가 발견되지 않으면 자동으로 활성화됩니다.</li>
+<li><b>동작:</b> 활성화되면 화면 확인 빈도가 <b>초당 약 1회</b>로 떨어져 CPU 사용량을 크게 줄입니다.</li>
+<li><b>비활성화:</b> 절전 모드 중 이미지가 인식되고 클릭이 수행되면 자동으로 비활성화되고 일반 모니터링 빈도로 돌아갑니다.</li>
+</ul>
+<div class="important">
+이 기능은 대기 시간이 긴 작업을 자동화할 때 특히 유용합니다. 기본적으로 활성화되어 있지만 항상 가장 빠른 응답이 필요한 경우 끌 수 있습니다.
+</div>
+</section>
+
+<section id="section6">
+<h2>6. 다양한 창</h2>
+<h3 id="s6-1">성능 모니터</h3>
+<p>메인 화면의 <span class="code-like">[성능]</span> 버튼을 통해 엽니다. CPU/메모리 사용량, FPS(초당 프레임 확인 횟수), 총 클릭 수 및 기타 정보를 실시간으로 확인할 수 있습니다. 상단의 버튼을 사용하여 모니터링을 시작/중지하거나 인식 영역을 설정할 수도 있습니다. 단축키 사용 가능: <b>오른쪽 더블클릭으로 모니터링 중지, 오른쪽 트리플클릭으로 모니터링 시작</b>.</p>
+
+<h3 id="s6-2">최소 UI 모드</h3>
+<p><span class="code-like">[최소 UI 모드]</span> 버튼을 통해 전환됩니다. 메인 창을 숨기고 모니터링 시작/중지와 같은 필수 컨트롤이 있는 작은 창을 표시합니다.</p>
+</section>
+
+<section id="section7">
+<h2>7. 자주 묻는 질문 (FAQ)</h2>
+<p><b>Q: 이미지가 제대로 찾아지지 않습니다.</b></p>
+<p>A: 다음 사항을 확인하십시오:</p>
+<ul>
+<li>"인식 영역"이 올바르게 설정되었습니까?</li>
+<li>"개별 이미지 설정"의 "인식 정확도"가 너무 높지 않습니까? 약간 낮춰 보십시오.</li>
+<li>게임 또는 응용 프로그램의 창 크기가 변경되었습니까? "자동 스케일" 탭의 설정을 검토하거나 이미지를 다시 캡처해 보십시오.</li>
+</ul>
+<p><b>Q: 앱이 무겁고 PC가 지연됩니다.</b></p>
+<p>A: 위의 "<a href="#section5">5. 성능 최적화</a>" 섹션을 참조하고 설정을 검토하십시오.</p>
+<p><b>Q: 화면 전환 중간에 클릭합니다.</b></p>
+<p>A: "앱 설정" 탭에서 "화면 안정성 검사"가 활성화되어 있는지 확인하십시오. 활성화된 경우 "임계값" 값을 약간 낮춰 검사를 더 엄격하게 만들어 보십시오.</p>
+</section>
+
+<section id="section8">
+<h2>8. 라이선스 정보</h2>
+<p>Imeck15는 여러 오픈 소스 라이브러리를 사용하여 개발되었습니다. 이 응용 프로그램을 재배포할 때는 이러한 라이브러리의 라이선스 조건을 준수해야 합니다. 포함된 THIRD-PARTY-NOTICES.txt 파일 및 licenses 폴더의 내용을 확인하십시오.</p>
+</section>
+
+</main>
+</body>
+</html>

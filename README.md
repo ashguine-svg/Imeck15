@@ -1,8 +1,11 @@
-*If you need exe/bin instead of Python, please download the version for your OS from Releases. *You can use the version compiled from Python to native language at the bottom of the page.
-
-*如果您需要 exe/bin 而不是 Python，请从“版本”下载适合您操作系统的版本。*您可以使用页面底部从 Python 编译为原生语言的版本。
-
-*Python이 아닌 exe/bin이 필요한 분은 Releases보다, 당신의 OS용의 것을 Download 해 주세요.
+The multi-language version of Imeck15_v1.5.5.1 (exe/Bin) for your OS can be downloaded from the bottom of the [releases page](https://github.com/ashguine-svg/Imeck15/releases).  
+适用于您操作系统的 Imeck15_v1.5.5.1 多语言版本 (exe/Bin) 可从 [Releases 页面](https://github.com/ashguine-svg/Imeck15/releases) 底部下载。  
+사용하시는 OS에 맞는 Imeck15_v1.5.5.1 다국어 버전 (exe/Bin)은 [Releases 페이지](https://github.com/ashguine-svg/Imeck15/releases) 하단에서 다운로드하실 수 있습니다。  
+La versión multiidioma de Imeck15_v1.5.5.1 (exe/Bin) para su sistema operativo puede descargarse desde la parte inferior de la [página de Releases](https://github.com/ashguine-svg/Imeck15/releases).  
+आपके ऑपरेटिंग सिस्टम के लिए Imeck15_v1.5.5.1 मल्टी-लैंग्वेज संस्करण (exe/Bin) [Releases पृष्ठ](https://github.com/ashguine-svg/Imeck15/releases) के निचले भाग से डाउनलोड किया जा सकता है।  
+يمكنكم تحميل النسخة متعددة اللغات من Imeck15_v1.5.5.1 (exe/Bin) الخاصة بنظام التشغيل لديكم من أسفل [صفحة الإصدارات (Releases)](https://github.com/ashguine-svg/Imeck15/releases).  
+Die mehrsprachige Version Imeck15_v1.5.5.1 (exe/Bin) für Ihr Betriebssystem kann unten auf der [Releases-Seite](https://github.com/ashguine-svg/Imeck15/releases) heruntergeladen werden.  
+Мультиязыковую версию Imeck15_v1.5.5.1 (exe/Bin) для вашей операционной системы можно скачать в нижней части [страницы релизов](https://github.com/ashguine-svg/Imeck15/releases).  
 
 # Imeck15 - 導入と使い方ガイド
 
