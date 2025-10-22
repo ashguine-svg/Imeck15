@@ -3,6 +3,8 @@
 # ★★★ キャプチャプレビュー表示 ＆ 認識範囲設定後のUI再表示を修正 ★★★
 # ★★★ キャプチャプレビュー表示の確実性を向上 (タブ切り替え、遅延追加) ★★★
 # ★★★ リスナー再開処理を再度遅延させ、ログを追加 ★★★
+# ★★★ 監視停止時の競合状態 (NoneType.handle) を RLock で修正 ★★★
+# ★★★ 軽量化モードのプリセット判定を英語の内部名に変更 (問題1対応) ★★★
 
 import sys
 import threading
@@ -90,6 +92,8 @@ class CoreEngine(QObject):
         self.backup_template_cache = {}
 
         self.state = None
+        # ★★★ 状態変数へのアクセスを保護するための RLock を追加 ★★★
+        self.state_lock = threading.RLock()
 
         self._last_clicked_path = None
 
@@ -164,7 +168,9 @@ class CoreEngine(QObject):
         self._log_spam_filter = {"log_stability_hold_click", "log_eco_mode_standby"}
 
     def transition_to(self, new_state):
-        self.state = new_state
+        # ★★★ state の書き込みをロックで保護 ★★★
+        with self.state_lock:
+            self.state = new_state
         self._last_clicked_path = None
 
     def transition_to_timer_priority(self, folder_path):
@@ -229,16 +235,18 @@ class CoreEngine(QObject):
         # Determine effective capture scale and frame skip based on lightweight mode
         lw_conf = self.app_config.get('lightweight_mode', {})
         is_lw_enabled = lw_conf.get('enabled', False)
-        preset_internal = lw_conf.get('preset', '標準') # Use internal name
+        # ★★★ 修正: デフォルト値を 'standard' (英語) に変更 ★★★
+        preset_internal = lw_conf.get('preset', 'standard') # Use internal name
 
         # Map internal preset name to settings
         if is_lw_enabled:
             user_frame_skip = self.app_config.get('frame_skip_rate', 2)
-            if preset_internal == "標準":
+            # ★★★ 修正: 比較を英語の内部名に変更 ★★★
+            if preset_internal == "standard":
                 self.effective_capture_scale, self.effective_frame_skip_rate = 0.5, user_frame_skip + 5
-            elif preset_internal == "パフォーマンス":
+            elif preset_internal == "performance":
                 self.effective_capture_scale, self.effective_frame_skip_rate = 0.4, user_frame_skip + 20
-            elif preset_internal == "ウルトラ":
+            elif preset_internal == "ultra":
                 self.effective_capture_scale, self.effective_frame_skip_rate = 0.3, user_frame_skip + 25
             else: # Fallback to standard if name is unknown
                  self.effective_capture_scale, self.effective_frame_skip_rate = 0.5, user_frame_skip + 5
@@ -745,7 +753,7 @@ class CoreEngine(QObject):
         # Start only if not already monitoring
         if not self.is_monitoring:
             self.is_monitoring = True
-            self.state = IdleState(self) # Start in Idle state
+            self.transition_to(IdleState(self)) # Start in Idle state
             # Reset counters and state variables
             self._click_count = 0
             self._cooldown_until = 0
@@ -776,7 +784,10 @@ class CoreEngine(QObject):
         """Stops the monitoring loop."""
         if self.is_monitoring:
             self.is_monitoring = False
-            self.state = None # Clear current state
+            # ★★★ state の書き込みをロックで保護 ★★★
+            with self.state_lock:
+                self.state = None # Clear current state
+            
             # Wait for monitoring thread to finish
             if self._monitor_thread and self._monitor_thread.is_alive():
                 self._monitor_thread.join(timeout=1.0) # Wait up to 1 second
@@ -798,6 +809,20 @@ class CoreEngine(QObject):
         frame_counter = 0
 
         while self.is_monitoring:
+            # ★★★ 修正: state をロックを取得してローカル変数にコピー ★★★
+            with self.state_lock:
+                current_state = self.state
+
+            # ★★★ 修正: 監視停止時に current_state が None になるためチェック ★★★
+            if not current_state:
+                if not self.is_monitoring:
+                    break # 監視が意図通り停止した場合、ループを抜ける
+                else:
+                    # 監視中にもかかわらず state が None になった場合 (異常系)
+                    self.logger.log("[WARN] Monitoring is active but state is None. Re-initializing to IdleState.")
+                    self.transition_to(IdleState(self)) # IdleState にリセット
+                    continue # 次のループで state を再取得
+
             try:
                 current_time = time.time()
 
@@ -819,7 +844,8 @@ class CoreEngine(QObject):
 
                 # --- State Management ---
                 # Check for timer priority activation if in Idle state
-                if isinstance(self.state, IdleState):
+                # ★★★ 修正: self.state -> current_state ★★★
+                if isinstance(current_state, IdleState):
                     self._check_and_activate_timer_priority_mode()
 
                 # --- Eco Mode Logic ---
@@ -827,7 +853,8 @@ class CoreEngine(QObject):
                 # Eligible for Eco Mode if enabled, Idle state, and past delay since last click
                 is_eco_eligible = (is_eco_enabled and
                                    self.last_successful_click_time > 0 and
-                                   isinstance(self.state, IdleState) and
+                                   # ★★★ 修正: self.state -> current_state ★★★
+                                   isinstance(current_state, IdleState) and
                                    (current_time - self.last_successful_click_time > self.ECO_MODE_DELAY))
 
                 self.is_eco_cooldown_active = is_eco_eligible
@@ -836,7 +863,8 @@ class CoreEngine(QObject):
                 skip_capture_and_handle = False
 
                 # 1. CountdownState: Always wait ~1 second per loop iteration
-                if isinstance(self.state, CountdownState):
+                # ★★★ 修正: self.state -> current_state ★★★
+                if isinstance(current_state, CountdownState):
                     time.sleep(1.0) # Effectively limits FPS to 1
 
                 # 2. Eco Mode: Skip if not yet time for the interval check
@@ -889,29 +917,35 @@ class CoreEngine(QObject):
                         self.logger.log("log_umat_convert_failed", str(e))
 
                 # --- Match Finding and State Handling ---
-                if self.state:
-                    screen_data = (screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat)
-                    # Find potential matches (used for Eco mode exit check)
-                    all_matches = self._find_matches_for_eco_check(screen_data)
+                screen_data = (screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat)
+                # Find potential matches (used for Eco mode exit check)
+                # ★★★ 修正: _find_matches_for_eco_check に current_state を渡す ★★★
+                all_matches = self._find_matches_for_eco_check(screen_data, current_state)
 
-                    # If in Eco Mode and matches are found, exit Eco Mode immediately
-                    if self.is_eco_cooldown_active and all_matches:
-                        self.last_successful_click_time = time.time() # Reset Eco timer
-                        self._log("log_eco_mode_resumed", force=True) # Log resumption
+                # If in Eco Mode and matches are found, exit Eco Mode immediately
+                if self.is_eco_cooldown_active and all_matches:
+                    self.last_successful_click_time = time.time() # Reset Eco timer
+                    self._log("log_eco_mode_resumed", force=True) # Log resumption
 
-                    # Delegate handling to the current state object
-                    self.state.handle(current_time, screen_data, last_match_time_map, pre_matches=all_matches)
+                # Delegate handling to the current state object
+                # ★★★ 修正: self.state.handle -> current_state.handle ★★★
+                current_state.handle(current_time, screen_data, last_match_time_map, pre_matches=all_matches)
 
             except Exception as e:
-                # Log general errors in the loop
-                self.logger.log("log_error_monitoring_loop", str(e))
+                # ★★★ 修正: レースコンディション起因の AttributeError を特別にハンドル ★★★
+                if isinstance(e, AttributeError) and "'NoneType' object has no attribute 'handle'" in str(e):
+                     self.logger.log("[CRITICAL] Race condition detected (state became None unexpectedly). Loop will restart/exit.")
+                else:
+                    # Log general errors in the loop
+                    self.logger.log("log_error_monitoring_loop", str(e))
                 time.sleep(1.0) # Wait after error
             finally:
                 # Short sleep in each loop iteration to prevent busy-waiting
                 time.sleep(0.01)
 
 
-    def _find_matches_for_eco_check(self, screen_data):
+    # ★★★ 修正: current_state を引数として受け取る ★★★
+    def _find_matches_for_eco_check(self, screen_data, current_state):
         """Finds matches relevant for checking if Eco Mode should be exited."""
         def filter_cache_for_eco(cache):
             # Exclude items in 'excluded' or 'priority_timer' folders
@@ -926,7 +960,8 @@ class CoreEngine(QObject):
         normal_matches = self._find_best_match(*screen_data, active_normal_cache)
 
         # Also check backup triggers only if in IdleState
-        if isinstance(self.state, IdleState):
+        # ★★★ 修正: self.state -> current_state ★★★
+        if isinstance(current_state, IdleState):
             active_backup_cache = filter_cache_for_eco(self.backup_template_cache)
             backup_trigger_matches = self._find_best_match(*screen_data, active_backup_cache)
             if backup_trigger_matches:

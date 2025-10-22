@@ -4,6 +4,7 @@
 # ★★★ プレビュー描画更新タイミングを修正 ★★★
 # ★★★ 削除された setRecAreaDialog メソッドを復元 ★★★
 # ★★★ update_image_preview メソッドの存在を確認 ★★★
+# ★★★ 軽量化モードの保存/読み込みロジックを修正 (問題1対応) ★★★
 
 import sys
 import json
@@ -846,13 +847,17 @@ class UIManager(QMainWindow):
         self.app_settings_widgets['lightweight_mode_enabled'].setChecked(lw_conf.get('enabled', False)) # Default False
 
         # Set Lightweight preset ComboBox based on internal name from config
-        preset_internal_name = lw_conf.get('preset', '標準') # Get internal name
-        preset_display_key = f"app_setting_lw_mode_preset_{preset_internal_name.lower()}" # Construct translation key
+        # ★★★ 修正: 内部名(英語)を読み込み、それに対応する翻訳キーで表示名を設定 ★★★
+        preset_internal_name = lw_conf.get('preset', 'standard') # Get internal name (e.g., "standard")
+        preset_display_key = f"app_setting_lw_mode_preset_{preset_internal_name}" # Construct translation key (e.g., "app_setting_lw_mode_preset_standard")
         preset_display_text = self.locale_manager.tr(preset_display_key) # Get translated display name
-        # Fallback if translation key is missing
+        
+        # Fallback if translation key is missing (e.g., key mismatch)
         if preset_display_text == preset_display_key:
              preset_display_text = self.locale_manager.tr("app_setting_lw_mode_preset_standard")
+        
         self.app_settings_widgets['lightweight_mode_preset'].setCurrentText(preset_display_text)
+        # ★★★ 修正ここまで ★★★
 
         # Language ComboBox selection is handled by retranslate_ui based on locale_manager.current_lang
 
@@ -920,22 +925,24 @@ class UIManager(QMainWindow):
             "threshold": self.app_settings_widgets['stability_threshold'].value()
         }
 
-        # Convert selected preset display name back to internal name for saving
+        # ★★★ 修正: 表示名(日本語)から内部名(英語)に変換して保存 ★★★
         preset_display_text = self.app_settings_widgets['lightweight_mode_preset'].currentText()
-        preset_internal_name = "標準" # Default
+        preset_internal_name = "standard" # Default
+        
         # Find the internal name corresponding to the display text
         if preset_display_text == lm("app_setting_lw_mode_preset_standard"):
-            preset_internal_name = "標準"
+            preset_internal_name = "standard"
         elif preset_display_text == lm("app_setting_lw_mode_preset_performance"):
-            preset_internal_name = "パフォーマンス"
+            preset_internal_name = "performance"
         elif preset_display_text == lm("app_setting_lw_mode_preset_ultra"):
-            preset_internal_name = "ウルトラ"
-        # If display text doesn't match known translations (shouldn't happen), keep default
+            preset_internal_name = "ultra"
+        # If display text doesn't match known translations, keep default "standard"
 
         self.app_config['lightweight_mode'] = {
             "enabled": self.app_settings_widgets['lightweight_mode_enabled'].isChecked(),
-            "preset": preset_internal_name
+            "preset": preset_internal_name # 英語の内部名を保存
         }
+        # ★★★ 修正ここまで ★★★
 
         # Language setting is saved separately in on_language_changed
 
