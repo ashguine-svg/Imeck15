@@ -5,6 +5,8 @@
 # ★★★ 削除された setRecAreaDialog メソッドを復元 ★★★
 # ★★★ update_image_preview メソッドの存在を確認 ★★★
 # ★★★ 軽量化モードの保存/読み込みロジックを修正 (問題1対応) ★★★
+# ★★★ [修正] 右クリック時のプロパティ表示が f-string が原因で失敗していたのを修正 ★★★
+# ★★★ [再修正] 右クリック時のプロパティ表示の翻訳キー呼び出し方をJSON定義に合わせて修正 ★★★
 
 import sys
 import json
@@ -1169,26 +1171,41 @@ class UIManager(QMainWindow):
             # Show tooltip with info for image files
             try:
                 settings = self.config_manager.load_item_setting(path)
-                # Determine click mode text
-                click_mode = lm("context_menu_info_mode_unset")
+                
+                # Determine click mode text by translating the mode key
+                click_mode_text = lm("context_menu_info_mode_unset") # Default
                 if settings.get('point_click'):
-                    click_mode = lm("context_menu_info_mode_point")
+                    click_mode_text = lm("context_menu_info_mode_point")
                 elif settings.get('range_click'):
-                    click_mode = lm("context_menu_info_mode_range_random") if settings.get('random_click') else lm("context_menu_info_mode_range")
+                    click_mode_text = lm("context_menu_info_mode_range_random") if settings.get('random_click') else lm("context_menu_info_mode_range")
+
                 # Get other settings
                 threshold = settings.get('threshold', 0.8)
                 interval = settings.get('interval_time', 1.5)
+
                 # Get image size
                 pixmap = QPixmap(path_str)
-                img_size_str = lm("context_menu_info_size_error")
+                img_size_text = lm("context_menu_info_size_error") # Default
                 if not pixmap.isNull():
-                    img_size_str = lm("context_menu_info_size", pixmap.width(), pixmap.height())
-                # Format tooltip text
+                    # ★★★ [再修正] JSONに合わせて %s を使う ★★★
+                    img_size_text = lm("context_menu_info_size", pixmap.width(), pixmap.height())
+
+                # ★★★ [再修正] JSONのキーに合わせて %s を使い、Python側で文字列を組み立てる ★★★
+                # "context_menu_info_mode": "({mode})" -> Python側で括弧を追加
+                mode_str = f"({click_mode_text})"
+
+                # "context_menu_info_threshold": "認識精度 %s"
+                threshold_str = lm('context_menu_info_threshold', f'{threshold:.2f}')
+                # "context_menu_info_interval": "インターバル %s秒"
+                interval_str = lm('context_menu_info_interval', f'{interval:.1f}')
+
                 tooltip_text = (
-                    f"{lm('context_menu_info_mode', mode=click_mode)}\n"
-                    f"{lm('context_menu_info_threshold', f'{threshold:.2f}')}：{lm('context_menu_info_interval', f'{interval:.1f}')}\n"
-                    f"{img_size_str}"
+                    f"{mode_str}\n"
+                    f"{threshold_str}：{interval_str}\n"
+                    f"{img_size_text}"
                 )
+                # ★★★ [再修正] ここまで ★★★
+
                 # Show tooltip at cursor position
                 global_pos = self.image_tree.mapToGlobal(pos)
                 QToolTip.showText(global_pos, tooltip_text, self.image_tree)
@@ -1196,6 +1213,7 @@ class UIManager(QMainWindow):
                 # Show error in tooltip if info retrieval fails
                 global_pos = self.image_tree.mapToGlobal(pos)
                 QToolTip.showText(global_pos, lm("context_menu_info_error", str(e)), self.image_tree)
+
 
     def set_tree_enabled(self, enabled: bool):
         """Enables or disables the image tree view."""

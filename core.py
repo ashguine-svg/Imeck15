@@ -5,6 +5,8 @@
 # ★★★ リスナー再開処理を再度遅延させ、ログを追加 ★★★
 # ★★★ 監視停止時の競合状態 (NoneType.handle) を RLock で修正 ★★★
 # ★★★ 軽量化モードのプリセット判定を英語の内部名に変更 (問題1対応) ★★★
+# ★★★ [修正] 監視停止時のUI更新タイミングを変更 (競合状態の解消) ★★★
+# ★★★ [修正] 画像設定変更時にキャッシュを再構築し即時反映させる ★★★
 
 import sys
 import threading
@@ -606,6 +608,12 @@ class CoreEngine(QObject):
         if self.current_image_settings:
             self.current_image_settings.update(settings)
             self._recalculate_and_update() # Recalculate ROI, update preview, trigger save
+            
+            # ★★★ [修正] 監視中に設定が変更された場合、キャッシュを再構築して即時反映させる ★★★
+            if self.is_monitoring and self.thread_pool:
+                self.logger.log("log_item_setting_changed_rebuild")
+                self.ui_manager.set_tree_enabled(False)
+                self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
 
     def on_roi_settings_changed(self, roi_data: dict):
         """Handles changes to the variable ROI rectangle from the preview label."""
@@ -788,6 +796,12 @@ class CoreEngine(QObject):
             with self.state_lock:
                 self.state = None # Clear current state
             
+            # ★★★ [修正] UIステータスの更新を .join() の前に移動し、競合状態を防ぐ ★★★
+            # 先にUIを「待機中」にしてから、スレッドの終了を待つ
+            self.updateStatus.emit("idle", "green")
+            self.logger.log("log_monitoring_stopped")
+            self.ui_manager.set_tree_enabled(True) # Re-enable tree
+
             # Wait for monitoring thread to finish
             if self._monitor_thread and self._monitor_thread.is_alive():
                 self._monitor_thread.join(timeout=1.0) # Wait up to 1 second
@@ -797,10 +811,11 @@ class CoreEngine(QObject):
                 for cache in [self.normal_template_cache, self.backup_template_cache]:
                     for item in cache.values():
                         item['best_scale'] = None
-
-            self.updateStatus.emit("idle", "green")
-            self.logger.log("log_monitoring_stopped")
-            self.ui_manager.set_tree_enabled(True) # Re-enable tree
+            
+            # ★★★ [修正] UI更新は既に上で行ったため、ここでは不要 ★★★
+            # self.updateStatus.emit("idle", "green")
+            # self.logger.log("log_monitoring_stopped")
+            # self.ui_manager.set_tree_enabled(True) # Re-enable tree
 
     def _monitoring_loop(self):
         """The main loop that captures screen, finds matches, and triggers actions."""
@@ -1806,3 +1821,4 @@ class CoreEngine(QObject):
         if isinstance(self.state, CountdownState):
             return self.state.get_remaining_time()
         return -1.0
+        
