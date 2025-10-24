@@ -7,6 +7,7 @@
 # ★★★ 軽量化モードのプリセット判定を英語の内部名に変更 (問題1対応) ★★★
 # ★★★ [修正] 監視停止時のUI更新タイミングを変更 (競合状態の解消) ★★★
 # ★★★ [修正] 画像設定変更時にキャッシュを再構築し即時反映させる ★★★
+# ★★★ [修正] 画面安定チェックのログにスコアと閾値を追加 (ユーザー要望) ★★★
 
 import sys
 import threading
@@ -167,7 +168,7 @@ class CoreEngine(QObject):
         self._last_log_message = ""
         self._last_log_time = 0
         # Filter uses keys directly now
-        self._log_spam_filter = {"log_stability_hold_click", "log_eco_mode_standby"}
+        self._log_spam_filter = {"log_stability_hold_click", "log_eco_mode_standby", "log_stability_check_debug"} # 'log_stability_check_debug' を追加
 
     def transition_to(self, new_state):
         # ★★★ state の書き込みをロックで保護 ★★★
@@ -1019,11 +1020,13 @@ class CoreEngine(QObject):
         threshold = self.app_config.get('screen_stability_check', {}).get('threshold', 8)
         hash_diff = self.screen_stability_hashes[-1] - self.screen_stability_hashes[0] # Hamming distance
 
-        # Log debug info (optional, can be noisy)
-        # self._log("log_stability_check_debug",
-        #           str(self.screen_stability_hashes[-1]),
-        #           str(self.screen_stability_hashes[0]),
-        #           hash_diff, threshold, force=True)
+        # ★★★ 修正: 4つの引数を渡すように修正 (Current Hash, Oldest Hash, Difference, Threshold) ★★★
+        self._log("log_stability_check_debug",
+                  str(self.screen_stability_hashes[-1]), # Current Hash
+                  str(self.screen_stability_hashes[0]), # Oldest Hash
+                  hash_diff, # Difference
+                  threshold, # Threshold
+                  force=True)
 
         # Return True if difference is within threshold (stable)
         return hash_diff <= threshold
@@ -1821,4 +1824,3 @@ class CoreEngine(QObject):
         if isinstance(self.state, CountdownState):
             return self.state.get_remaining_time()
         return -1.0
-        

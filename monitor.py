@@ -133,7 +133,7 @@ class PerformanceMonitor(QDialog):
                     countdown_format_string = lm("monitor_backup_countdown")
                     try:
                         # .0f で小数点以下を表示しない整数にする
-                        countdown_text = countdown_format_string.format(s=countdown)
+                        countdown_text = countdown_format_string.format(s=int(countdown)) # int() に変更
                     except KeyError: # 翻訳ファイルのキー名 {s} と一致しない場合
                         countdown_text = f"(バックアップまで: {countdown:.0f}秒) (ERR:FMT)" # Fallback
                     self.backup_countdown_label.setText(countdown_text)

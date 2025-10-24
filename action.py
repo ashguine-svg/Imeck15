@@ -172,11 +172,35 @@ class ActionManager:
             try:
                 pyautogui.click(final_click_x, final_click_y)
                 
-                # ★★★ 7. self.logger.log に変更 (翻訳キー使用) ★★★
-                log_msg = self.logger.locale_manager.tr("log_click_success", path.name, final_click_x, final_click_y, f"{match_info['confidence']:.2f}")
-                if 'scale' in match_info:
-                    log_msg += self.logger.locale_manager.tr("log_click_success_scale", f"{match_info['scale']:.3f}")
-                self.logger.log(log_msg) # 翻訳済みのメッセージをそのまま渡す
+                # ★★★ 7. self.logger.log に変更 (翻訳キー使用) - 最終修正案 ★★★
+                
+                # 1. log_click_success_scale の翻訳文字列を取得
+                # JSONファイルに手を加えないため、この時点で完全な文字列に組み立てる。
+                scale_suffix = self.logger.locale_manager.tr(
+                    "log_click_success_scale", 
+                    f"{match_info.get('scale', 1.0):.3f}"
+                )
+                
+                # 2. log_click_success_full (または log_click_success) の翻訳結果を取得し、スケール情報を結合する
+                # log_click_success_full が5つの %s を持つという既存の仮定を基に、引数を渡す。
+                
+                # まず、基本のメッセージ（スケールなし）を log_click_success を使って生成（4つの引数）
+                base_message_part = self.logger.locale_manager.tr(
+                    "log_click_success",
+                    path.name,
+                    final_click_x,
+                    final_click_y,
+                    f"{match_info['confidence']:.2f}"
+                )
+                
+                # 3. 完成した文字列を Logger に渡す（引数なし）
+                # base_message_part が既に完全な文字列（スケールなし）であることを利用し、
+                # それにスケール情報を直接結合して Logger に渡す。
+                
+                final_message = base_message_part + scale_suffix
+                
+                self.logger.log(final_message)
+                
                 return {'success': True, 'path': str(path)}
 
             except pyautogui.FailSafeException:
