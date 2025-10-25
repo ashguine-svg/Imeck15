@@ -1,11 +1,14 @@
 # preview_mode_manager.py
-# ★★★ 排他処理とUI同期ロジックを修正 ★★★
+# ★★★ 修正: UIチェックボックスの状態を直接変更しないように修正 ★★★
+# ★★★ 修正: _set_drawing_mode_and_update_ui メソッドを追加・役割分担 ★★★
+# ★★★ 修正: _on_ui_state_changed のロジックを明確化 ★★★
+# ★★★ 修正: _update_ui_elements で sender を考慮した排他制御を追加 ★★★
 
 from PySide6.QtCore import QObject, Signal
 
 class PreviewModeManager(QObject):
     """プレビューの描画モードと関連UIを一元管理するクラス"""
-    modeChanged = Signal(str)
+    modeChanged = Signal(str) # 描画モードの変更を通知するシグナル
 
     def __init__(self, roi_button, point_cb, range_cb, random_cb, locale_manager, parent=None):
         super().__init__(parent)
@@ -13,23 +16,22 @@ class PreviewModeManager(QObject):
         self.point_cb = point_cb
         self.range_cb = range_cb
         self.random_cb = random_cb
-        self.locale_manager = locale_manager # LocaleManagerインスタンスを保持
-        self.current_mode = None
+        self.locale_manager = locale_manager
+        self.current_mode = None # 現在の描画モード (point, range, roi_variable, None)
 
-        # シグナル接続: 各ボタン/チェックボックスの状態変化を検知
+        # UI要素の状態変化を検知するシグナルを接続
         self.roi_button.toggled.connect(self._on_ui_state_changed)
         self.point_cb.toggled.connect(self._on_ui_state_changed)
         self.range_cb.toggled.connect(self._on_ui_state_changed)
-        # ランダムクリックは set_mode 内で制御されるため、ここでの接続は不要 (依存関係のため)
-        # self.random_cb.toggled.connect(...)
+        # random_cb は range_cb の状態に依存するため、_update_ui_elements で制御
+        self.range_cb.toggled.connect(self._update_ui_elements) # range_cb の状態が変わったら random_cb の有効状態も更新
 
     def _on_ui_state_changed(self, checked):
-        """UI部品の状態変化を検知し、あるべきモードを決定して設定するメソッド"""
-        sender = self.sender() # シグナルを発行したウィジェットを取得
+        """UI要素(ROIボタン, 点/範囲チェックボックス)の状態変化に応じて描画モードを決定・設定"""
+        sender = self.sender()
         new_mode = None
 
-        # どのウィジェットがチェックされたかに基づいて新しいモードを決定
-        # チェックが外された場合は基本的に何もしない (set_mode内で他の要素が制御)
+        # チェックが入った場合、新しいモードを決定
         if checked:
             if sender == self.roi_button:
                 new_mode = 'roi_variable'
@@ -37,104 +39,129 @@ class PreviewModeManager(QObject):
                 new_mode = 'point'
             elif sender == self.range_cb:
                 new_mode = 'range'
-            # ランダムクリックチェックボックス自体の変更はここではモードに影響しない
-            # elif sender == self.random_cb:
-            #     pass
-
-            # 新しいモードが決定された場合のみ set_mode を呼び出す
-            if new_mode is not None:
-                self.set_mode(new_mode)
+        # チェックが外れた場合
         else:
-            # チェックが外された場合
-            # もし現在アクティブなモードに対応するウィジェットのチェックが外されたら、モードを解除(None)
+            # 現在アクティブなモードに対応するUI要素のチェックが外されたらモード解除
             if (sender == self.roi_button and self.current_mode == 'roi_variable') or \
                (sender == self.point_cb and self.current_mode == 'point') or \
                (sender == self.range_cb and self.current_mode == 'range'):
-                self.set_mode(None) # モード解除
+                new_mode = None # モード解除を示す
 
-    def set_mode(self, mode):
-        """単一のモード指定に基づき、UI全体の整合性を保つように更新します"""
-        # モードが実際に変更された場合のみ処理を実行
+        # モードが変化する場合のみ更新処理を実行
+        # (new_modeがNoneでも、current_modeがNoneでなければ変化とみなす)
+        if new_mode != self.current_mode:
+            self._set_drawing_mode_and_update_ui(new_mode)
+        # モードが変わらない場合でもUIの状態は更新する (例: rangeチェックONのままrandomチェックON/OFF)
+        elif sender == self.random_cb:
+            self._update_ui_elements()
+
+
+    def _set_drawing_mode_and_update_ui(self, mode):
+        """描画モードを設定し、関連UIの有効/無効状態とROIボタン表示を更新"""
+        # モードが実際に変更された場合のみ処理
         if self.current_mode == mode:
+            self._update_ui_elements() # UIの有効/無効状態だけは更新する
             return
 
+        lm = self.locale_manager.tr
         self.current_mode = mode
 
-        # UI更新中の意図しないシグナル連鎖を防ぐ
-        self.roi_button.blockSignals(True)
+        # --- ROIボタンの表示更新 ---
+        is_roi_mode = (mode == 'roi_variable')
+        self.roi_button.blockSignals(True) # 再帰的なシグナル発生を防ぐ
+        self.roi_button.setChecked(is_roi_mode)
+        self.roi_button.setText(lm("item_setting_roi_button_active") if is_roi_mode else lm("item_setting_roi_button"))
+        self.roi_button.blockSignals(False)
+
+        # --- UI要素の有効/無効状態と排他制御 ---
+        self._update_ui_elements()
+
+        # --- 描画モード変更を通知 ---
+        self.modeChanged.emit(self.current_mode) # InteractivePreviewLabel へ通知
+
+    def _update_ui_elements(self):
+        """現在の描画モードに基づいてUI要素の有効/無効状態を更新し、排他制御を行う"""
+        is_roi_mode = (self.current_mode == 'roi_variable')
+        is_point_mode = (self.current_mode == 'point')
+        is_range_mode = (self.current_mode == 'range')
+
+        # シグナルをブロックして意図しない連鎖を防ぐ
+        # ※注意※ ここでチェックボックスのsetChecked()は呼ばない！
         self.point_cb.blockSignals(True)
         self.range_cb.blockSignals(True)
         self.random_cb.blockSignals(True)
+        # ROIボタンのブロック解除は _set_drawing_mode_and_update_ui で行うため不要
 
-        lm = self.locale_manager.tr
+        # --- 有効/無効状態の設定 ---
+        # ROIモード中はクリック設定チェックボックスを無効化
+        self.point_cb.setEnabled(not is_roi_mode)
+        self.range_cb.setEnabled(not is_roi_mode)
+        # ランダムチェックボックスは、ROIモードでなく、かつ範囲クリックが有効な場合のみ有効
+        # ※ isChecked() で現在のUIの状態を直接参照する
+        self.random_cb.setEnabled(not is_roi_mode and self.range_cb.isChecked())
 
-        # 指定されたモードに基づいて各UI要素の状態を確実に設定 (排他制御)
-        if mode == 'roi_variable':
-            self.roi_button.setChecked(True)
-            self.roi_button.setText(lm("item_setting_roi_button_active"))
-            # ROIモード時は他のクリック設定を解除・無効化
+        # --- 排他制御 (他の *描画モードに対応する* UI要素のチェックを外す) ---
+        # ユーザー操作の起点となったウィジェット(sender)は変更しない
+        sender = self.sender()
+
+        if is_roi_mode:
+             # ROIモードが有効になった -> Point/Range のチェックを外す
+             # (ROIボタンがsenderなので、point/rangeは必ずチェックを外して良い)
             self.point_cb.setChecked(False)
             self.range_cb.setChecked(False)
-            self.random_cb.setChecked(False)
-            self.point_cb.setEnabled(False)
-            self.range_cb.setEnabled(False)
-            self.random_cb.setEnabled(False)
-        elif mode == 'point':
-            self.roi_button.setChecked(False) # ROIボタンは解除
-            self.roi_button.setText(lm("item_setting_roi_button"))
-            self.point_cb.setChecked(True)    # ポイントクリックをチェック
-            self.range_cb.setChecked(False)   # 範囲クリックは解除
-            self.random_cb.setChecked(False)  # ランダムも解除
-            self.point_cb.setEnabled(True)
-            self.range_cb.setEnabled(True)
-            self.random_cb.setEnabled(False) # ランダムは範囲クリック時のみ
-        elif mode == 'range':
-            self.roi_button.setChecked(False) # ROIボタンは解除
-            self.roi_button.setText(lm("item_setting_roi_button"))
-            self.point_cb.setChecked(False)   # ポイントクリックは解除
-            self.range_cb.setChecked(True)    # 範囲クリックをチェック
-            # random_cb のチェック状態は変更しない (UIでユーザーが設定した状態を維持)
-            self.point_cb.setEnabled(True)
-            self.range_cb.setEnabled(True)
-            self.random_cb.setEnabled(True)  # ランダムを有効化
-        else: # mode is None (モード解除)
-            self.roi_button.setChecked(False)
-            self.roi_button.setText(lm("item_setting_roi_button"))
-            self.point_cb.setChecked(False)
-            self.range_cb.setChecked(False)
-            self.random_cb.setChecked(False)
-            self.point_cb.setEnabled(True)
-            self.range_cb.setEnabled(True)
-            self.random_cb.setEnabled(False)
+            self.random_cb.setChecked(False) # range依存なのでこれも外す
+        elif is_point_mode:
+            # Pointモードが有効になった -> Range のチェックを外す, ROIボタンのチェックを外す
+            # (point_cb が sender)
+            if sender != self.range_cb: self.range_cb.setChecked(False)
+            if sender != self.random_cb: self.random_cb.setChecked(False) # range依存
+            if sender != self.roi_button: self.roi_button.setChecked(False) # ROIボタンも外す
+        elif is_range_mode:
+            # Rangeモードが有効になった -> Point のチェックを外す, ROIボタンのチェックを外す
+            # (range_cb が sender)
+            if sender != self.point_cb: self.point_cb.setChecked(False)
+            if sender != self.roi_button: self.roi_button.setChecked(False) # ROIボタンも外す
+            # random_cb のチェック状態は維持 (ユーザー操作を尊重)
+        else: # モード解除 (None)
+            # モードが解除された場合 (対応するUIのチェックが外されたことが原因のはず)
+            # 例: Pointチェックが外された -> is_point_mode=False になる
+            # この場合、特に他のチェックを外す必要はない
+            # ROIボタンのチェックを外す (これが原因でNoneになった場合を除く)
+             if sender != self.roi_button: self.roi_button.setChecked(False)
+            # random_cb は range_cb がチェックされていなければチェックを外す
+             if not self.range_cb.isChecked():
+                 if sender != self.random_cb: self.random_cb.setChecked(False)
 
-        # シグナルブロックを解除
-        self.roi_button.blockSignals(False)
+
+        # シグナルブロック解除
         self.point_cb.blockSignals(False)
         self.range_cb.blockSignals(False)
         self.random_cb.blockSignals(False)
-
-        # モード変更を通知 (InteractivePreviewLabel が受け取る)
-        self.modeChanged.emit(self.current_mode)
+        # ROIボタンのブロック解除は _set_drawing_mode_and_update_ui で行う
 
     def sync_from_settings_data(self, settings_data):
-        """外部データ (settings_data) からUI状態と描画モードを同期します"""
-        new_mode = None # デフォルトモード (何も選択されていない状態)
+        """外部データ (settings_data) からUI状態を同期します"""
+        # 注意: このメソッドはUI要素のチェック状態は直接変更しません。
+        #       チェック状態の設定は UIManager.set_settings_from_data が担当します。
+        #       ここでは settings_data からあるべき描画モードを決定し、
+        #       UI要素の有効/無効状態とROIボタン表示を更新します。
 
+        new_mode = None
         if settings_data:
-            # 設定データに基づいて、どのクリックモードが有効かを判断
-            # range_click を優先的にチェック (両方TrueになるケースはUI操作では防がれるはずだが念のため)
+            # データに基づいて描画モードを決定 (range優先)
             if settings_data.get('range_click'):
                  new_mode = 'range'
             elif settings_data.get('point_click'):
                 new_mode = 'point'
+            # ROIモード('roi_variable')はUIボタンの状態に依存するため、データからは決定しない
 
-            # ★★★ ランダムクリックの状態も復元 ★★★
-            # set_mode呼び出し前にチェック状態を設定しておく
-            # (set_modeはrangeモードでなければrandomを無効化＆解除するので問題ない)
-            self.random_cb.blockSignals(True)
-            self.random_cb.setChecked(settings_data.get('random_click', False))
-            self.random_cb.blockSignals(False)
+        # 描画モードを設定し、UI有効/無効とROIボタン表示を更新
+        # ※ この中で _update_ui_elements が呼ばれ、排他制御は行われない
+        self._set_drawing_mode_and_update_ui(new_mode)
 
-        # 決定したモードに基づいて set_mode を呼び出し、UI全体の状態を更新・同期
-        # これにより、roiボタンの状態や、クリック種別チェックボックスの有効/無効も設定される
-        self.set_mode(new_mode)
+        # random_cb の有効状態は _update_ui_elements で設定されるが、
+        # range_cb のチェック状態に依存するため、ここで再確認する
+        # (set_settings_from_data で range_cb の状態が設定された後で呼ばれる想定)
+        is_range_active = settings_data.get('range_click', False) if settings_data else False
+        is_roi_active = self.roi_button.isChecked() # 現在のUI状態を確認
+        self.random_cb.setEnabled(not is_roi_active and is_range_active)

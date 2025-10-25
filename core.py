@@ -9,6 +9,7 @@
 # ★★★ [修正] 画像設定変更時にキャッシュを再構築し即時反映させる ★★★
 # ★★★ [修正] 画面安定チェックのログにスコアと閾値を追加 (ユーザー要望) ★★★
 # ★★★ [修正] 省エネモード (Eco Mode) がCPU負荷を下げられていなかった問題を修正 ★★★
+# ★★★ [修正] on_image_settings_changed, on_preview_click_settings_changed にクリック種別の排他制御追加 ★★★
 
 import sys
 import threading
@@ -239,13 +240,13 @@ class CoreEngine(QObject):
         # Determine effective capture scale and frame skip based on lightweight mode
         lw_conf = self.app_config.get('lightweight_mode', {})
         is_lw_enabled = lw_conf.get('enabled', False)
-        # ★★★ 修正: デフォルト値を 'standard' (英語) に変更 ★★★
+        # ★★★ 内部名で処理 ★★★
         preset_internal = lw_conf.get('preset', 'standard') # Use internal name
 
         # Map internal preset name to settings
         if is_lw_enabled:
             user_frame_skip = self.app_config.get('frame_skip_rate', 2)
-            # ★★★ 修正: 比較を英語の内部名に変更 ★★★
+            # ★★★ 内部名で比較 ★★★
             if preset_internal == "standard":
                 self.effective_capture_scale, self.effective_frame_skip_rate = 0.5, user_frame_skip + 5
             elif preset_internal == "performance":
@@ -605,13 +606,32 @@ class CoreEngine(QObject):
         # If load successful, update preview and settings UI
         self._recalculate_and_update(request_save=False) # Don't trigger save on load
 
+    # ★★★ クリック設定の排他制御はここに移動 ★★★
     def on_image_settings_changed(self, settings: dict):
         """Handles changes from the item settings UI."""
         if self.current_image_settings:
+            # --- 排他制御 ---
+            if 'point_click' in settings:
+                if settings['point_click']:
+                    # point_click が True になったら range_click を False にする
+                    settings['range_click'] = False
+                    # UI側の random_click は range_click に依存するため、ここもFalseにする
+                    settings['random_click'] = False
+            elif 'range_click' in settings:
+                if settings['range_click']:
+                    # range_click が True になったら point_click を False にする
+                    settings['point_click'] = False
+                    # random_click の状態は UI からの settings に従う
+                else:
+                    # range_click が False になったら random_click も False にする
+                    settings['random_click'] = False
+            # --- 排他制御ここまで ---
+
+            # 更新された設定を適用
             self.current_image_settings.update(settings)
             self._recalculate_and_update() # Recalculate ROI, update preview, trigger save
-            
-            # ★★★ [修正] 監視中に設定が変更された場合、キャッシュを再構築して即時反映させる ★★★
+
+            # 監視中に設定が変更された場合、キャッシュを再構築して即時反映させる
             if self.is_monitoring and self.thread_pool:
                 self.logger.log("log_item_setting_changed_rebuild")
                 self.ui_manager.set_tree_enabled(False)
@@ -623,10 +643,28 @@ class CoreEngine(QObject):
             self.current_image_settings.update(roi_data) # roi_data contains {'roi_rect_variable': [...]}
             self._recalculate_and_update()
 
+    # ★★★ クリック設定の排他制御を追加 ★★★
     def on_preview_click_settings_changed(self, click_data: dict):
         """Handles changes to click position/rect from the preview label."""
         if self.current_image_settings:
-            self.current_image_settings.update(click_data) # click_data has {'click_position': [...]} or {'click_rect': [...]}
+            # --- 排他制御 ---
+            if 'click_position' in click_data: # Point click data received
+                # point_click=True, range_click=False に設定
+                self.current_image_settings['point_click'] = True
+                self.current_image_settings['range_click'] = False
+                self.current_image_settings['random_click'] = False
+                 # click_rect は None にする (Optional)
+                self.current_image_settings['click_rect'] = None # None を設定
+            elif 'click_rect' in click_data: # Range click data received
+                # point_click=False, range_click=True に設定
+                self.current_image_settings['point_click'] = False
+                self.current_image_settings['range_click'] = True
+                # random_click の状態は変更しない (UIの状態を維持)
+                 # click_position は None にする (Optional)
+                self.current_image_settings['click_position'] = None # None を設定
+            # --- 排他制御ここまで ---
+
+            self.current_image_settings.update(click_data)
             self._recalculate_and_update()
 
     def _recalculate_and_update(self, request_save=True):
@@ -638,6 +676,7 @@ class CoreEngine(QObject):
             self.current_image_settings['roi_rect'] = self.calculate_roi_rect((w, h), self.current_image_settings)
 
         # Emit signal to update the preview label (image and overlays)
+        # ★★★ ここで最新の設定データを渡す ★★★
         self.updatePreview.emit(self.current_image_mat, self.current_image_settings)
 
         # Trigger delayed save if requested
@@ -797,7 +836,7 @@ class CoreEngine(QObject):
             # ★★★ state の書き込みをロックで保護 ★★★
             with self.state_lock:
                 self.state = None # Clear current state
-            
+
             # ★★★ [修正] UIステータスの更新を .join() の前に移動し、競合状態を防ぐ ★★★
             # 先にUIを「待機中」にしてから、スレッドの終了を待つ
             self.updateStatus.emit("idle", "green")
@@ -813,7 +852,7 @@ class CoreEngine(QObject):
                 for cache in [self.normal_template_cache, self.backup_template_cache]:
                     for item in cache.values():
                         item['best_scale'] = None
-            
+
             # ★★★ [修正] UI更新は既に上で行ったため、ここでは不要 ★★★
             # self.updateStatus.emit("idle", "green")
             # self.logger.log("log_monitoring_stopped")
@@ -900,7 +939,7 @@ class CoreEngine(QObject):
                     else:
                         self._last_eco_check_time = current_time # Reset check timer
                         # ★★★ [修正] キャプチャとEcoチェックは行うが、クリック(handle)はしない ★★★
-                        skip_handle = True 
+                        skip_handle = True
 
                 # 3. Normal Frame Skip: Skip based on effective_frame_skip_rate
                 elif (frame_counter % self.effective_frame_skip_rate) != 0:
@@ -1294,24 +1333,24 @@ class CoreEngine(QObject):
         """Handles cancellation of the selection process."""
         self.logger.log("log_selection_cancelled")
         self._is_capturing_for_registration = False # Reset flag if capturing
-        
+
         # --- pynputリスナーの確実な停止とクリーンアップ ---
-        
+
         # 停止リクエストを非同期で送る (フリーズ回避のため)
         if self.window_selection_listener and self.window_selection_listener.is_alive():
              # pynputの停止はjoinを伴わないため、すぐにスレッド終了を待つ必要はない
              self.window_selection_listener.stop()
              self.window_selection_listener = None
-        
+
         if self.keyboard_selection_listener and self.keyboard_selection_listener.is_alive():
             self.keyboard_selection_listener.stop()
             self.keyboard_selection_listener = None
-        
+
         # Clean up selection tools
         if hasattr(self, 'selection_overlay') and self.selection_overlay:
             self.selection_overlay.close()
             self.selection_overlay = None
-            
+
         # Notify UI and restore visibility
         self.selectionProcessFinished.emit()
         self._show_ui_safe() # 必ずUIを再表示
@@ -1325,13 +1364,13 @@ class CoreEngine(QObject):
         """Handles ESC key press during window selection."""
         if key == keyboard.Key.esc:
             self.logger.log("log_selection_cancelled_key")
-            
+
             # --- pynputリスナーの確実な停止とクリーンアップ (修正) ---
             # stop() を呼び出すと、そのリスナー（ここではキーボードリスナー）は終了する
-            if self.keyboard_selection_listener and self.keyboard_selection_listener.is_alive(): 
+            if self.keyboard_selection_listener and self.keyboard_selection_listener.is_alive():
                  self.keyboard_selection_listener.stop()
             self.keyboard_selection_listener = None
-            
+
             # ウィンドウリスナーもここで停止リクエストを送る
             if self.window_selection_listener and self.window_selection_listener.is_alive():
                  self.window_selection_listener.stop()

@@ -8,6 +8,7 @@
 # ★★★ [修正] 右クリック時のプロパティ表示が f-string が原因で失敗していたのを修正 ★★★
 # ★★★ [再修正] 右クリック時のプロパティ表示の翻訳キー呼び出し方をJSON定義に合わせて修正 ★★★
 # ★★★ [修正] ウィンドウスケールが1.0倍以外の時に画像キャプチャボタンを無効化 ★★★
+# ★★★ [修正] set_settings_from_data でチェックボックス状態をデータから直接設定 ★★★
 
 import sys
 import json
@@ -1412,32 +1413,36 @@ class UIManager(QMainWindow):
             settings['roi_mode'] = 'variable'
         return settings
 
+    # ★★★ 修正: チェックボックスの状態を settings_data から直接設定 ★★★
     def set_settings_from_data(self, settings_data):
         """Updates the item settings widgets based on loaded data."""
         selected_path, _ = self.get_selected_item_path()
         is_folder = selected_path and Path(selected_path).is_dir()
 
-        # Combine all relevant widgets for enabling/disabling
         all_widgets = list(self.item_settings_widgets.values()) + \
                       [self.item_settings_widgets['roi_mode_fixed'],
                        self.item_settings_widgets['roi_mode_variable']]
 
-        # Disable all item settings if a folder is selected or no data provided
         enable_widgets = not is_folder and settings_data is not None
         for widget in all_widgets:
             widget.setEnabled(enable_widgets)
 
-        # If disabled or no data, reset widgets
         if not enable_widgets:
+            # --- (リセット処理) ---
             for widget in all_widgets:
-                widget.blockSignals(True) # Prevent signals during reset
+                widget.blockSignals(True)
                 if isinstance(widget, QDoubleSpinBox): widget.setValue(0)
                 elif isinstance(widget, QCheckBox): widget.setChecked(False)
                 elif isinstance(widget, QRadioButton):
-                    widget.setAutoExclusive(False); widget.setChecked(False); widget.setAutoExclusive(True)
-            for widget in all_widgets: widget.blockSignals(False) # Re-enable signals
+                    # QButtonGroup に属している RadioButton のチェックを外す正しい方法
+                    if hasattr(self, 'roi_mode_group') and self.roi_mode_group.id(widget) != -1:
+                        widget.setAutoExclusive(False)
+                        widget.setChecked(False)
+                        widget.setAutoExclusive(True)
+                    else:
+                        widget.setChecked(False)
+            for widget in all_widgets: widget.blockSignals(False) # ブロック解除
 
-            # Splash/Folder Preview Logic remains here...
             if is_folder:
                 if self.splash_pixmap:
                     self.preview_label.set_pixmap(self.splash_pixmap)
@@ -1446,66 +1451,71 @@ class UIManager(QMainWindow):
                     self.preview_label.setText(self.locale_manager.tr("preview_folder_selected"))
                     self.preview_label.set_pixmap(None)
 
-            # Sync preview mode manager even when disabled
+            # PreviewModeManager を同期 (モードとUI有効/無効のみ更新)
             self.preview_mode_manager.sync_from_settings_data(None)
-            self._update_roi_widgets_state()
-
-            # ★★★ Update preview data (explicitly pass None) ★★★
-            self.preview_label.set_drawing_data(None)
-            # update() は update_image_preview の最後で呼ばれる
+            self._update_roi_widgets_state() # ROIウィジェットの有効/無効更新
+            self.preview_label.set_drawing_data(None) # 描画データクリア
             return
+        # --- (リセット処理ここまで) ---
 
-        # If data exists and it's not a folder, load settings into widgets
-        # (preview_label.set_drawing_data is called at the end now)
+        # settings_data から値を読み込み、UIウィジェットに設定
         for key, value in settings_data.items():
             if key in self.item_settings_widgets:
                 widget = self.item_settings_widgets[key]
-                widget.blockSignals(True) # Prevent signals during loading
+                widget.blockSignals(True) # 値設定中のシグナル発生を防ぐ
                 if isinstance(widget, (QDoubleSpinBox, QSpinBox)):
                     widget.setValue(value if value is not None else 0)
                 elif isinstance(widget, QCheckBox):
+                     # ★★★ クリック種別チェックボックスの状態を settings_data から直接設定 ★★★
                     widget.setChecked(bool(value))
-                widget.blockSignals(False) # Re-enable signals
+                # RadioButton (ROIモード) は後で別途設定
+                widget.blockSignals(False) # ブロック解除
 
-        # Set ROI mode RadioButtons
+        # ROIモード RadioButtons を設定
         roi_mode = settings_data.get('roi_mode', 'fixed')
+        # RadioButtonのチェック状態を設定する際もシグナルをブロック
         self.item_settings_widgets['roi_mode_fixed'].blockSignals(True)
         self.item_settings_widgets['roi_mode_variable'].blockSignals(True)
         if roi_mode == 'variable':
             self.item_settings_widgets['roi_mode_variable'].setChecked(True)
-        else:
+            self.item_settings_widgets['roi_mode_fixed'].setChecked(False) # 排他なので片方をFalseに
+        else: # fixed or unknown, default to fixed
             self.item_settings_widgets['roi_mode_fixed'].setChecked(True)
+            self.item_settings_widgets['roi_mode_variable'].setChecked(False) # 排他なので片方をFalseに
         self.item_settings_widgets['roi_mode_fixed'].blockSignals(False)
         self.item_settings_widgets['roi_mode_variable'].blockSignals(False)
 
-        # Sync preview mode manager and update dependent ROI widgets
+        # PreviewModeManager を同期 (モードとUI有効/無効のみ更新)
+        # ※ この中で _update_ui_elements が呼ばれる
         self.preview_mode_manager.sync_from_settings_data(settings_data)
+        # ROI関連ウィジェットの有効/無効状態を更新
         self._update_roi_widgets_state()
-
-        # ★★★ Update preview data with current settings ★★★
-        self.preview_label.set_drawing_data(settings_data) # Update preview overlays data
-        # update() は update_image_preview の最後で呼ばれる
+        # 描画データを更新
+        self.preview_label.set_drawing_data(settings_data)
 
 
     def on_item_settings_changed(self, *args):
         """Handles changes in item settings widgets."""
-        # どのウィジェットが変更されたかを取得 (オプション)
-        # sender = self.sender()
-        # print(f"Settings changed by: {sender}")
-
-        # 現在のUIから設定を取得 (これによりチェックボックスの状態が反映される)
+        # 現在のUIから設定を取得
         current_ui_settings = self.get_current_item_settings()
 
-        # CoreEngine に変更を通知 (CoreEngine 側で保持しているデータが更新される)
+        # CoreEngine に変更を通知 (CoreEngine側で排他制御が行われる)
         self.imageSettingsChanged.emit(current_ui_settings)
 
-        # 依存ウィジェットの状態を更新 (例: ROIボタンの有効/無効)
+        # 依存ウィジェットの状態を更新 (例: ROIボタンや random_cb の有効/無効)
+        # ※ PreviewModeManager 側でシグナル起点で更新されるので、ここでの _update_roi_widgets_state() 呼び出しは不要かも？
+        #    ただし、念のため残しておく。PreviewModeManager 側も更新されるはず。
         self._update_roi_widgets_state()
+        # ★★★ random_cb の有効状態も更新 ★★★
+        is_roi_enabled = self.item_settings_widgets['roi_enabled'].isChecked()
+        is_range_click_enabled = self.item_settings_widgets['range_click'].isChecked()
+        self.item_settings_widgets['random_click'].setEnabled(not is_roi_enabled and is_range_click_enabled)
 
-        # ★★★ CoreEngine が保持する最新の設定データでプレビューを更新 ★★★
+
+        # CoreEngine が保持する最新の設定データでプレビューを更新
+        # ※ CoreEngine側で排他制御された後のデータが送られてくる
         if self.core_engine and self.core_engine.current_image_settings:
-            # CoreEngine側のデータでプレビューの描画データを更新
-            # これにより、UI変更 -> CoreEngine更新 -> 最新データで描画、という流れになる
+            # プレビューの描画データを更新
             self.preview_label.set_drawing_data(self.core_engine.current_image_settings)
             self.preview_label.update() # 明示的に再描画を要求
 
@@ -1667,26 +1677,20 @@ class UIManager(QMainWindow):
 
     def update_image_preview(self, cv_image: np.ndarray, settings_data: dict = None):
         """Updates the image preview label with the given OpenCV image and settings."""
-        # First, update the settings display (this also calls preview_label.set_drawing_data indirectly)
-        # set_settings_from_data にデータ設定と再描画要求を任せる
+        # Core から受け取った最新の設定データでUI要素と描画データを更新
         self.set_settings_from_data(settings_data)
 
         # If image is None or empty, clear the preview or show splash
         if cv_image is None or cv_image.size == 0:
             selected_path, _ = self.get_selected_item_path()
-            # Don't clear text if a folder is selected (handled in set_settings_from_data)
+            # フォルダ選択時は set_settings_from_data 内で処理される
             if not (selected_path and Path(selected_path).is_dir()):
-
-                # --- Splash Image Logic ---
                 if self.splash_pixmap:
                     self.preview_label.set_pixmap(self.splash_pixmap)
                     self.preview_label.setText("") # Clear text
                 else:
                     self.preview_label.setText(self.locale_manager.tr("preview_default_text"))
                     self.preview_label.set_pixmap(None) # Clear the pixmap
-                # --- End Splash Image Logic ---
-
-            # ★★★ 明示的に再描画 (画像がない場合) ★★★
             self.preview_label.update()
             return
 
@@ -1697,7 +1701,6 @@ class UIManager(QMainWindow):
             bytes_per_line = ch * w
             q_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
             pixmap = QPixmap.fromImage(q_image)
-            # Pixmap の設定のみを行う
             self.preview_label.set_pixmap(pixmap) # Display the image
             self.preview_label.setText("") # Clear any previous text
         except Exception as e:
@@ -1705,7 +1708,7 @@ class UIManager(QMainWindow):
             self.preview_label.setText("Preview Error")
             self.preview_label.set_pixmap(None)
 
-        # ★★★ 明示的に再描画 (画像がある場合) ★★★
+        # 再描画を要求
         self.preview_label.update()
 
 
