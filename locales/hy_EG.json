@@ -348,4 +348,5 @@
   "log_countdown_executing": "%𓋴 𓋴𓇋𓎡𓍯𓈖𓂧𓋴 𓇋𓃭𓄿𓏤𓋴𓇋𓂧. 𓇋𓎡𓋴𓇋𓎡𓅱𓏏𓇋𓈖𓎼 𓃀𓄿𓎡𓅱𓏤 𓎡𓃭𓇋𓎡𓎡.",
   "log_image_saved_success": "𓋴𓄿𓆑𓇋𓂧 𓇋𓅓𓄿𓎼𓇋: %𓋴",
   "log_rec_area_cleared": "𓎡𓃭𓇋𓄿𓂋𓇋𓂧 𓂋𓇋𓎡𓍯𓎼𓈖𓇋𓏏𓇋𓅱𓈖 𓄿𓂋𓇋𓄿."
+  "warn_capture_disabled_scale": "Images captured during auto-scale will not match.\nPlease capture images at 1.0x scale."
 }

@@ -346,6 +346,5 @@
   "log_countdown_started": "检测到备用图像 '%s'。开始 %s 秒倒计时。",
   "log_countdown_cancelled": "检测到普通图像，取消备用倒计时。",
   "log_countdown_executing": "%s 秒已过。执行备用单击。",
-  "log_image_saved_success": "已保存图像：%s",
-  "log_rec_area_cleared": "已清除识别区域。"
+  "warn_capture_disabled_scale": "自动缩放期间捕获的图像将不匹配。\n请以 1.0 倍比例捕获图像。"
 }

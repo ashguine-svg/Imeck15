@@ -8,6 +8,7 @@
 # ★★★ [修正] 監視停止時のUI更新タイミングを変更 (競合状態の解消) ★★★
 # ★★★ [修正] 画像設定変更時にキャッシュを再構築し即時反映させる ★★★
 # ★★★ [修正] 画面安定チェックのログにスコアと閾値を追加 (ユーザー要望) ★★★
+# ★★★ [修正] 省エネモード (Eco Mode) がCPU負荷を下げられていなかった問題を修正 ★★★
 
 import sys
 import threading
@@ -876,12 +877,14 @@ class CoreEngine(QObject):
                 self.is_eco_cooldown_active = is_eco_eligible
 
                 # --- Frame Skipping Logic ---
-                skip_capture_and_handle = False
+                # ★★★ [修正] 省エネモード対応: skip_handleフラグを追加 ★★★
+                skip_handle = False # Clicks/State handlingをスキップするかどうか
 
                 # 1. CountdownState: Always wait ~1 second per loop iteration
                 # ★★★ 修正: self.state -> current_state ★★★
                 if isinstance(current_state, CountdownState):
                     time.sleep(1.0) # Effectively limits FPS to 1
+                    # skip_handle は False のまま (キャプチャとマッチングは実行)
 
                 # 2. Eco Mode: Skip if not yet time for the interval check
                 elif self.is_eco_cooldown_active:
@@ -892,18 +895,20 @@ class CoreEngine(QObject):
                         sleep_time = self.ECO_CHECK_INTERVAL - (current_time - self._last_eco_check_time)
                         if sleep_time > 0:
                             time.sleep(sleep_time)
-                        skip_capture_and_handle = True # Skip rest of loop this iteration
+                        # ★★★ [修正] ループ全体をスキップ (キャプチャ/マッチングを行わない) ★★★
+                        continue
                     else:
-                        self._last_eco_check_time = current_time # Reset check timer, proceed to capture
+                        self._last_eco_check_time = current_time # Reset check timer
+                        # ★★★ [修正] キャプチャとEcoチェックは行うが、クリック(handle)はしない ★★★
+                        skip_handle = True 
 
                 # 3. Normal Frame Skip: Skip based on effective_frame_skip_rate
                 elif (frame_counter % self.effective_frame_skip_rate) != 0:
                     time.sleep(0.01) # Short sleep to yield CPU
-                    skip_capture_and_handle = True
-
-                # If skipping, restart loop
-                if skip_capture_and_handle:
+                    # ★★★ [修正] ループ全体をスキップ ★★★
                     continue
+
+                # ★★★ [修正] skip_capture_and_handle のチェックを削除 (continue で処理されるため) ★★★
 
                 # --- Screen Capture and Processing ---
                 screen_bgr = self.capture_manager.capture_frame(region=self.recognition_area)
@@ -943,9 +948,12 @@ class CoreEngine(QObject):
                     self.last_successful_click_time = time.time() # Reset Eco timer
                     self._log("log_eco_mode_resumed", force=True) # Log resumption
 
-                # Delegate handling to the current state object
-                # ★★★ 修正: self.state.handle -> current_state.handle ★★★
-                current_state.handle(current_time, screen_data, last_match_time_map, pre_matches=all_matches)
+                # ★★★ [修正] skip_handle が True (Ecoモードのチェック実行時) の場合は、 ★★★
+                # ★★★ current_state.handle() を呼び出さない ★★★
+                if not skip_handle:
+                    # Delegate handling to the current state object
+                    # ★★★ 修正: self.state.handle -> current_state.handle ★★★
+                    current_state.handle(current_time, screen_data, last_match_time_map, pre_matches=all_matches)
 
             except Exception as e:
                 # ★★★ 修正: レースコンディション起因の AttributeError を特別にハンドル ★★★
@@ -1286,16 +1294,24 @@ class CoreEngine(QObject):
         """Handles cancellation of the selection process."""
         self.logger.log("log_selection_cancelled")
         self._is_capturing_for_registration = False # Reset flag if capturing
+        
+        # --- pynputリスナーの確実な停止とクリーンアップ ---
+        
+        # 停止リクエストを非同期で送る (フリーズ回避のため)
+        if self.window_selection_listener and self.window_selection_listener.is_alive():
+             # pynputの停止はjoinを伴わないため、すぐにスレッド終了を待つ必要はない
+             self.window_selection_listener.stop()
+             self.window_selection_listener = None
+        
+        if self.keyboard_selection_listener and self.keyboard_selection_listener.is_alive():
+            self.keyboard_selection_listener.stop()
+            self.keyboard_selection_listener = None
+        
         # Clean up selection tools
         if hasattr(self, 'selection_overlay') and self.selection_overlay:
             self.selection_overlay.close()
             self.selection_overlay = None
-        if self.window_selection_listener:
-            self.window_selection_listener.stop()
-            self.window_selection_listener = None
-        if self.keyboard_selection_listener:
-            self.keyboard_selection_listener.stop()
-            self.keyboard_selection_listener = None
+            
         # Notify UI and restore visibility
         self.selectionProcessFinished.emit()
         self._show_ui_safe() # 必ずUIを再表示
@@ -1309,16 +1325,21 @@ class CoreEngine(QObject):
         """Handles ESC key press during window selection."""
         if key == keyboard.Key.esc:
             self.logger.log("log_selection_cancelled_key")
-            # Stop listeners safely
-            if self.window_selection_listener: self.window_selection_listener.stop()
-            if self.keyboard_selection_listener: self.keyboard_selection_listener.stop()
+            
+            # --- pynputリスナーの確実な停止とクリーンアップ (修正) ---
+            # stop() を呼び出すと、そのリスナー（ここではキーボードリスナー）は終了する
+            if self.keyboard_selection_listener and self.keyboard_selection_listener.is_alive(): 
+                 self.keyboard_selection_listener.stop()
+            self.keyboard_selection_listener = None
+            
+            # ウィンドウリスナーもここで停止リクエストを送る
+            if self.window_selection_listener and self.window_selection_listener.is_alive():
+                 self.window_selection_listener.stop()
+            self.window_selection_listener = None
+
             # Use signal to trigger cancellation cleanup on main thread
-            # Connect temporarily, emit, then disconnect to avoid multiple calls
-            self._showUiSignal.connect(self._on_selection_cancelled)
-            self._showUiSignal.emit()
-            try: # Disconnect might fail if already handled
-                 self._showUiSignal.disconnect(self._on_selection_cancelled)
-            except RuntimeError: pass
+            # _on_selection_cancelled に処理を集約するため、ここでは直接クリーンアップを行わない
+            self._on_selection_cancelled()
             return False # Stop keyboard listener
 
 

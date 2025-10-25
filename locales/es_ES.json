@@ -344,5 +344,6 @@
   "log_priority_image_completed": "Monitoreo de Prioridad por Reconocimiento de Imagen finalizado para la carpeta '%s'. (Completado)",
   "log_countdown_started": "Imagen de respaldo '%s' detectada. Iniciando cuenta regresiva de %s segundos.",
   "log_countdown_cancelled": "Imagen normal detectada, cancelando cuenta regresiva de respaldo.",
-  "log_countdown_executing": "%s segundos transcurridos. Ejecutando clic de respaldo."
+  "log_countdown_executing": "%s segundos transcurridos. Ejecutando clic de respaldo.",
+  "warn_capture_disabled_scale": "Las imágenes capturadas durante la escala automática no coincidirán.\nCapture imágenes a una escala de 1.0x."
 }

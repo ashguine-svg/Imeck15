@@ -4,7 +4,7 @@ import sys
 import mss
 import cv2
 import numpy as np
-import threading  # ★ 1. threading をインポート
+import threading
 from PySide6.QtCore import QObject
 
 try:
@@ -59,14 +59,21 @@ class CaptureManager(QObject):
                     self.logger.log("log_dxcam_init_failed_instance")
                     self.is_dxcam_ready = False
                 else:
-                    self.is_dxcam_ready = True
-                    self.logger.log("log_dxcam_init_success")
+                    # ★★★ 修正: 初期化後の即時フレーム取得チェックを強化 ★★★
                     frame = self.dxcam_sct.grab()
                     if frame is not None:
+                        self.is_dxcam_ready = True
+                        self.logger.log("log_dxcam_init_success")
                         self.target_height, self.target_width, _ = frame.shape
                         self.logger.log("log_dxcam_resolution", self.target_width, self.target_height)
                     else:
                         self.logger.log("log_dxcam_resolution_failed")
+                        # インスタンスは作れたがフレーム取得失敗 -> MSSにフォールバックさせる
+                        self.logger.log("log_dxcam_init_failed_frame_grab")
+                        self.dxcam_sct.release()
+                        self.dxcam_sct = None
+                        self.is_dxcam_ready = False
+
 
             except Exception as e:
                 self.logger.log("log_dxcam_init_failed_general", str(e))
@@ -121,16 +128,18 @@ class CaptureManager(QObject):
                     # ★ メインモニタ(output_idx=0)を明示的に指定
                     self.dxcam_sct = dxcam.create(output_idx=0)
                     if self.dxcam_sct:
-                        self.is_dxcam_ready = True
-                        self.dxcam_error_count = 0
+                        # ★★★ 修正: 初期化後の即時フレーム取得チェックを強化 ★★★
                         frame = self.dxcam_sct.grab()
                         if frame is not None:
+                            self.is_dxcam_ready = True
+                            self.dxcam_error_count = 0
                             self.target_height, self.target_width, _ = frame.shape
                             self.logger.log("log_dxcam_init_success_resolution", self.target_width, self.target_height)
                         else:
-                            self.logger.log("log_dxcam_init_warn_no_frame")
+                             raise RuntimeError("dxcam.create() returned instance but failed to grab first frame.")
                     else:
                         raise RuntimeError("dxcam.create() returned None")
+
                 except Exception as e:
                     self.logger.log("log_dxcam_init_error_critical", str(e))
                     self.current_method = 'mss'

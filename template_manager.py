@@ -163,11 +163,16 @@ class TemplateManager:
 
                     if use_opencl:
                         try:
+                            # ★★★ 修正: UMat変換時に失敗した場合の処理を追加 ★★★
                             template_entry['image_umat'] = cv2.UMat(resized_image)
                             template_entry['gray_umat'] = cv2.UMat(resized_gray)
                         except Exception as e:
+                            # UMat生成に失敗した場合、そのテンプレートのエントリからUMatを削除し、numpyで続行できるようにする
+                            if 'image_umat' in template_entry: del template_entry['image_umat']
+                            if 'gray_umat' in template_entry: del template_entry['gray_umat']
                             # ★★★ 6. ログを翻訳キーに置き換え ★★★
                             self.logger.log("log_umat_convert_error", Path(path).name, str(e))
+
 
                     scaled_templates.append(template_entry)
 

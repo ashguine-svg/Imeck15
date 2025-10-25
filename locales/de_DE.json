@@ -345,6 +345,5 @@
   "log_countdown_started": "Backup-Bild '%s' erkannt. Starte %s Sekunden Countdown.",
   "log_countdown_cancelled": "Normales Bild erkannt, breche Backup-Countdown ab.",
   "log_countdown_executing": "%s Sekunden vergangen. Führe Backup-Klick aus.",
-  "log_image_saved_success": "Bild gespeichert: %s",
-  "log_rec_area_cleared": "Erkennungsbereich gelöscht."
+  "warn_capture_disabled_scale": "Bilder, die während der automatischen Skalierung aufgenommen wurden, stimmen nicht überein.\nBitte nehmen Sie Bilder im Maßstab 1,0x auf."
 }

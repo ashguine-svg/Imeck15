@@ -347,5 +347,6 @@
   "log_countdown_cancelled": "Normal image detected, cancelling backup countdown.",
   "log_countdown_executing": "%s seconds elapsed. Executing backup click.",
   "log_image_saved_success": "Saved image: %s",
-  "log_rec_area_cleared": "Cleared recognition area."
+  "log_rec_area_cleared": "Cleared recognition area.",
+  "warn_capture_disabled_scale": "Images captured during auto-scale will not match.\nPlease capture images at 1.0x scale."
 }

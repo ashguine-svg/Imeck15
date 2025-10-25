@@ -62,6 +62,7 @@
   "app_setting_lw_mode_preset_performance": "パフォーマンス",
   "app_setting_lw_mode_preset_ultra": "ウルトラ",
   "app_setting_lw_mode_desc": "<b>標準 (Standard):</b> デフォルト設定 (スケール:0.5倍, スキップ:+5)<br><b>パフォーマンス (Performance):</b> 標準より高いパフォーマンスを発揮します (スケール:0.4倍, スキップ:+20)<br><b>ウルトラ (Ultra):</b> 最大限の軽量化を試みますが、環境によっては動作しない可能性があります (スケール:0.3倍, スキップ:+25)<br><br><b>注意:</b> 軽量化モードを有効にすると、自動スケール機能は無効になります。",
+  "app_setting_language_label": "言語:",
   "tab_usage": "使い方",
   "usage_html_path": "locales/usage_ja.html",
   "group_item_settings": "画像ごとの設定",
@@ -343,5 +344,8 @@
   "log_priority_image_completed": "フォルダ '%s' の優先監視を終了しました。(完了)",
   "log_countdown_started": "バックアップ画像 '%s' を検出。%s秒のカウントダウンを開始します。",
   "log_countdown_cancelled": "通常画像を検出したため、バックアップカウントダウンをキャンセルします。",
-  "log_countdown_executing": "%s秒が経過。バックアップクリックを実行します。"
+  "log_countdown_executing": "%s秒が経過。バックアップクリックを実行します。",
+
+  "language_name": "日本語",
+  "warn_capture_disabled_scale": "自動スケール時にキャプチャした画像は画像マッチングしません。\n倍率1.0で画像キャプチャしてください。"
 }

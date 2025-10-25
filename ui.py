@@ -7,6 +7,7 @@
 # ★★★ 軽量化モードの保存/読み込みロジックを修正 (問題1対応) ★★★
 # ★★★ [修正] 右クリック時のプロパティ表示が f-string が原因で失敗していたのを修正 ★★★
 # ★★★ [再修正] 右クリック時のプロパティ表示の翻訳キー呼び出し方をJSON定義に合わせて修正 ★★★
+# ★★★ [修正] ウィンドウスケールが1.0倍以外の時に画像キャプチャボタンを無効化 ★★★
 
 import sys
 import json
@@ -317,11 +318,17 @@ class UIManager(QMainWindow):
             locale_manager=self.locale_manager
         )
 
+        # ★★★ [修正] キャプチャボタンの参照を保持 ★★★
+        self.main_capture_button = self.capture_image_button # setup_ui で作成されるボタン
+        # floating_window 内のボタンは floating_window 作成時に参照する
+
         # Adjust size after UI is potentially rendered
         QTimer.singleShot(100, self.adjust_initial_size)
 
         # Initial preview update (for splash screen)
         QTimer.singleShot(0, lambda: self.update_image_preview(None, None))
+        # ★★★ [修正] 初期状態でボタンの状態を更新 ★★★
+        QTimer.singleShot(0, self._update_capture_button_state)
 
     def set_performance_monitor(self, monitor):
         self.performance_monitor = monitor
@@ -813,6 +820,8 @@ class UIManager(QMainWindow):
         if self.core_engine and self.core_engine.current_window_scale is not None:
             current_scale = self.core_engine.current_window_scale
         self.on_window_scale_calculated(current_scale)
+        # ★★★ [修正] 言語変更時にボタンの状態も更新 ★★★
+        self._update_capture_button_state()
 
 
     def is_dark_mode(self):
@@ -853,11 +862,11 @@ class UIManager(QMainWindow):
         preset_internal_name = lw_conf.get('preset', 'standard') # Get internal name (e.g., "standard")
         preset_display_key = f"app_setting_lw_mode_preset_{preset_internal_name}" # Construct translation key (e.g., "app_setting_lw_mode_preset_standard")
         preset_display_text = self.locale_manager.tr(preset_display_key) # Get translated display name
-        
+
         # Fallback if translation key is missing (e.g., key mismatch)
         if preset_display_text == preset_display_key:
              preset_display_text = self.locale_manager.tr("app_setting_lw_mode_preset_standard")
-        
+
         self.app_settings_widgets['lightweight_mode_preset'].setCurrentText(preset_display_text)
         # ★★★ 修正ここまで ★★★
 
@@ -930,7 +939,7 @@ class UIManager(QMainWindow):
         # ★★★ 修正: 表示名(日本語)から内部名(英語)に変換して保存 ★★★
         preset_display_text = self.app_settings_widgets['lightweight_mode_preset'].currentText()
         preset_internal_name = "standard" # Default
-        
+
         # Find the internal name corresponding to the display text
         if preset_display_text == lm("app_setting_lw_mode_preset_standard"):
             preset_internal_name = "standard"
@@ -981,6 +990,8 @@ class UIManager(QMainWindow):
         self.set_rec_area_button_main_ui.clicked.connect(self.setRecAreaDialog)
         if self.core_engine: # Connect clear button only if core engine exists
             self.clear_rec_area_button_main_ui.clicked.connect(self.core_engine.clear_recognition_area)
+            # ★★★ [修正] CoreEngineからのスケール変更通知をボタン状態更新に接続 ★★★
+            self.core_engine.windowScaleCalculated.connect(self._update_capture_button_state)
 
         # Item settings widgets -> trigger saving and UI updates
         for widget in self.item_settings_widgets.values():
@@ -1171,7 +1182,7 @@ class UIManager(QMainWindow):
             # Show tooltip with info for image files
             try:
                 settings = self.config_manager.load_item_setting(path)
-                
+
                 # Determine click mode text by translating the mode key
                 click_mode_text = lm("context_menu_info_mode_unset") # Default
                 if settings.get('point_click'):
@@ -1583,6 +1594,30 @@ class UIManager(QMainWindow):
             self.current_best_scale_label.setText(lm("auto_scale_best_scale_default"))
             self.current_best_scale_label.setStyleSheet("color: gray;")
 
+        # ★★★ [修正] スケール値が変わったので、キャプチャボタンの状態を更新 ★★★
+        self._update_capture_button_state(scale)
+
+    # ★★★ [追加] キャプチャボタンの状態を更新するメソッド ★★★
+    def _update_capture_button_state(self, current_scale=None):
+        """Enables/disables capture buttons based on the current window scale."""
+        # CoreEngine から最新のスケールを取得 (引数で渡されない場合)
+        if current_scale is None and self.core_engine:
+            current_scale = self.core_engine.current_window_scale
+
+        # スケールが 1.0 または None (未設定) の場合のみキャプチャを許可
+        enable_capture = (current_scale is None or current_scale == 1.0)
+        tooltip = "" if enable_capture else self.locale_manager.tr("warn_capture_disabled_scale")
+
+        # メインUIのボタン
+        if hasattr(self, 'main_capture_button'):
+            self.main_capture_button.setEnabled(enable_capture)
+            self.main_capture_button.setToolTip(tooltip)
+
+        # 最小UI (フローティングウィンドウ) のボタン
+        if self.floating_window and hasattr(self.floating_window, 'capture_button'):
+            self.floating_window.capture_button.setEnabled(enable_capture)
+            self.floating_window.capture_button.setToolTip(tooltip)
+
     def prompt_to_save_base_size(self, window_title: str) -> bool:
         """Shows a dialog asking whether to save the current window size as base."""
         lm = self.locale_manager.tr
@@ -1772,6 +1807,8 @@ class UIManager(QMainWindow):
 
             self.floating_window.show()
             self.toggle_minimal_ui_button.setText(lm("minimal_ui_button_stop"))
+            # ★★★ [修正] 最小UIモード切替時もボタン状態を更新 ★★★
+            self._update_capture_button_state()
         else:
             # Switching back to normal UI
             if self.floating_window:
@@ -1799,6 +1836,8 @@ class UIManager(QMainWindow):
 
             self.activateWindow() # Bring main window to front
             self.toggle_minimal_ui_button.setText(lm("minimal_ui_button"))
+            # ★★★ [修正] 通常UIモード切替時もボタン状態を更新 ★★★
+            self._update_capture_button_state()
 
     def on_selection_process_started(self):
         """Hides UI elements when recognition area selection starts."""
