@@ -10,6 +10,8 @@
 # ★★★ [修正] 画面安定チェックのログにスコアと閾値を追加 (ユーザー要望) ★★★
 # ★★★ [修正] 省エネモード (Eco Mode) がCPU負荷を下げられていなかった問題を修正 ★★★
 # ★★★ [修正] on_image_settings_changed, on_preview_click_settings_changed にクリック種別の排他制御追加 ★★★
+# ★★★ [修正] 監視中の設定変更が即時保存されず、キャッシュ再構築に反映されない競合状態を修正 ★★★
+# ★★★ [修正] インターバルの定義を「マッチ後クリックまでの遅延」に変更 ★★★
 
 import sys
 import threading
@@ -19,6 +21,7 @@ import numpy as np
 import os
 from PySide6.QtCore import QObject, Signal, QThread, QPoint, QRect, Qt, QTimer
 from PySide6.QtGui import QMouseEvent, QPainter, QPen, QColor, QBrush, QPainterPath, QKeyEvent
+# ★★★ QInputDialog をインポート ★★★
 from PySide6.QtWidgets import QDialog, QWidget, QLabel, QVBoxLayout, QMessageBox, QApplication, QInputDialog, QFileDialog
 from pathlib import Path
 from pynput import mouse, keyboard
@@ -172,11 +175,17 @@ class CoreEngine(QObject):
         # Filter uses keys directly now
         self._log_spam_filter = {"log_stability_hold_click", "log_eco_mode_standby", "log_stability_check_debug"} # 'log_stability_check_debug' を追加
 
+        # ★★★ [追加] マッチ検出時刻を記録する辞書 ★★★
+        self.match_detected_at = {}
+
     def transition_to(self, new_state):
         # ★★★ state の書き込みをロックで保護 ★★★
         with self.state_lock:
             self.state = new_state
         self._last_clicked_path = None
+        # ★★★ 状態遷移時に検出時刻をリセット ★★★
+        self.match_detected_at.clear()
+
 
     def transition_to_timer_priority(self, folder_path):
         folder_settings = self.config_manager.load_item_setting(Path(folder_path))
@@ -606,7 +615,29 @@ class CoreEngine(QObject):
         # If load successful, update preview and settings UI
         self._recalculate_and_update(request_save=False) # Don't trigger save on load
 
-    # ★★★ クリック設定の排他制御はここに移動 ★★★
+    # ★★★ [修正] 監視中の設定変更に関する競合状態を修正 ★★★
+
+    def _handle_setting_change_and_rebuild(self):
+        """
+        設定変更を適用し、監視状態に応じて保存とキャッシュ再構築を実行します。
+        (監視中: 即時保存 -> キャッシュ再構築, 停止中: 遅延保存)
+        """
+        if self.is_monitoring:
+            # 監視中の場合:
+            # 1. プレビューを更新 (遅延保存は要求しない)
+            self._recalculate_and_update(request_save=False)
+            # 2. 設定をディスクに即時保存
+            self.save_current_settings()
+            # 3. キャッシュを再構築
+            if self.thread_pool:
+                self.logger.log("log_item_setting_changed_rebuild")
+                self.ui_manager.set_tree_enabled(False)
+                self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
+        else:
+            # 監視中でない場合 (従来通りの動作):
+            # プレビューを更新し、遅延保存を要求
+            self._recalculate_and_update(request_save=True)
+
     def on_image_settings_changed(self, settings: dict):
         """Handles changes from the item settings UI."""
         if self.current_image_settings:
@@ -629,21 +660,23 @@ class CoreEngine(QObject):
 
             # 更新された設定を適用
             self.current_image_settings.update(settings)
-            self._recalculate_and_update() # Recalculate ROI, update preview, trigger save
 
-            # 監視中に設定が変更された場合、キャッシュを再構築して即時反映させる
-            if self.is_monitoring and self.thread_pool:
-                self.logger.log("log_item_setting_changed_rebuild")
-                self.ui_manager.set_tree_enabled(False)
-                self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
+            # ★★★ 修正: ヘルパーメソッド呼び出しに変更 ★★★
+            self._handle_setting_change_and_rebuild()
+
+            # ★★★ 元のキャッシュ再構築ロジックは削除 ★★★
+            # (ヘルパーメソッドに移動したため)
+            # if self.is_monitoring and self.thread_pool:
+            #    ...
 
     def on_roi_settings_changed(self, roi_data: dict):
         """Handles changes to the variable ROI rectangle from the preview label."""
         if self.current_image_settings:
             self.current_image_settings.update(roi_data) # roi_data contains {'roi_rect_variable': [...]}
-            self._recalculate_and_update()
 
-    # ★★★ クリック設定の排他制御を追加 ★★★
+            # ★★★ 修正: ヘルパーメソッド呼び出しに変更 ★★★
+            self._handle_setting_change_and_rebuild()
+
     def on_preview_click_settings_changed(self, click_data: dict):
         """Handles changes to click position/rect from the preview label."""
         if self.current_image_settings:
@@ -665,7 +698,9 @@ class CoreEngine(QObject):
             # --- 排他制御ここまで ---
 
             self.current_image_settings.update(click_data)
-            self._recalculate_and_update()
+
+            # ★★★ 修正: ヘルパーメソッド呼び出しに変更 ★★★
+            self._handle_setting_change_and_rebuild()
 
     def _recalculate_and_update(self, request_save=True):
         """Recalculates fixed ROI if needed, updates preview, and optionally triggers save."""
@@ -811,6 +846,8 @@ class CoreEngine(QObject):
             self.last_successful_click_time = 0
             self.is_eco_cooldown_active = False
             self._last_eco_check_time = time.time() # Reset Eco check timer
+            # ★★★ 検出時刻辞書をリセット ★★★
+            self.match_detected_at.clear()
 
             # Rebuild cache with current settings and start monitoring thread
             self.ui_manager.set_tree_enabled(False)
@@ -852,6 +889,9 @@ class CoreEngine(QObject):
                 for cache in [self.normal_template_cache, self.backup_template_cache]:
                     for item in cache.values():
                         item['best_scale'] = None
+
+            # ★★★ 検出時刻辞書をリセット ★★★
+            self.match_detected_at.clear()
 
             # ★★★ [修正] UI更新は既に上で行ったため、ここでは不要 ★★★
             # self.updateStatus.emit("idle", "green")
@@ -1090,53 +1130,144 @@ class CoreEngine(QObject):
                 # del self.priority_timers[folder_path] # Let PriorityState handle timer reset logic
                 break # Only activate one per cycle
 
-
+    # ★★★ [修正] インターバル定義変更に伴うロジック修正 ★★★
+    # ★★★ [修正] clickable_after_interval の初期化を追加 ★★★
     def _process_matches_as_sequence(self, all_matches, current_time, last_match_time_map):
-        """Processes found matches, clicks the highest priority one respecting intervals."""
-        if not all_matches:
-            return False # No matches found
+        """
+        Processes matches based on new interval definition (delay after match).
+        Handles debounce and priority.
 
-        # Filter matches that are ready to be clicked (past interval + debounce)
-        clickable = []
+        【重要】パラメータ定義:
+        - インターバル (interval_time): 画像がマッチしてからクリックするまでの「遅延時間」。
+        - デバウンス (debounce_time):   画像をクリックした後、次に「同じ画像」がクリック可能になるまでの「最低待ち時間」。
+        """
+        if not all_matches:
+            # ★★★ 現在のマッチにない検出時刻エントリを削除 ★★★
+            current_match_paths = set() # ここで空セットを作成
+            keys_to_remove = [path for path in self.match_detected_at if path not in current_match_paths]
+            for path in keys_to_remove:
+                del self.match_detected_at[path]
+            return False
+
+        # ★★★ [修正] clickable_after_interval をここで初期化 ★★★
+        clickable_after_interval = [] # インターバル（遅延）が経過したマッチ候補
+
+        current_match_paths = {m['path'] for m in all_matches}
+
         for m in all_matches:
             path = m['path']
             settings = m['settings']
+
+            # インターバル: 画像マッチ後クリックまでの「遅延時間」
             interval = settings.get('interval_time', 1.5)
-            debounce = settings.get('debounce_time', 0.0) if self._last_clicked_path == path else 0.0
-            last_clicked = last_match_time_map.get(path, 0) # Default to 0 if never clicked
+            # デバウンス: クリック後、次に同じ画像がクリック可能になるまでの「最低待ち時間」
+            debounce = settings.get('debounce_time', 0.0)
+            last_clicked = last_match_time_map.get(path, 0)
 
-            if current_time - last_clicked > (interval + debounce):
-                clickable.append(m)
+            # 1. デバウンスチェック (前回クリックからの経過時間)
+            effective_debounce = debounce if self._last_clicked_path == path else 0.0 # 最後にクリックした画像と同じかチェック
+            if current_time - last_clicked <= effective_debounce: # debounce -> effective_debounce に変更
+                # デバウンス期間中の場合、このマッチは無視
+                if path in self.match_detected_at:
+                    del self.match_detected_at[path]
+                continue # 次のマッチへ
 
-        # If no clickable matches, return False
-        if not clickable:
+            # 2. インターバル（マッチ後遅延）チェック
+            if path not in self.match_detected_at:
+                # この画像が初めて検出された（またはデバウンス後再検出された）場合
+                self.match_detected_at[path] = current_time # 検出時刻を記録
+                self.logger.log(f"[DEBUG] Detected '{Path(path).name}'. Interval timer started ({interval:.1f}s).")
+                continue # まだインターバル経過していないので次のマッチへ
+            else:
+                # すでに検出時刻が記録されている場合
+                detected_at = self.match_detected_at[path]
+                time_since_detected = current_time - detected_at
+
+                if time_since_detected >= interval:
+                    # インターバル（遅延時間）が経過した場合、クリック候補に追加
+                    clickable_after_interval.append(m) # ★★★ ここで追加される ★★★
+                    self.logger.log(f"[DEBUG] Interval elapsed for '{Path(path).name}' ({time_since_detected:.2f}s >= {interval:.1f}s). Added to clickable.")
+                else:
+                    remaining = interval - time_since_detected
+                    self.logger.log(f"[DEBUG] Waiting for interval on '{Path(path).name}'. Remaining: {remaining:.2f}s.")
+                    pass # インターバル待機中
+
+        # ★★★ 現在のマッチにない古い検出時刻エントリを削除 ★★★
+        keys_to_remove = [p for p in self.match_detected_at if p not in current_match_paths]
+        if keys_to_remove:
+            for p in keys_to_remove:
+                del self.match_detected_at[p]
+            self.logger.log(f"[DEBUG] Cleared detection times for disappearing images: {', '.join(Path(p).name for p in keys_to_remove)}")
+
+
+        # If no matches have passed their interval delay, return False
+        # ★★★ ここで clickable_after_interval を参照する前に初期化が必要だった ★★★
+        if not clickable_after_interval:
             return False
 
-        # Find the best match among clickable ones (lowest interval, then highest confidence)
-        target_match = min(clickable, key=lambda m: (m['settings'].get('interval_time', 1.5), -m['confidence']))
+        # Find the best match among those that passed interval (shortest original interval setting, then highest confidence)
+        try:
+            potential_target_match = min(clickable_after_interval, key=lambda m: (m['settings'].get('interval_time', 1.5), -m['confidence']))
+        except ValueError:
+            self.logger.log("[DEBUG] Error finding minimum in clickable_after_interval list.")
+            return False
+
+        # --- [診断ログ] ---
+        try:
+            target_name = Path(potential_target_match['path']).name
+            target_interval_setting = potential_target_match['settings'].get('interval_time', 1.5)
+            target_conf = potential_target_match['confidence']
+            target_detected_at = self.match_detected_at.get(potential_target_match['path'], 0)
+            target_time_since_detected = current_time - target_detected_at
+            self.logger.log(f"[DEBUG] Potential click target: {target_name}, IntervalSetting: {target_interval_setting:.1f}s, TimeSinceDetected: {target_time_since_detected:.2f}s, Conf: {target_conf:.2f}")
+
+            if len(clickable_after_interval) > 1:
+                other_candidates = []
+                for item in clickable_after_interval:
+                    if item['path'] != potential_target_match['path']:
+                        other_name = Path(item['path']).name
+                        other_interval = item['settings'].get('interval_time', 1.5)
+                        other_conf = item['confidence']
+                        other_candidates.append(f"{other_name}({other_interval:.1f}s,{other_conf:.2f})")
+                if other_candidates:
+                    self.logger.log(f"[DEBUG] Other candidates passed interval: {', '.join(other_candidates)}")
+        except Exception as log_e:
+            self.logger.log(f"[ERROR] Failed to generate interval diagnostic log: {log_e}")
+        # --- [診断ログここまで] ---
 
         # --- Stability Check ---
-        is_stability_check_enabled = self.app_config.get('screen_stability_check',{}).get('enabled',True)
-        # Check stability only if enabled AND not currently in Eco Mode cooldown
+        is_stability_check_enabled = self.app_config.get('screen_stability_check', {}).get('enabled', True)
         if is_stability_check_enabled and not self.is_eco_cooldown_active:
             if not self.check_screen_stability():
                 self._log("log_stability_hold_click")
                 self.updateStatus.emit("unstable", "orange")
-                # Update last successful click time to prevent immediate Eco Mode entry
-                self.last_successful_click_time = current_time
-                return False # Do not click if unstable
+                self.last_successful_click_time = current_time # Prevent immediate Eco Mode entry
+                # ★★★ 安定チェックでスキップされても検出時刻はリセットしない ★★★
+                self.logger.log(f"[DEBUG] Click skipped for {Path(potential_target_match['path']).name} due to screen instability (interval timer continues).")
+                return False
 
-        # If stable or check skipped, ensure status is "Monitoring" (unless in Eco)
         if not self.is_eco_cooldown_active:
-             self.updateStatus.emit("monitoring", "blue")
+            self.updateStatus.emit("monitoring", "blue")
 
         # --- Execute Click ---
-        if not self.is_monitoring: return False # Double check if stopped during processing
-        # Execute the click action
-        self._execute_click(target_match)
-        # Update the last click time for this specific image path
-        last_match_time_map[target_match['path']] = time.time()
+        if not self.is_monitoring: return False
+
+        target_path = potential_target_match['path']
+        self.logger.log(f"[DEBUG] Executing click for {Path(target_path).name}")
+        self._execute_click(potential_target_match)
+
+        click_time = time.time()
+        last_match_time_map[target_path] = click_time # Update last clicked time (for debounce)
+        # ★★★ クリック後、検出時刻をリセット ★★★
+        if target_path in self.match_detected_at:
+            del self.match_detected_at[target_path]
+            self.logger.log(f"[DEBUG] Reset detection time for clicked image: {Path(target_path).name}")
+
+        self.logger.log(f"[DEBUG] Updated last_match_time_map for {Path(target_path).name} to {click_time:.2f}")
+
         return True # Click was executed
+
+    # ... (以下のメソッド _execute_final_backup_click から _get_filename_from_user までは変更なし) ...
 
     def _execute_final_backup_click(self, target_path):
         """Captures screen and attempts to click the specified backup target."""
@@ -1676,32 +1807,17 @@ class CoreEngine(QObject):
         self.logger.log("[DEBUG] Scheduling listener restart after selection completion (150ms delay)...")
         QTimer.singleShot(150, self._start_global_mouse_listener)
 
-
+    # ★★★ [修正] Linux環境でも QInputDialog.getText を使用する ★★★
     def _get_filename_from_user(self):
-        """Prompts user for filename using platform-appropriate dialog."""
+        """Prompts user for filename using QInputDialog."""
         lm = self.locale_manager.tr
-        if sys.platform == 'win32':
-            # Use QInputDialog on Windows
-            return QInputDialog.getText(
-                self.ui_manager,
-                lm("dialog_filename_prompt_title"),
-                lm("dialog_filename_prompt_text")
-            )
-        else:
-            # Use zenity on Linux if available
-            if not shutil.which('zenity'):
-                QMessageBox.warning(self.ui_manager, lm("error_title_zenity_missing"), lm("error_message_zenity_missing"))
-                return None, False
-            try:
-                cmd = ['zenity', '--entry', f'--title={lm("zenity_title")}', f'--text={lm("zenity_text")}']
-                # Run zenity and capture output
-                res = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=60) # Add timeout
-                # Return filename and True if OK clicked, else None and False
-                return (res.stdout.strip(), res.returncode == 0)
-            except (subprocess.TimeoutExpired, Exception) as e:
-                QMessageBox.critical(self.ui_manager, lm("error_title_zenity_failed"), lm("error_message_zenity_failed", str(e)))
-                return None, False
-
+        # プラットフォームに関わらず QInputDialog.getText を使用
+        return QInputDialog.getText(
+            self.ui_manager,
+            lm("dialog_filename_prompt_title"),
+            lm("dialog_filename_prompt_text")
+        )
+        # --- zenity を使用するコードは削除 ---
 
     def _save_captured_image(self, region_coords):
         """Coordinates capturing image and prompting user for filename."""

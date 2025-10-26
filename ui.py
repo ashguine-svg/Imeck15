@@ -9,6 +9,7 @@
 # ★★★ [再修正] 右クリック時のプロパティ表示の翻訳キー呼び出し方をJSON定義に合わせて修正 ★★★
 # ★★★ [修正] ウィンドウスケールが1.0倍以外の時に画像キャプチャボタンを無効化 ★★★
 # ★★★ [修正] set_settings_from_data でチェックボックス状態をデータから直接設定 ★★★
+# ★★★ [修正] キャプチャボタン無効化の条件式が 0.0 (矩形選択時) を考慮していなかった問題を修正 ★★★
 
 import sys
 import json
@@ -1608,14 +1609,15 @@ class UIManager(QMainWindow):
         self._update_capture_button_state(scale)
 
     # ★★★ [追加] キャプチャボタンの状態を更新するメソッド ★★★
+    # ★★★ [修正] 0.0 (矩形選択/スケールなし) の場合を許可する ★★★
     def _update_capture_button_state(self, current_scale=None):
         """Enables/disables capture buttons based on the current window scale."""
         # CoreEngine から最新のスケールを取得 (引数で渡されない場合)
         if current_scale is None and self.core_engine:
             current_scale = self.core_engine.current_window_scale
 
-        # スケールが 1.0 または None (未設定) の場合のみキャプチャを許可
-        enable_capture = (current_scale is None or current_scale == 1.0)
+        # スケールが 1.0, 0.0 (矩形選択/クリア時), または None (未設定) の場合のみキャプチャを許可
+        enable_capture = (current_scale is None or current_scale == 1.0 or current_scale == 0.0)
         tooltip = "" if enable_capture else self.locale_manager.tr("warn_capture_disabled_scale")
 
         # メインUIのボタン
