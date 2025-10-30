@@ -239,59 +239,78 @@ python3 main.py
 このアプリケーションを構成する各ファイルが、どのような役割を持ち、どのように連携しているかを示した図です。
 
 ```mermaid
+## ⚙️ モジュール構成図
+
+このアプリケーションのモジュール構成は、Google の AI、**Gemini** とのペアプログラミングを通じて洗練されました。
+各ファイルがどのような役割を持ち、どのように連携しているかを示した図です。
+
+```mermaid
 graph TD
-    subgraph UI Layer
-        A[main.py / ui.py]
+    subgraph UI Layer (ユーザーインターフェース)
+        A[main.py] -- "起動" --> B[ui.py (UIManager)]
+        B -- "使用" --> B1[image_tree_widget.py]
+        B -- "使用" --> B2[preview_mode_manager.py]
+        B -- "使用" --> B3[floating_window.py]
+        B -- "使用" --> B4[dialogs.py]
     end
 
-    subgraph Core Logic Layer
-        B(core.py) --- C(monitoring_states.py)
-        B --- D(template_manager.py)
-        B --- E(matcher.py)
-        B --- F(action.py)
+    subgraph Core Logic Layer (中核ロジック)
+        C(core.py) --- C1(monitoring_states.py)
+        C --- D(template_manager.py)
+        C --- E(matcher.py)
+        C --- F(action.py)
     end
 
-    subgraph Hardware & System Interaction Layer
+    subgraph Hardware & System Interaction (ハードウェア・システム連携)
         G[capture.py]
         F --- H[Mouse/Keyboard]
         G --- I[Screen]
     end
 
-    subgraph Data & Configuration Layer
+    subgraph Data & Configuration (データ・設定)
         J[config.py]
+        L[locale_manager.py]
+        K[(画像ファイル & 設定JSON)]
+
         D --- J
-        B --- J
-        A --- J
-        K[(Image Files & Settings)]
+        C --- J
+        B -- "設定読み込み" --> J
+        B -- "多言語" --> L
+        C -- "多言語" --> L
         J --- K
     end
 
     %% Connections
-    A -- "操作イベント(開始/停止/設定変更)" --> B
-    B -- "UI更新指示(ログ/プレビュー/ステータス)" --> A
+    B -- "操作イベント (開始/停止/設定変更)" --> C
+    C -- "UI更新指示 (ログ/プレビュー/ステータス)" --> B
 
-    B -- "画面キャプチャ要求" --> G
-    G -- "キャプチャ画像" --> B
+    C -- "画面キャプチャ要求" --> G
+    G -- "キャプチャ画像" --> C
 
-    B -- "テンプレートマッチング実行" --> E
-    E -- "マッチング結果" --> B
+    C -- "テンプレートマッチング実行" --> E
+    E -- "マッチング結果" --> C
 
-    B -- "クリック/操作実行" --> F
+    C -- "クリック/操作実行" --> F
     
-    B -- "キャッシュ構築要求" --> D
+    C -- "キャッシュ構築要求" --> D
 
-    C -.-> B
+    C1 -.-> C
 ```
 
 ### 各ファイルの機能説明
 
 | レイヤー | ファイル名 | 担当する処理 |
 | :--- | :--- | :--- |
-| **UI Layer** | **`main.py / ui.py`** | **アプリケーションの顔。** ユーザーが操作するウィンドウ（GUI）の表示と管理を担当します。ボタンのクリックや設定変更といったユーザーからの入力を受け付け、`core.py`に処理を依頼します。 |
-| **Core Logic Layer** | **`core.py`** | **アプリケーションの頭脳・司令塔。** 全体の動作を制御します。UIからの指示を受けて監視を開始/停止し、各専門モジュール（`capture`, `matcher`など）に必要な処理を命令し、結果をUIに伝達します。 |
-| | **`monitoring_states.py`** | **監視モードの専門家。** `core.py`の監視ループの複雑なロ`ジックを担当。「通常監視」「優先モード」「バックアップカウントダウン」といった各状態の振る舞いを個別のクラスとして定義し、状態遷移を管理します。 |
+| **UI Layer** | **`main.py`** | **起動ファイル。** アプリケーションを起動し、`UIManager` や `CoreEngine` などの主要コンポーネントを初期化して接続します。|
+| | **`ui.py` (UIManager)** | **メインウィンドウ（器）。** アプリ全体のレイアウト、タブ、ボタンなどを管理します。各モジュール（`image_tree_widget` や `preview_mode_manager`）を組み込み、`CoreEngine` との信号を中継します。|
+| | **`image_tree_widget.py`** | **画像ツリー専門家。** `ui.py` から分離されました。画像のリスト表示と、フォルダへのD&D（ドラッグ＆ドロップ）操作や並べ替えといった複雑なロジックを専門に担当します。|
+| | **`preview_mode_manager.py`** | **画像設定プレビュー専門家。** `ui.py` から分離されました。画像プレビューの表示、クリック位置（1点/範囲）やROIの描画・設定ロジックをすべて管理します。|
+| | `floating_window.py` / `dialogs.py` | 最小化UIや各種ポップアップダイアログなど、サブのUIコンポーネントです。 |
+| **Core Logic** | **`core.py`** | **アプリケーションの頭脳・司令塔。** 全体の動作を制御します。UIからの指示を受けて監視を開始/停止し、各専門モジュール（`capture`, `matcher`など）に必要な処理を命令し、結果をUIに伝達します。 |
+| | **`monitoring_states.py`** | **監視モードの専門家。** `core.py`の監視ループの複雑なロジックを担当。「通常監視」「優先モード」「バックアップカウントダウン」といった各状態の振る舞いを個別のクラスとして定義し、状態遷移を管理します。 |
 | | **`template_manager.py`** | **テンプレート画像の準備係。** 登録された画像ファイルを読み込み、設定（拡大率、ROIなど）に基づいて、画像認識に使用するためのデータ（キャッシュ）をメモリ上に準備します。 |
 | | **`matcher.py`** | **画像認識の実行役。** `core.py`から渡された画面のキャプチャ画像と、`template_manager`が準備したテンプレート画像を比較し、一致する箇所と信頼度を計算して結果を返します。 |
 | | **`action.py`** | **PC操作の実行役。** `core.py`からの指示に基づき、実際にマウスカーソルを動かしてクリックしたり、ウィンドウをアクティブにしたりといったPC操作を実行します。 |
-| **Hardware & System** | **`capture.py`** | **画面のカメラマン。** PCのスクリーンや特定のウィンドウの画像を撮影（キャプチャ）する処理を担当します。`core.py`の要求に応じて、リアルタイムの画面イメージを提供します。 |
-| **Data & Configuration**| **`config.py`** | **設定情報の管理人。** 登録された画像へのパス、各画像の詳細設定（クリック座標、閾値など）、アプリ全体の動作設定などをファイル（JSONなど）から読み書きする役割を担います。 |
+| **Hardware** | **`capture.py`** | **画面のカメラマン。** PCのスクリーンや特定のウィンドウの画像を撮影（キャプチャ）する処理を担当します。`core.py`の要求に応じて、リアルタイムの画面イメージを提供します。 |
+| **Data** | **`config.py`** | **設定情報の管理人。** 登録された画像へのパス、各画像の詳細設定（クリック座標、閾値など）、アプリ全体の動作設定などをファイル（JSONなど）から読み書きする役割を担います。 |
+| | **`locale_manager.py`** | **多言語の専門家。** アプリケーション内のテキスト（UI、ログ）を管理し、`locales` フォルダ内の `ja_JP.json` などのファイルから適切な言語に翻訳します。 |
