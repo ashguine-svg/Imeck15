@@ -8,8 +8,10 @@
     h4 { color: #34495e; margin-top: 15px; margin-bottom: 5px; }
     p, li { line-height: 1.8; }
     b { color: #e74c3c; }
-    code { background-color: #f4f4f4; padding: 2px 4px; border-radius: 3px; font-family: Consolas, monospace; }
-    .important { border-right: 3px solid #f39c12; padding-right: 10px; padding-left: 0; background-color: #fef9e7; margin: 10px 0; border-left: none;}
+    /* --- ▼▼▼ 修正箇所 ▼▼▼ --- */
+    code { padding: 2px 4px; border-radius: 3px; font-family: Consolas, monospace; }
+    .important { border-right: 3px solid #f39c12; padding-right: 10px; padding-left: 0; margin: 10px 0; border-left: none;}
+    /* --- ▲▲▲ 修正箇所 (code と .important から background-color を削除) ▲▲▲ --- */
     ul, ol { padding-right: 25px; padding-left: 0; }
 </style>
 </head>
