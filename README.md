@@ -55,7 +55,7 @@ Windowsユーザー向けの手順です。
     cd %USERPROFILE%\Desktop
 
     # Imeck15をダウンロード
-    git clone [https://github.com/ashguine-svg/Imeck15.git](https://github.com/ashguine-svg/Imeck15.git)
+    git clone https://github.com/ashguine-svg/Imeck15
     ```
 
 >方法B：ZIPファイルでダウンロードする
@@ -149,7 +149,7 @@ sudo apt install git python3 python3-pip python3-venv -y
 cd ~
 
 # Imeck15をダウンロード
-git clone [https://github.com/ashguine-svg/Imeck15.git](https://github.com/ashguine-svg/Imeck15.git)
+git clone https://github.com/ashguine-svg/Imeck15
 ```
 
 ※ `ashguine-svg` の部分は、実際のプロジェクトのURLに合わせて変更してください。
