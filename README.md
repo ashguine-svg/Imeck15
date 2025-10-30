@@ -235,32 +235,37 @@ python3 main.py
 -----
 
 ## ⚙️ モジュール構成図
+
+このアプリケーションのモジュール構成は、Google の AI、**Gemini** とのペアプログラミングを通じて洗練されました。
+各ファイルがどのような役割を持ち、どのように連携しているかを示した図です。
+
+```mermaid
 graph TD
-    subgraph UI Layer (ユーザーインターフェース)
-        A[main.py] -- "起動" --> B[ui.py (UIManager)]
+    subgraph UILayer
+        A[main.py] -- "起動" --> B[ui.py]
         B -- "使用" --> B1[image_tree_widget.py]
         B -- "使用" --> B2[preview_mode_manager.py]
         B -- "使用" --> B3[floating_window.py]
         B -- "使用" --> B4[dialogs.py]
     end
 
-    subgraph Core Logic Layer (中核ロジック)
+    subgraph CoreLogicLayer
         C(core.py) --- C1(monitoring_states.py)
         C --- D(template_manager.py)
         C --- E(matcher.py)
         C --- F(action.py)
     end
 
-    subgraph Hardware & System Interaction (ハードウェア・システム連携)
+    subgraph HardwareSystemInteraction
         G[capture.py]
         F --- H[Mouse/Keyboard]
         G --- I[Screen]
     end
 
-    subgraph Data & Configuration (データ・設定)
+    subgraph DataConfiguration
         J[config.py]
         L[locale_manager.py]
-        K[(画像ファイル & 設定JSON)]
+        K[画像ファイル & 設定JSON]
 
         D --- J
         C --- J
@@ -285,8 +290,7 @@ graph TD
     C -- "キャッシュ構築要求" --> D
 
     C1 -.-> C
-
-
+```
 ### 各ファイルの機能説明
 
 | レイヤー | ファイル名 | 担当する処理 |
