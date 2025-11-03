@@ -1037,11 +1037,19 @@ class UIManager(QMainWindow):
         if self.core_engine: self.core_engine.load_image_and_settings(path)
 
     def move_item_up(self):
-        if self.is_processing_tree_change: return; item = self.image_tree.currentItem();
-        if not item: return; parent = item.parent()
+        # 選択されたアイテムを取得し、単一のアイテムであることを確認
+        selected_items = self.image_tree.selectedItems()
+        if not selected_items or len(selected_items) != 1:
+            self.logger.log(self.locale_manager.tr("log_move_item_warn_selection"))
+            return
+            
+        item = selected_items[0]
+        parent = item.parent()
+
         if parent:
+            # フォルダ内のアイテムの場合
             index = parent.indexOfChild(item)
-            if index > 0: 
+            if index > 0:
                 self.set_tree_enabled(False)
                 taken_item = parent.takeChild(index)
                 parent.insertChild(index - 1, taken_item)
@@ -1049,8 +1057,9 @@ class UIManager(QMainWindow):
             else:
                 return
         else:
+            # トップレベルのアイテムの場合
             index = self.image_tree.indexOfTopLevelItem(item)
-            if index > 0: 
+            if index > 0:
                 self.set_tree_enabled(False)
                 taken_item = self.image_tree.takeTopLevelItem(index)
                 self.image_tree.insertTopLevelItem(index - 1, taken_item)
@@ -1058,13 +1067,22 @@ class UIManager(QMainWindow):
             else:
                 return
         
+        # 順序の変更を通知
         self.orderChanged.emit()
         self.set_tree_enabled(True)
         
     def move_item_down(self):
-        if self.is_processing_tree_change: return; item = self.image_tree.currentItem();
-        if not item: return; parent = item.parent()
+        # 選択されたアイテムを取得
+        selected_items = self.image_tree.selectedItems()
+        if not selected_items or len(selected_items) != 1:
+            self.logger.log(self.locale_manager.tr("log_move_item_warn_selection"))
+            return
+            
+        item = selected_items[0]
+        parent = item.parent()
+
         if parent:
+            # フォルダ内のアイテムの場合
             index = parent.indexOfChild(item)
             if index < parent.childCount() - 1: 
                 self.set_tree_enabled(False)
@@ -1074,6 +1092,7 @@ class UIManager(QMainWindow):
             else:
                 return
         else:
+            # トップレベルのアイテムの場合
             index = self.image_tree.indexOfTopLevelItem(item)
             if index < self.image_tree.topLevelItemCount() - 1: 
                 self.set_tree_enabled(False)
@@ -1083,6 +1102,7 @@ class UIManager(QMainWindow):
             else:
                 return
         
+        # 順序の変更を通知
         self.orderChanged.emit()
         self.set_tree_enabled(True)
 
