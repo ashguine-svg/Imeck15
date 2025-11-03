@@ -6,6 +6,16 @@ La versión multiidioma de Imeck15_v1.5.5.1 (exe/Bin) para su sistema operativo 
 يمكنكم تحميل النسخة متعددة اللغات من Imeck15_v1.5.5.1 (exe/Bin) الخاصة بنظام التشغيل لديكم من أسفل [صفحة الإصدارات (Releases)](https://github.com/ashguine-svg/Imeck15/releases).  
 Die mehrsprachige Version Imeck15_v1.5.5.1 (exe/Bin) für Ihr Betriebssystem kann unten auf der [Releases-Seite](https://github.com/ashguine-svg/Imeck15/releases) heruntergeladen werden.  
 Мультиязыковую версию Imeck15_v1.5.5.1 (exe/Bin) для вашей операционной системы можно скачать в нижней части [страницы релизов](https://github.com/ashguine-svg/Imeck15/releases).  
+La version multi-langues de Imeck15_v1.5.5.1 (exe/Bin) pour votre OS peut être téléchargée en bas de la [page des versions](https://github.com/ashguine-svg/Imeck15/releases).  
+La versione multilingue di Imeck15_v1.5.5.1 (exe/Bin) per il tuo OS può essere scaricata dal fondo della [pagina delle release](https://github.com/ashguine-svg/Imeck15/releases).  
+Multisproget version af Imeck15_v1.5.5.1 (exe/Bin) til dit OS kan downloades fra bunden af [udgivelser siden](https://github.com/ashguine-svg/Imeck15/releases).  
+De meertalige versie van Imeck15_v1.5.5.1 (exe/Bin) voor uw OS kan worden gedownload onderaan de [releases pagina](https://github.com/ashguine-svg/Imeck15/releases).  
+Fler språklig versjon av Imeck15_v1.5.5.1 (exe/Bin) for ditt OS kan lastes ned fra bunnen av [utgivelsessiden](https://github.com/ashguine-svg/Imeck15/releases).  
+Wielojęzyczną wersję Imeck15_v1.5.5.1 (exe/Bin) dla Twojego systemu operacyjnego można pobrać z dołu [strony wydań](https://github.com/ashguine-svg/Imeck15/releases).  
+A versão multilíngue do Imeck15_v1.5.5.1 (exe/Bin) para o seu SO pode ser baixada na parte inferior da [página de lançamentos](https://github.com/ashguine-svg/Imeck15/releases).  
+Imeck15_v1.5.5.1 (exe/Bin) monikielinen versio käyttöjärjestelmällesi on ladattavissa [julkaisusivun](https://github.com/ashguine-svg/Imeck15/releases) alaosasta. 
+Den flerspråkiga versionen av Imeck15_v1.5.5.1 (exe/Bin) för ditt OS kan laddas ner från botten av [releases-sidan](https://github.com/ashguine-svg/Imeck15/releases).  
+İşletim sisteminiz için Imeck15_v1.5.5.1 (exe/Bin) çok dilli sürümü, [sürümler sayfasının](https://github.com/ashguine-svg/Imeck15/releases) alt kısmından indirilebilir.  
 
 # Imeck15 - 導入と使い方ガイド
 
