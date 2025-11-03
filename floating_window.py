@@ -1,7 +1,8 @@
 # floating_window.py
 
 from PySide6.QtWidgets import (
-    QDialog, QPushButton, QHBoxLayout, QLabel, QSpacerItem, QSizePolicy, QApplication, QStyle
+    QDialog, QPushButton, QHBoxLayout, QLabel, QSpacerItem, QSizePolicy, QApplication, QStyle,
+    QVBoxLayout # ★ QVBoxLayout をインポート
 )
 from PySide6.QtGui import QPainter, QColor, QFontMetrics
 from PySide6.QtCore import Qt, Signal, QPoint
@@ -9,6 +10,7 @@ from PySide6.QtCore import Qt, Signal, QPoint
 class FloatingWindow(QDialog):
     """
     最小UIモードで表示されるフローティングウィンドウ。
+    (仕様書 3.3 適用版)
     """
     startMonitoringRequested = Signal()
     stopMonitoringRequested = Signal()
@@ -17,10 +19,10 @@ class FloatingWindow(QDialog):
     closeRequested = Signal()
     setRecAreaRequested = Signal()
 
-    # ★★★ 1. __init__ に locale_manager を追加 ★★★
     def __init__(self, locale_manager, parent=None):
         super().__init__(parent)
         self.locale_manager = locale_manager
+        lm = self.locale_manager.tr
         
         self.setWindowFlags(
             Qt.FramelessWindowHint |
@@ -34,18 +36,28 @@ class FloatingWindow(QDialog):
 
         self.offset = None
 
-        title_bar_height = self.style().pixelMetric(QStyle.PM_TitleBarHeight)
-        self.setFixedHeight(title_bar_height)
-        
-        layout = QHBoxLayout(self)
-        margin = 2
-        layout.setContentsMargins(margin * 2, margin, margin * 2, margin)
-        layout.setSpacing(4)
+        # OSのタイトルバーの高さを取得
+        try:
+            # QStyle.PM_TitleBarHeight を使ってOSの標準的な高さを取得
+            title_bar_height = self.style().pixelMetric(QStyle.PM_TitleBarHeight)
+            if title_bar_height <= 0: title_bar_height = 28 # フォールバック値
+        except Exception:
+            title_bar_height = 28
+            
+        # マージンとボタンの高さを設定
+        v_margin = 2 # 縦の余白
+        h_margin = 6 # 横の余白
+        # ボタンの高さをタイトルバーの高さから余白を引いた値に設定
+        button_height = title_bar_height - (v_margin * 2)
 
-        # ★★★ 2. ボタンのテキストを翻訳キーで設定 ★★★
-        lm = self.locale_manager.tr
+        # --- 1列表示のメインレイアウト (QHBoxLayout) ---
+        main_layout = QHBoxLayout(self)
+        main_layout.setContentsMargins(h_margin, v_margin, h_margin, v_margin)
+        main_layout.setSpacing(4) # ウィジェット間のスペース
+        
         self.setWindowTitle(lm("float_window_title"))
         
+        # --- 1. ボタン ---
         self.start_button = QPushButton(lm("float_button_start"))
         self.stop_button = QPushButton(lm("float_button_stop"))
         self.capture_button = QPushButton(lm("float_button_capture"))
@@ -53,46 +65,91 @@ class FloatingWindow(QDialog):
         self.toggle_ui_button = QPushButton(lm("float_button_toggle_ui"))
         self.close_button = QPushButton(lm("float_button_close"))
         
-        button_height = title_bar_height - (margin * 2)
+        buttons_list = [
+            self.start_button, self.stop_button, self.capture_button, 
+            self.set_rec_area_button, self.toggle_ui_button, self.close_button
+        ]
         
-        for btn in [self.start_button, self.stop_button, self.capture_button, self.set_rec_area_button, self.toggle_ui_button, self.close_button]:
+        # ボタンのスタイルとサイズを設定
+        button_radius = int(button_height / 2) # 角丸（円形）のための半径
+        for btn in buttons_list:
             btn.setFixedSize(button_height, button_height)
             font = btn.font()
-            font.setPointSize(int(button_height * 0.45))
+            font.setPointSize(int(button_height * 0.45)) # フォントサイズ調整
             btn.setFont(font)
-            btn.setStyleSheet(f"QPushButton {{ border-radius: {int(button_height / 2)}px; background-color: rgba(200, 200, 200, 150); color: black; }} QPushButton:hover {{ background-color: rgba(220, 220, 220, 200); }}")
+            btn.setStyleSheet(
+                f"QPushButton {{ border-radius: {button_radius}px; background-color: rgba(200, 200, 200, 150); color: black; }}"
+                f"QPushButton:hover {{ background-color: rgba(220, 220, 220, 200); }}"
+            )
         
-        self.close_button.setStyleSheet(f"QPushButton {{ border-radius: {int(button_height / 2)}px; background-color: rgba(231, 76, 60, 180); color: white; font-weight: bold; }} QPushButton:hover {{ background-color: rgba(231, 76, 60, 230); }}")
+        # 閉じるボタンだけ赤くする
+        self.close_button.setStyleSheet(
+            f"QPushButton {{ border-radius: {button_radius}px; background-color: rgba(231, 76, 60, 180); color: white; font-weight: bold; }}"
+            f"QPushButton:hover {{ background-color: rgba(231, 76, 60, 230); }}"
+        )
 
-        # ★★★ 3. ラベルのテキストを翻訳キーで設定 ★★★
-        self.perf_label = QLabel(lm("float_label_perf_default"))
-        font = self.perf_label.font()
-        font.setBold(True)
-        self.perf_label.setFont(font)
-        self.perf_label.setStyleSheet("color: #FFA500; background-color: transparent;")
+        # --- 2. 統計情報ラベル ---
+        label_font = self.font()
+        label_font.setBold(True)
+        
+        self.cpu_label = QLabel("CPU: ---%")
+        self.fps_label = QLabel("FPS: --")
+        self.status_label = QLabel(lm("float_label_status_default")) # "待機中..."
+        self.clicks_label = QLabel("Clicks: 0")
+        self.uptime_label = QLabel("Uptime: 00h00m00s")
+        
+        # --- ▼▼▼ 修正箇所 (タイマーラベルの追加) ▼▼▼ ---
+        self.backup_timer_label = QLabel("BC: ---s")
+        self.priority_timer_label = QLabel("●: --m")
 
-        font_metrics = QFontMetrics(self.perf_label.font())
-        max_width = font_metrics.horizontalAdvance("100% 99fps") + 5
-        self.perf_label.setFixedWidth(max_width)
-        self.perf_label.setAlignment(Qt.AlignCenter)
+        stats_list = [
+            self.cpu_label, self.fps_label, self.status_label,
+            self.clicks_label, self.uptime_label, 
+            self.backup_timer_label, self.priority_timer_label # 新しいラベルを追加
+        ]
+        
+        for label in stats_list:
+            label.setFont(label_font)
+            label.setStyleSheet("color: white; background-color: transparent; padding: 2px;")
 
-        self.status_label = QLabel(lm("float_label_status_default"))
-        font = self.status_label.font()
-        font.setBold(True)
-        self.status_label.setFont(font)
-        self.status_label.setStyleSheet("color: #90EE90; background-color: transparent;")
+        # ステータスとカウントダウンの色を個別に設定
+        self.status_label.setStyleSheet("color: #90EE90; background-color: transparent; padding: 2px;") # 緑
+        # バックアップタイマーはオレンジ
+        self.backup_timer_label.setStyleSheet("color: #FFA500; background-color: transparent; padding: 2px;") 
+        # 優先タイマーは緑
+        self.priority_timer_label.setStyleSheet("color: #90EE90; background-color: transparent; padding: 2px;") 
+        
+        # デフォルトで非表示にする
+        self.backup_timer_label.setVisible(False)
+        self.priority_timer_label.setVisible(False)
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
-        layout.addWidget(self.start_button)
-        layout.addWidget(self.stop_button)
-        layout.addWidget(self.capture_button)
-        layout.addWidget(self.set_rec_area_button)
-        layout.addWidget(self.toggle_ui_button)
-        layout.addWidget(self.perf_label)
-        layout.addWidget(self.status_label)
-        layout.addSpacerItem(QSpacerItem(10, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
-        layout.addWidget(self.close_button)
 
-        # ★★★ 4. ツールチップを翻訳キーで設定 ★★★
+        # --- 3. レイアウトにウィジェットを追加 ---
+        main_layout.addWidget(self.start_button)
+        main_layout.addWidget(self.stop_button)
+        main_layout.addWidget(self.capture_button)
+        main_layout.addWidget(self.set_rec_area_button)
+        main_layout.addWidget(self.toggle_ui_button)
+        main_layout.addSpacerItem(QSpacerItem(10, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
+
+        # 統計情報を追加
+        main_layout.addWidget(self.cpu_label)
+        main_layout.addWidget(self.fps_label)
+        main_layout.addWidget(self.status_label)
+        main_layout.addWidget(self.clicks_label)
+        main_layout.addWidget(self.uptime_label)
+        
+        # --- ▼▼▼ 修正箇所 (タイマーラベルのレイアウト追加) ▼▼▼ ---
+        # main_layout.addWidget(self.countdown_label) # 古いラベルを削除
+        main_layout.addWidget(self.backup_timer_label) # 新しいバックアップタイマーを追加
+        main_layout.addWidget(self.priority_timer_label) # 新しい優先タイマーを追加
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
+        
+        main_layout.addSpacerItem(QSpacerItem(10, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
+        main_layout.addWidget(self.close_button)
+
+        # --- 4. ツールチップ ---
         self.start_button.setToolTip(lm("float_tooltip_start"))
         self.stop_button.setToolTip(lm("float_tooltip_stop"))
         self.capture_button.setToolTip(lm("float_tooltip_capture"))
@@ -100,30 +157,49 @@ class FloatingWindow(QDialog):
         self.toggle_ui_button.setToolTip(lm("float_tooltip_toggle_ui"))
         self.close_button.setToolTip(lm("float_tooltip_close"))
 
+        # --- 5. シグナル接続 ---
         self.start_button.clicked.connect(self.startMonitoringRequested)
         self.stop_button.clicked.connect(self.stopMonitoringRequested)
         self.capture_button.clicked.connect(self.captureImageRequested)
         self.toggle_ui_button.clicked.connect(self.toggleMainUIRequested)
         self.close_button.clicked.connect(self.closeRequested)
         self.set_rec_area_button.clicked.connect(self.setRecAreaRequested)
-    
-    def update_performance(self, cpu, fps):
-        # ★★★ ここを修正 ★★★
-        # perf_text = self.locale_manager.tr("float_perf_format", cpu=cpu, fps=fps) # ← 修正前
         
-        # 修正後: tr() でフォーマット文字列を取得し、.format() を使う
-        format_string = self.locale_manager.tr("float_perf_format") 
-        try:
-            perf_text = format_string.format(cpu=cpu, fps=fps)
-        except KeyError: # .format() のキーが翻訳ファイルと合わない場合のエラー処理
-            print(f"[WARN] floating_window: フォーマットキーが 'float_perf_format' ('{format_string}') と一致しません。")
-            # フォールバック表示
-            perf_text = f"{cpu:.0f}% {fps:.0f}fps"
+        # 最小幅を自動調整し、最大幅を設定
+        self.setMinimumWidth(self.sizeHint().width())
+        self.setMaximumWidth(960) # ご要望の最大幅
+    
+    def on_stats_updated(self, click_count: int, uptime_str: str, timer_data: dict, cpu: float, fps: float):
+        """CoreEngineから統計情報を受け取るスロット"""
+        lm = self.locale_manager.tr
+        
+        # 1. CPU と FPS
+        self.cpu_label.setText(f"CPU: {cpu:.0f}%")
+        self.fps_label.setText(f"FPS: {fps:.0f}")
+        
+        # 2. クリック回数と稼働時間
+        self.clicks_label.setText(f"Clicks: {click_count}")
+        self.uptime_label.setText(f"{uptime_str}") 
             
-        self.perf_label.setText(perf_text)
+        # --- ▼▼▼ 修正箇所 (タイマーロジックの分離) ▼▼▼ ---
+            
+        # 3. バックアップタイマー (BC: ---s)
+        backup_remaining = timer_data.get('backup', -1.0)
+        if backup_remaining >= 0:
+            self.backup_timer_label.setText(f"BC: {backup_remaining:.0f}s")
+            self.backup_timer_label.setVisible(True)
+        else:
+            self.backup_timer_label.setVisible(False)
+
+        # 4. 優先タイマー (●: --m)
+        priority_remaining_min = timer_data.get('priority', -1.0)
+        if priority_remaining_min >= 0:
+            self.priority_timer_label.setText(f"●: {priority_remaining_min:.0f}m")
+            self.priority_timer_label.setVisible(True)
+        else:
+            self.priority_timer_label.setVisible(False)
 
     def update_status(self, text, color="green"):
-        # ★★★ 6. テキストは翻訳済みのものが渡される想定 (ui.py/core.py から) ★★★
         self.status_label.setText(text)
         self.status_label.setStyleSheet(f"color: {color}; background-color: transparent;")
 
@@ -132,8 +208,12 @@ class FloatingWindow(QDialog):
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setPen(Qt.NoPen)
         painter.setBrush(QColor(50, 50, 50, 200))
-        radius = self.height() / 2.0
-        painter.drawRoundedRect(self.rect(), radius, radius)
+        
+        # ★★★ 矩形から角丸に変更 ★★★
+        rect = self.rect()
+        # 高さに応じた半径 (高さの半分の半径で完全な円形)
+        radius = rect.height() / 2.0 
+        painter.drawRoundedRect(rect, radius, radius)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:

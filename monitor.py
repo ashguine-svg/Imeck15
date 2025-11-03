@@ -1,39 +1,63 @@
 # monitor.py
 # ★★★ カウントダウン表示を .format() を使うように再修正 ★★★
+# ★★★ 統計情報表示を削除し、ログ専用ビューアに変更 ★★★
+# ★★★ [修正] OS標準のタイトルバー（閉じる・最小化ボタン）を復活 ★★★
 
 import sys
 import time
 import psutil
 from PySide6.QtWidgets import (
     QDialog, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTextEdit, QSizePolicy, QSpacerItem
+    QTextEdit, QSizePolicy, QSpacerItem, QApplication # ★ QApplication を追加
 )
-from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtGui import QPainter, QColor # ★ QPainter, QColor を追加
+from PySide6.QtCore import Qt, Signal, QTimer, QPoint # ★ QPoint を追加
 
 class PerformanceMonitor(QDialog):
     """
     リアルタイムのパフォーマンス情報を表示する独立したウィンドウ。
+    (現在はログビューアとして機能)
     """
 
-    toggleMonitoringRequested = Signal()
-    performanceUpdated = Signal(float, float)
+    # toggleMonitoringRequested シグナルは削除
+    # performanceUpdated シグナルは削除
 
-    # ★★★ 1. __init__ に locale_manager を追加 ★★★
     def __init__(self, ui_manager, locale_manager, parent=None):
+        """
+        __init__ メソッド:
+        TypeErrorを回避するため、super().__init__(parent) を正しく呼び出します。
+        """
         super().__init__(parent)
         self.ui_manager = ui_manager
         self.locale_manager = locale_manager # LocaleManagerインスタンスを保持
 
+        # --- ▼▼▼ 修正箇所 (Task 2, 3) ▼▼▼ ---
+        # 最小UIとスタイルを合わせる
+        # flags = (
+        #     Qt.FramelessWindowHint |
+        #     Qt.WindowStaysOnTopHint |
+        #     Qt.Tool
+        # ) # ★ 枠なしフラグを削除
+        
+        # ★ OS標準のタイトルバーを再表示するフラグに戻す
         flags = Qt.Window | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint
+        
         self.setWindowFlags(flags)
+        self.setAttribute(Qt.WA_TranslucentBackground) # 半透明背景は維持
+        self.setWindowOpacity(0.85) # 全体の透明度は維持
 
-        self.resize(1024, 200)
-        self.setMinimumSize(600, 100)
+        self.resize(1024, 200) # 起動時のサイズはそのまま
+        self.setMinimumSize(200, 40) # ★ 最小サイズ (200x40)
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
         self.process = psutil.Process()
         self.process.cpu_percent(interval=None)
-        self.current_fps = 0.0
-        self.current_clicks = 0
+        
+        self.last_cpu_percent = 0.0
+
+        # --- ▼▼▼ 修正箇所 (Task 4) ▼▼▼ ---
+        # self.offset = None # ★ 枠なし用の変数のため削除
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
         self.setup_ui() # UIのセットアップ
 
@@ -52,102 +76,43 @@ class PerformanceMonitor(QDialog):
         main_layout.setContentsMargins(4, 4, 4, 4)
         main_layout.setSpacing(4)
 
-        top_layout = QHBoxLayout()
-        top_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.monitor_button = QPushButton(lm("monitor_button_toggle"))
-        self.monitor_button.setToolTip(lm("monitor_button_toggle_tooltip"))
-        top_layout.addWidget(self.monitor_button)
-
-        self.rec_area_button = QPushButton(lm("monitor_button_rec_area"))
-        top_layout.addWidget(self.rec_area_button)
-
-        self.backup_countdown_label = QLabel("")
-        self.backup_countdown_label.setStyleSheet("font-size: 12px; color: #888888;")
-        top_layout.addWidget(self.backup_countdown_label)
-
-        top_layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
-
-        self.perf_label = QLabel(lm("monitor_label_perf_default"))
-        self.perf_label.setStyleSheet("font-size: 14px;")
-        top_layout.addWidget(self.perf_label)
-
-        main_layout.addLayout(top_layout)
+        # --- ▼▼▼ 修正箇所 (Task 1: ボタン削除) ▼▼▼ ---
+        # top_layout (ボタンが配置されていたレイアウト) 全体を削除
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
         self.log_text_edit = QTextEdit()
         self.log_text_edit.setReadOnly(True)
+        
+        # --- ▼▼▼ 修正箇所 (Task 3: スタイル設定) ▼▼▼ ---
+        # ログウィンドウの背景を半透明の黒に、文字を白に設定
+        self.log_text_edit.setStyleSheet(
+            "background-color: rgba(0, 0, 0, 100); color: white; border: none;"
+        )
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
+        
         main_layout.addWidget(self.log_text_edit)
 
     def connect_signals(self):
         """シグナルとスロットを接続します"""
-        self.monitor_button.clicked.connect(self.toggleMonitoringRequested.emit)
-        if self.ui_manager:
-            self.rec_area_button.clicked.connect(self.ui_manager.setRecAreaDialog)
+        # --- ▼▼▼ 修正箇所 (Task 1: 接続削除) ▼▼▼ ---
+        pass # 接続するシグナルがなくなったため pass に変更
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
-    def update_monitoring_status(self, status_text_key: str, color: str):
-        # ★★★ 3. ステータスをキー (monitoring, idle) で受け取る ★★★
-        if status_text_key == "monitoring":
-            self.monitor_button.setStyleSheet("background-color: #3399FF; color: white;")
-        else:
-            self.monitor_button.setStyleSheet("")
-
-    def update_fps(self, fps):
-        self.current_fps = fps
-
-    def update_click_count(self, count):
-        self.current_clicks = count
+    # --- ▼▼▼ 修正箇所 (Task 1: メソッド削除) ▼▼▼ ---
+    # update_monitoring_status メソッドは削除されました
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
     def update_performance_info(self):
         try:
-            cpu_percent = self.process.cpu_percent()
-            mem_used = self.process.memory_info().rss / (1024 * 1024)
-            clicks = self.current_clicks
-            uptime_seconds = int(time.time() - self.start_time)
-            hours, remainder = divmod(uptime_seconds, 3600)
-            minutes, seconds = divmod(remainder, 60)
-
-            # ★★★ 4. フォーマット文字列を翻訳キーから取得し、.format() で適用 ★★★
-            lm = self.locale_manager.tr
-            perf_text_format = lm("monitor_perf_format")
-            # .format() が失敗する可能性も考慮 (キー名が翻訳ファイルと違う場合)
-            try:
-                perf_text = perf_text_format.format(
-                    cpu=cpu_percent,
-                    mem=mem_used,
-                    fps=self.current_fps,
-                    clicks=clicks,
-                    h=hours,
-                    m=minutes,
-                    s=seconds
-                )
-            except KeyError:
-                 perf_text = f"CPU:{cpu_percent:.1f}% MEM:{mem_used:.0f}MB FPS:{self.current_fps:.1f} CLICKS:{clicks} UPTIME:{hours:02d}:{minutes:02d}:{seconds:02d} (ERR:FMT)" # Fallback
-            self.perf_label.setText(perf_text)
-
-            self.performanceUpdated.emit(cpu_percent, self.current_fps)
-
-            if self.ui_manager and self.ui_manager.core_engine:
-                countdown = self.ui_manager.core_engine.get_backup_click_countdown()
-                if countdown > 0:
-                    # ★★★ 修正: tr() でフォーマット文字列を取得し、.format() を使用 ★★★
-                    countdown_format_string = lm("monitor_backup_countdown")
-                    try:
-                        # .0f で小数点以下を表示しない整数にする
-                        countdown_text = countdown_format_string.format(s=int(countdown)) # int() に変更
-                    except KeyError: # 翻訳ファイルのキー名 {s} と一致しない場合
-                        countdown_text = f"(バックアップまで: {countdown:.0f}秒) (ERR:FMT)" # Fallback
-                    self.backup_countdown_label.setText(countdown_text)
-                else:
-                    self.backup_countdown_label.setText("")
-
+            self.last_cpu_percent = self.process.cpu_percent(interval=None) 
+            
+            # プロセスが存在するかどうかの最小限のチェック
+            self.process.cpu_percent() 
+            
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             self.update_timer.stop()
-            self.perf_label.setText(self.locale_manager.tr("monitor_perf_error")) # エラー表示
-            self.backup_countdown_label.setText("")
         except Exception as e:
-            # core_engine がまだ存在しない等のエラーは無視
             if hasattr(self, 'ui_manager') and self.ui_manager and self.ui_manager.logger:
-                # ★★★ 6. print を self.ui_manager.logger.log に変更 ★★★
                 self.ui_manager.logger.log("monitor_log_error", str(e))
 
     def update_log(self, message):
@@ -158,3 +123,23 @@ class PerformanceMonitor(QDialog):
     def closeEvent(self, event):
         event.ignore()
         self.hide()
+
+    # --- ▼▼▼ 修正箇所 (Task 2, 3: paintEvent 追加) ▼▼▼ ---
+    def paintEvent(self, event):
+        """背景を角丸で描画します"""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(Qt.NoPen)
+        # 最小UI (floating_window.py) と同じ背景色
+        painter.setBrush(QColor(50, 50, 50, 200)) 
+        # 10px の角丸で描画
+        painter.drawRoundedRect(self.rect(), 10.0, 10.0)
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
+
+    # --- ▼▼▼ 修正箇所 (Task 4: マウスイベント3種 削除) ▼▼▼ ---
+    # mousePressEvent, mouseMoveEvent, mouseReleaseEvent は削除されました
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
+
+    def get_last_cpu(self):
+        """CoreEngineが1秒ごとにCPU使用率を取得するためのメソッド"""
+        return self.last_cpu_percent

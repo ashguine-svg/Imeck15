@@ -1,4 +1,4 @@
-# capture.py
+# capture.py (DXCam スケール対応版)
 
 import sys
 import mss
@@ -30,12 +30,10 @@ class CaptureManager(QObject):
     画面キャプチャのインターフェース。
     キャプチャバックエンドのインスタンスを保持し、効率的なキャプチャを行う。
     """
-    # ★★★ 1. __init__ で logger を受け取る ★★★
     def __init__(self, logger):
         super().__init__()
-        self.logger = logger # Loggerインスタンスを保持
+        self.logger = logger
         
-        # ★ 2. RLock (再入可能ロック) を初期化
         self.lock = threading.RLock()
         
         self.mss_thread_local = threading.local()
@@ -48,27 +46,31 @@ class CaptureManager(QObject):
         self.DXCAM_ERROR_THRESHOLD = 5 
         
         if DXCAM_AVAILABLE:
-            # ★★★ 2. print を self.logger.log に変更 (翻訳キー使用) ★★★
             self.logger.log("log_dxcam_available")
             try:
-                self.logger.log("log_dxcam_init")
-                # ★ メインモニタ(output_idx=0)を明示的に指定
-                self.dxcam_sct = dxcam.create(output_idx=0)
+                # --- ▼▼▼ 修正箇所 1 ▼▼▼ ---
+                # output_idx=0 を削除し、特定のモニタに限定せず、
+                # 仮想デスクトップ全体（マルチモニタ/スケーリング対応）を
+                # 扱えるように初期化する
+                self.logger.log("log_dxcam_init") # ログキーは "Initializing DXCam..."
+                self.dxcam_sct = dxcam.create()
+                # --- ▲▲▲ 修正完了 ▲▲▲ ---
                 
                 if self.dxcam_sct is None:
                     self.logger.log("log_dxcam_init_failed_instance")
                     self.is_dxcam_ready = False
                 else:
-                    # ★★★ 修正: 初期化後の即時フレーム取得チェックを強化 ★★★
+                    # プライマリモニタでグラブをテスト
                     frame = self.dxcam_sct.grab()
                     if frame is not None:
                         self.is_dxcam_ready = True
                         self.logger.log("log_dxcam_init_success")
+                        # ログに出力されるのはプライマリモニタの解像度だが、
+                        # インスタンス自体は仮想デスクトップ全体を扱える
                         self.target_height, self.target_width, _ = frame.shape
                         self.logger.log("log_dxcam_resolution", self.target_width, self.target_height)
                     else:
                         self.logger.log("log_dxcam_resolution_failed")
-                        # インスタンスは作れたがフレーム取得失敗 -> MSSにフォールバックさせる
                         self.logger.log("log_dxcam_init_failed_frame_grab")
                         self.dxcam_sct.release()
                         self.dxcam_sct = None
@@ -92,7 +94,6 @@ class CaptureManager(QObject):
         """
         if self.current_method == 'mss' and sys.platform != 'win32':
             try:
-                # ★★★ 3. print を self.logger.log に変更 (翻訳キー使用) ★★★
                 self.logger.log("log_mss_priming")
                 with mss.mss() as sct:
                     sct.grab({"top": 0, "left": 0, "width": 1, "height": 1})
@@ -101,7 +102,6 @@ class CaptureManager(QObject):
                 self.logger.log("log_mss_priming_failed", str(e))
 
     def set_capture_method(self, method: str):
-        # ★ 3. メソッド全体をロックで保護
         with self.lock:
             requested_method = 'dxcam' if (method == 'dxcam' and DXCAM_AVAILABLE) else 'mss'
             
@@ -110,7 +110,6 @@ class CaptureManager(QObject):
                 return
 
             if self.current_method == 'dxcam' and self.dxcam_sct:
-                # ★★★ 4. print を self.logger.log に変更 (翻訳キー使用) ★★★
                 self.logger.log("log_dxcam_release")
                 try:
                     self.dxcam_sct.release()
@@ -125,10 +124,12 @@ class CaptureManager(QObject):
             if self.current_method == 'dxcam':
                 self.logger.log("log_dxcam_init_attempt")
                 try:
-                    # ★ メインモニタ(output_idx=0)を明示的に指定
-                    self.dxcam_sct = dxcam.create(output_idx=0)
+                    # --- ▼▼▼ 修正箇所 2 ▼▼▼ ---
+                    # ここも同様に output_idx=0 を削除
+                    self.dxcam_sct = dxcam.create()
+                    # --- ▲▲▲ 修正完了 ▲▲▲ ---
+                    
                     if self.dxcam_sct:
-                        # ★★★ 修正: 初期化後の即時フレーム取得チェックを強化 ★★★
                         frame = self.dxcam_sct.grab()
                         if frame is not None:
                             self.is_dxcam_ready = True
@@ -149,16 +150,32 @@ class CaptureManager(QObject):
             self.logger.log("log_capture_method_set", self.current_method)
 
     def capture_frame(self, region: tuple = None) -> np.ndarray:
-        # ★ 4. メソッド全体をロックで保護
         with self.lock:
             try:
                 if self.current_method == 'dxcam' and self.is_dxcam_ready:
                     if self.dxcam_sct is None:
-                        # ★★★ 5. print を self.logger.log に変更 (翻訳キー使用) ★★★
                         self.logger.log("log_dxcam_missing_recreate")
-                        self.set_capture_method('dxcam') # RLockのためロック獲得済みでも呼び出し可能
+                        self.set_capture_method('dxcam')
                         if not self.is_dxcam_ready:
                             return None
+                    
+                    # ★★★ 修正:
+                    # DXCam 3.x/4.x では、target_hwndが設定されている場合、
+                    # region引数は無視されるか、ウィンドウのクライアント領域基準になる
+                    # core.py側で target_hwnd が設定されているため、
+                    # region=region を渡しても、ウィンドウ全体がキャプチャされる
+                    # 
+                    # ...と、思われましたが、ログを見ると core.py が
+                    # region=(3, 31, 1635, 949) を渡した結果、
+                    # DXCamが "Invalid Region" エラーを出しています。
+                    #
+                    # これは、dxcam.create(output_idx=0) で初期化されたインスタンスが、
+                    # target_hwnd が設定されても、元のモニタ(1024x768)の
+                    # 座標空間で region を評価しようとしていることを示唆しています。
+                    #
+                    # create() (引数なし) で初期化することで、
+                    # 仮想デスクトップ全体の座標空間で region を
+                    # 評価できるようになるはずです。
                     
                     frame = self.dxcam_sct.grab(region=region)
 
@@ -168,18 +185,14 @@ class CaptureManager(QObject):
                         
                         if self.dxcam_error_count >= self.DXCAM_ERROR_THRESHOLD:
                             self.logger.log("log_dxcam_switching_to_mss")
-                            self.set_capture_method('mss') # RLockのため呼び出し可能
-                            # ★ 修正: return self.capture_frame(region) を削除
-                            # このifブロックを抜け、下の 'if self.current_method == 'mss':' に進ませる
+                            self.set_capture_method('mss')
                         else:
-                            return None # 閾値未満なら None を返す
+                            return None
                     
                     else:
                         self.dxcam_error_count = 0
                         return cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
-                # ★ 修正: 'else:' から 'if self.current_method == 'mss':' に変更
-                # (上のDXcamブロックで 'mss' に切り替わった場合もここで処理するため)
                 if self.current_method == 'mss':
                     if not hasattr(self.mss_thread_local, 'sct'):
                         self.mss_thread_local.sct = mss.mss()
@@ -206,19 +219,18 @@ class CaptureManager(QObject):
                     return cv2.cvtColor(img_bgra, cv2.COLOR_BGRA2BGR)
 
             except Exception as e:
+                # ★★★ ログから "Invalid Region" エラーがここに飛んでくる ★★★
                 self.logger.log("log_capture_error", self.current_method, region, str(e))
                 if self.current_method == 'dxcam':
                     self.dxcam_error_count += 1
                     if self.dxcam_error_count >= self.DXCAM_ERROR_THRESHOLD:
                         self.logger.log("log_dxcam_critical_error_switching")
-                        self.set_capture_method('mss') # RLockのため呼び出し可能
+                        self.set_capture_method('mss')
                 return None
             
-            # DXcamが成功も失敗もせず(frame is Noneでもなく)、MSSでもない稀なケース
             return None
             
     def cleanup(self):
-        # ★ 5. cleanupもロックで保護
         with self.lock:
             if self.dxcam_sct and DXCAM_AVAILABLE:
                 try:

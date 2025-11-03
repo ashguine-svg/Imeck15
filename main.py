@@ -133,15 +133,20 @@ def main():
     
     ui_manager.core_engine = core_engine
     
-    # --- シグナル接続 (変更なし) ---
+    # --- ▼▼▼ 修正箇所 ▼▼▼ ---
+    
+    # --- シグナル接続 ---
     core_engine.updateStatus.connect(ui_manager.set_status)
-    core_engine.updateStatus.connect(performance_monitor.update_monitoring_status)
+    # core_engine.updateStatus.connect(performance_monitor.update_monitoring_status) # ★★★ 削除 (monitor.py からメソッド削除のため) ★★★
     core_engine.updatePreview.connect(ui_manager.update_image_preview)
     core_engine.updateRecAreaPreview.connect(ui_manager.update_rec_area_preview)
-    core_engine.fpsUpdated.connect(performance_monitor.update_fps)
+    
+    # (performance_monitor から統計機能が削除されたため、該当の接続を削除)
+    
     core_engine.cacheBuildFinished.connect(ui_manager.on_cache_build_finished)
     
-    core_engine.clickCountUpdated.connect(performance_monitor.update_click_count)
+    # (statsUpdated, clickCountUpdated, fpsUpdated は、
+    #  ui.py の toggle_minimal_ui_mode で動的に接続/切断されます)
     
     core_engine.selectionProcessStarted.connect(ui_manager.on_selection_process_started)
     core_engine.selectionProcessFinished.connect(ui_manager.on_selection_process_finished)
@@ -156,8 +161,10 @@ def main():
     ui_manager.loadImagesRequested.connect(core_engine.load_images_into_manager)
     ui_manager.imageSettingsChanged.connect(core_engine.on_image_settings_changed)
     ui_manager.captureImageRequested.connect(core_engine.capture_image_for_registration)
-    
     ui_manager.deleteItemsRequested.connect(core_engine.delete_selected_items)
+    # --- ▼▼▼ 修正箇所 (リネームシグナルを接続) ▼▼▼ ---
+    ui_manager.renameItemRequested.connect(core_engine.rename_item)
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
     
     ui_manager.folderSettingsChanged.connect(core_engine.on_folder_settings_changed)
     
@@ -174,8 +181,11 @@ def main():
 
     ui_manager.connect_signals()
     
-    performance_monitor.toggleMonitoringRequested.connect(ui_manager.toggle_monitoring)
+    # (monitor.py からボタンとシグナルを削除したため、以下の行を削除)
+    # performance_monitor.toggleMonitoringRequested.connect(ui_manager.toggle_monitoring)
     performance_monitor.connect_signals()
+    
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
     
     # --- 起動シーケンス (変更なし) ---
     ui_manager.set_tree_enabled(False)

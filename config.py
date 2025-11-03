@@ -221,6 +221,26 @@ class ConfigManager:
         order_path = Path(folder_path) / self.sub_order_filename if folder_path else self.base_dir / self.image_order_filename
         with open(order_path, 'w', encoding='utf-8') as f:
             json.dump(order_list, f, indent=2, ensure_ascii=False)
+            
+    def save_tree_order_data(self, data_to_save: dict):
+        """
+        (ワーカースレッド) UIスレッドから渡された順序データでJSONファイルを上書きします。
+        """
+        try:
+            # 1. トップレベルの順序を保存
+            top_level_order = data_to_save.get('top_level', [])
+            self.save_image_order(top_level_order, folder_path=None)
+            
+            # 2. 各フォルダの順序を保存
+            folder_data_map = data_to_save.get('folders', {})
+            for folder_path_str, child_order_filenames in folder_data_map.items():
+                self.save_image_order(child_order_filenames, folder_path=folder_path_str)
+        
+        except Exception as e:
+            # このログは core.py の _save_order_and_rebuild_async の
+            # except ブロックでキャッチされます。
+            self.logger.log("log_error_save_order_data", str(e))
+            raise # エラーを呼び出し元に伝播させます
 
     def add_item(self, item_path: Path):
         target_path = self.base_dir / item_path.name
@@ -265,6 +285,65 @@ class ConfigManager:
             self.logger.log("log_item_delete_error", str(e))
             raise
 
+    # --- 修正箇所A (rename_item メソッドの翻訳キーを修正) ---
+    def rename_item(self, item_path_str: str, new_name: str):
+        """
+        ファイルまたはフォルダの名前を変更し、関連する設定ファイルと順序リストも更新します。
+        (クロスプラットフォーム対応)
+        """
+        try:
+            # 1. パスの検証と準備
+            if not item_path_str or not new_name:
+                # ★ 修正: log_rename_item_error_empty -> log_rename_error_empty
+                return False, self.logger.locale_manager.tr("log_rename_error_empty")
+            
+            # OS依存の禁止文字チェック (簡易版)
+            if any(char in new_name for char in '/\\:*?"<>|'):
+                 # ★ 修正: log_rename_item_error_invalid_chars -> log_rename_error_general (汎用キー)
+                 return False, self.logger.locale_manager.tr("log_rename_error_general", "Invalid characters in name")
+
+            source_path = Path(item_path_str)
+            if not source_path.exists():
+                return False, self.logger.locale_manager.tr("log_move_item_error_not_exists")
+
+            # 2. 新しいパスの決定と衝突確認
+            dest_path = source_path.with_name(new_name)
+            if dest_path.exists():
+                # ★ 修正: log_move_item_error_exists -> log_rename_error_exists (JSONに合わせる)
+                return False, self.logger.locale_manager.tr("log_rename_error_exists", new_name)
+
+            source_json_path = self._get_setting_path(source_path)
+            dest_json_path = self._get_setting_path(dest_path)
+
+            # 3. 物理ファイル/フォルダのリネーム
+            source_path.rename(dest_path)
+
+            # 4. JSON設定のリネーム (存在する場合)
+            if source_json_path.exists():
+                source_json_path.rename(dest_json_path)
+
+            # 5. 親の順序リストを更新
+            parent_dir = source_path.parent
+            order_file_owner = parent_dir if parent_dir != self.base_dir else None
+            order = self.load_image_order(order_file_owner)
+
+            # 順序リスト内のキー (トップレベルはフルパス、フォルダ内はファイル名)
+            item_key_source = str(source_path) if order_file_owner is None else source_path.name
+            item_key_dest = str(dest_path) if order_file_owner is None else dest_path.name
+
+            if item_key_source in order:
+                index = order.index(item_key_source)
+                order[index] = item_key_dest
+                self.save_image_order(order, order_file_owner)
+            
+            # ★ 修正: log_rename_item_success -> log_rename_success
+            return True, self.logger.locale_manager.tr("log_rename_success", source_path.name, dest_path.name)
+        
+        except Exception as e:
+            # ★ 修正: log_rename_item_error_general -> log_rename_error_general
+            return False, self.logger.locale_manager.tr("log_rename_error_general", str(e))
+    
+    # --- 修正箇所B (get_ordered_item_list を完全なコードに置き換え) ---
     def get_ordered_item_list(self) -> list:
         ordered_paths_str = self.load_image_order()
         try:
@@ -281,7 +360,10 @@ class ConfigManager:
         
         if final_order != ordered_paths_str:
             self.save_image_order(final_order)
+        
+        # ★★★ 'None' ではなく、必ずリスト [Path(p)] を返すようにします ★★★
         return [Path(p) for p in final_order]
+    # --- 修正完了 ---
 
     def get_hierarchical_list(self):
         structured_list = []
