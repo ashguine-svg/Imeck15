@@ -345,5 +345,17 @@
   "log_countdown_started": "Backup-Bild '%s' erkannt. Starte %s Sekunden Countdown.",
   "log_countdown_cancelled": "Normales Bild erkannt, breche Backup-Countdown ab.",
   "log_countdown_executing": "%s Sekunden vergangen. Führe Backup-Klick aus.",
-  "warn_capture_disabled_scale": "Bilder, die während der automatischen Skalierung aufgenommen wurden, stimmen nicht überein.\nBitte nehmen Sie Bilder im Maßstab 1,0x auf."
+  "warn_capture_disabled_scale": "Bilder, die während der automatischen Skalierung aufgenommen wurden, stimmen nicht überein.\nBitte nehmen Sie Bilder im Maßstab 1,0x auf.",
+  "rename_button": "Umbenennen",
+  "warn_rename_title": "Fehler beim Umbenennen",
+  "warn_rename_no_selection": "Bitte wählen Sie ein Element (Bild oder Ordner) zum Umbenennen aus.",
+  "rename_dialog_title": "Namen ändern",
+  "rename_dialog_prompt": "Geben Sie einen neuen Namen ein:",
+  "log_rename_cancelled": "Umbenennung abgebrochen.",
+  "log_rename_error_empty": "Neuer Name ist leer. Umbenennung nicht möglich.",
+  "log_rename_error_exists": "Fehler: Ein Element mit dem Namen '%s' existiert bereits.",
+  "log_rename_error_general": "Fehler beim Umbenennen: %s",
+  "log_rename_warn_not_in_order": "Warnung: Umbenanntes Element '%s' nicht in der Reihenfolgeliste gefunden (Datei-Umbenennung war erfolgreich).",
+  "log_rename_success": "Element '%s' in '%s' umbenannt.",
+  "log_rename_error_order_list": "Datei-Umbenennung erfolgreich, aber Fehler beim Aktualisieren der Reihenfolgeliste: %s"
 }

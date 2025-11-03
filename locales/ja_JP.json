@@ -345,7 +345,21 @@
   "log_countdown_started": "バックアップ画像 '%s' を検出。%s秒のカウントダウンを開始します。",
   "log_countdown_cancelled": "通常画像を検出したため、バックアップカウントダウンをキャンセルします。",
   "log_countdown_executing": "%s秒が経過。バックアップクリックを実行します。",
-
   "language_name": "日本語",
-  "warn_capture_disabled_scale": "自動スケール時にキャプチャした画像は画像マッチングしません。\n倍率1.0で画像キャプチャしてください。"
+  "warn_capture_disabled_scale": "自動スケール時にキャプチャした画像は画像マッチングしません。\n倍率1.0で画像キャプチャしてください。",
+  "rename_button": "リネーム",
+  "warn_rename_title": "リネームエラー",
+  "warn_rename_no_selection": "リネームするアイテム（画像またはフォルダ）を選択してください。",
+  "rename_dialog_title": "名前の変更",
+  "rename_dialog_prompt": "新しい名前を入力してください:",
+  "log_rename_cancelled": "リネーム操作がキャンセルされました。",
+  "log_rename_error_empty": "新しい名前が空です。リネームできません。",
+  "log_rename_error_exists": "エラー: '%s' という名前のアイテムは既に存在します。",
+  "log_rename_error_general": "リネーム中にエラーが発生しました: %s",
+  "log_rename_warn_not_in_order": "警告: リネームされたアイテム '%s' が順序リストに見つかりませんでした（ファイルのリネームは成功しています）。",
+  "log_rename_success": "アイテム '%s' を '%s' にリネームしました。",
+  "log_rename_error_order_list": "ファイルのリネームには成功しましたが、順序リストの更新中にエラーが発生しました: %s",
+  "capture_hotkey_prompt": "キャプチャしたいウィンドウに\nマウスを重ねて Enter キーを押してください\n(Esc キーでキャンセル)",
+  "log_capture_hotkey_enter": "Enterキー検出。マウス座標からウィンドウをキャプチャします。",
+  "log_error_hotkey_listener": "ホットキーリスナーでエラーが発生しました: %s"
 }

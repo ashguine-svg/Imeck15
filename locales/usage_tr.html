@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+    body { font-family: sans-serif; font-size: 13px; }
+    h3 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px;}
+    h4 { color: #34495e; margin-top: 15px; margin-bottom: 5px; }
+    p, li { line-height: 1.6; }
+    b { color: #e74c3c; }
+    /* --- ▼▼▼ 修正箇所 ▼▼▼ --- */
+    code { padding: 2px 4px; border-radius: 3px; font-family: monospace; }
+    .important { border-left: 3px solid #f39c12; padding-left: 10px; margin: 10px 0;}
+    /* --- ▲▲▲ 修正箇所 (code から background-color を削除) ▲▲▲ --- */
+</style>
+</head>
+<body>
+    <h3>Imeck15 Görüntü Başına Tıklama Ayarları Kılavuzu</h3>
+    <p>
+        Bu kılavuz, kayıtlı bir görüntü bulunduğunda tıklama eylemlerinin nasıl yapılandırılacağını açıklar. Birincil olarak pencereli uygulamalarda işlemleri otomatikleştirmek için tasarlanmıştır.
+    </p>
+
+    <h4>1. Tıklama için Görüntüler Nasıl Kaydedilir</h4>
+    <p>
+        Öncelikle, tıklama hedefi olarak görev yapacak görüntüyü kaydedin. "Görüntü Yakala" işlevini kullanmak temel yöntemdir.<br>
+        <b>İpucu:</b> Hedef olarak düğmeler veya simgeler gibi <b>küçük parçaları</b> yakalamanız önerilir.
+    </p>
+    <ul>
+        <li><b>Neden 1: Daha Hızlı İşlem</b><br>Küçük bir görüntü aramak, tüm ekranı aramaktan daha az bilgisayar gücü gerektirir.</li>
+        <li><b>Neden 2: Doğru Tıklama</b><br>Ekranda birden fazla aynı düğme bulunsa bile, yalnızca belirli bir parçayı yakalamak, amaçlanan hedefe hassas bir şekilde tıklama sağlar.</li>
+    </ul>
+
+    <h4>2. Tıklama Sırası Nasıl Kontrol Edilir (Aralık Ayarı)</h4>
+    <p>
+        "Aralık", bir görüntüye tıkladıktan sonra <b>aynı görüntüye</b> tekrar tıklanabilmesi için gereken minimum bekleme süresidir (saniye olarak).
+    </p>
+    <div class="important">
+        <b>[Önemli] Tıklama Öncelik Mekanizması</b><br>
+        İzleme sırasında ekranda birden fazla tıklanabilir görüntü bulunursa, Imeck15 <b>en kısa "Aralık" ayarına</b> sahip olana tıklamayı önceliklendirir ve diğer görüntülere tıklamaz. Tıklama sırasını kontrol etmek için bu mekanizmayı kullanın.
+    </div>
+
+    <h4>3. Tek Bir Ekranda Birden Fazla Konuma Tıklama Tekniği</h4>
+    <p>
+        "Aralık Ayarı" mekanizmasını uygulayarak, tek bir ekranda birden fazla konuma sırayla tıklamasını sağlayabilirsiniz.<br>
+        <b>Önkoşul:</b> Tıklanan konumdaki görüntü veya metin, tıklandıktan sonra değişmelidir (kaybolmalı, grileşmeli vb.).
+    </p>
+    <p><b>Örnek Kurulum Adımları:</b></p>
+    <ol>
+        <li>Ekran üzerinde tıklamak istediğiniz A, B ve C parçalarını ayrı görüntüler olarak kaydedin.</li>
+        <li>Daha erken tıklamak istediğiniz görüntüler için daha kısa aralık süreleri ayarlayın. (örneğin, A: <code>1.5</code> sn, B: <code>2.0</code> sn, C: <code>2.5</code> sn)</li>
+        <li>İzlemeyi başlatın. Önce, en kısa aralığa sahip <b>A parçasına</b> tıklanacaktır.</li>
+        <li>Tıkladıktan sonra, A parçası ekrandan kaybolursa, sonraki izleme döngüsünde <b>B parçası</b> bir sonraki tıklama hedefi olacaktır.</li>
+        <li>Benzer şekilde, <b>C parçasına</b> en son tıklanacaktır.</li>
+    </ol>
+
+    <h4>4. Tanıma Doğruluğu ve Aralığı Nasıl Ayarlanır</h4>
+    <ul>
+        <li><b>Tanıma Eşiği:</b><br>Bu ayar, görüntülerin "eşleşme" olarak kabul edilmesi için ne kadar benzer olması gerektiğini belirler. Yaklaşık <code>0.8</code> değeri genellikle yeterlidir, ancak bunu <code>0.9</code> veya daha yükseğe ayarlamak, metin varyasyonları gibi küçük farkları kesin olarak ayırt etmek için etkili olabilir.</li>
+        <li><b>Arama Aralığı (ROI Ayarı):</b><br>"ROI Etkin" özelliğini etkinleştirmek, arama hedefini tıklama koordinatının etrafında merkezlenmiş <b>200x200 piksellik bir alanla</b> sınırlar. Bu, işlemeyi önemli ölçüde hızlandırır ve bilgisayar üzerindeki yükü büyük ölçüde azaltır. (Değişken ROI modu, aralığın serbestçe ayarlanmasına izin verir).</li>
+        <li><b>ROI Aralığı Belirtimi:</b><br>Tıklama konumunda merkezlenmiş 200x200'lük bir aralık yerine, bu özellik odaklanılacak belirli bir alanı belirtmenize ve ayrı bir tıklama konumu atamanıza olanak tanır.</li>
+    </ul>
+
+    <h4>5. Özel Durumlar İçin "Debounce" Ayarı</h4>
+    <p>
+        "Debounce", "kısa bir aralıkla A görüntüsüne tıkla, sonra başka bir B görüntüsüne tıkla ve kısa bir duraklamadan sonra bir sonraki ekrana geçmek için A görüntüsüne tekrar tıkla" gibi karmaşık işlemler için kullanılır.
+    </p>
+    <p>
+        <b>Mekanizma:</b> Bir debounce süresi ayarlamak, aynı görüntü arka arkaya hedeflendiğinde ikinci tıklama için bekleme süresini <b>"Aralık + Debounce Süresi"ne</b> uzatır. Bu, diğer görüntülerin önce tıklanması için bir fırsat yaratır.
+    </p>
+</body>
+</html>

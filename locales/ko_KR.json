@@ -346,5 +346,17 @@
   "log_countdown_started": "백업 이미지 '%s' 감지됨. %s초 카운트다운 시작.",
   "log_countdown_cancelled": "일반 이미지 감지됨, 백업 카운트다운 취소.",
   "log_countdown_executing": "%s초 경과. 백업 클릭 실행 중。",
-  "warn_capture_disabled_scale": "자동 스케일 중에 캡처된 이미지는 일치하지 않습니다.\n1.0배 스케일로 이미지를 캡처하십시오."
+  "warn_capture_disabled_scale": "자동 스케일 중에 캡처된 이미지는 일치하지 않습니다.\n1.0배 스케일로 이미지를 캡처하십시오.",
+  "rename_button": "이름 변경",
+  "warn_rename_title": "이름 변경 오류",
+  "warn_rename_no_selection": "이름을 변경할 항목(이미지 또는 폴더)을 선택하세요.",
+  "rename_dialog_title": "이름 변경",
+  "rename_dialog_prompt": "새 이름을 입력하세요:",
+  "log_rename_cancelled": "이름 변경 작업이 취소되었습니다.",
+  "log_rename_error_empty": "새 이름이 비어 있습니다. 이름을 변경할 수 없습니다.",
+  "log_rename_error_exists": "오류: '%s'(이)라는 이름의 항목이 이미 존재합니다.",
+  "log_rename_error_general": "이름 변경 중 오류 발생: %s",
+  "log_rename_warn_not_in_order": "경고: 순서 목록에서 이름이 변경된 항목 '%s'을(를) 찾을 수 없습니다 (파일 이름 변경은 성공함).",
+  "log_rename_success": "항목 '%s'의 이름을 '%s'(으)로 변경했습니다.",
+  "log_rename_error_order_list": "파일 이름 변경에는 성공했지만 순서 목록 업데이트 중 오류가 발생했습니다: %s"
 }

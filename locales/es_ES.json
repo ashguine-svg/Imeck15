@@ -345,5 +345,17 @@
   "log_countdown_started": "Imagen de respaldo '%s' detectada. Iniciando cuenta regresiva de %s segundos.",
   "log_countdown_cancelled": "Imagen normal detectada, cancelando cuenta regresiva de respaldo.",
   "log_countdown_executing": "%s segundos transcurridos. Ejecutando clic de respaldo.",
-  "warn_capture_disabled_scale": "Las imágenes capturadas durante la escala automática no coincidirán.\nCapture imágenes a una escala de 1.0x."
+  "warn_capture_disabled_scale": "Las imágenes capturadas durante la escala automática no coincidirán.\nCapture imágenes a una escala de 1.0x.",
+  "rename_button": "Renombrar",
+  "warn_rename_title": "Error al Renombrar",
+  "warn_rename_no_selection": "Por favor, seleccione un elemento (imagen o carpeta) para renombrar.",
+  "rename_dialog_title": "Cambiar Nombre",
+  "rename_dialog_prompt": "Ingrese un nuevo nombre:",
+  "log_rename_cancelled": "La operación de renombrar fue cancelada.",
+  "log_rename_error_empty": "El nuevo nombre está vacío. No se puede renombrar.",
+  "log_rename_error_exists": "Error: Ya existe un elemento llamado '%s'.",
+  "log_rename_error_general": "Ocurrió un error durante el renombrado: %s",
+  "log_rename_warn_not_in_order": "Advertencia: El elemento renombrado '%s' no se encontró en la lista de orden (el renombrado del archivo fue exitoso).",
+  "log_rename_success": "Se renombró el elemento '%s' a '%s'.",
+  "log_rename_error_order_list": "El renombrado del archivo fue exitoso, pero ocurrió un error al actualizar la lista de orden: %s"
 }

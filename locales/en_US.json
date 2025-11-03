@@ -348,5 +348,17 @@
   "log_countdown_executing": "%s seconds elapsed. Executing backup click.",
   "log_image_saved_success": "Saved image: %s",
   "log_rec_area_cleared": "Cleared recognition area.",
-  "warn_capture_disabled_scale": "Images captured during auto-scale will not match.\nPlease capture images at 1.0x scale."
+  "warn_capture_disabled_scale": "Images captured during auto-scale will not match.\nPlease capture images at 1.0x scale.",
+  "rename_button": "Rename",
+  "warn_rename_title": "Rename Error",
+  "warn_rename_no_selection": "Please select an item (image or folder) to rename.",
+  "rename_dialog_title": "Rename Item",
+  "rename_dialog_prompt": "Enter a new name:",
+  "log_rename_cancelled": "Rename operation was cancelled.",
+  "log_rename_error_empty": "New name is empty. Cannot rename.",
+  "log_rename_error_exists": "Error: An item named '%s' already exists.",
+  "log_rename_error_general": "An error occurred during rename: %s",
+  "log_rename_warn_not_in_order": "Warning: Renamed item '%s' not found in order list (file rename was successful).",
+  "log_rename_success": "Renamed item '%s' to '%s'.",
+  "log_rename_error_order_list": "File rename succeeded, but an error occurred while updating the order list: %s"
 }

@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Imeck15 Manual do Usuário (Edição Revisada)</title>
+<style>
+/* Basic Styles */
+:root {
+--main-bg-color: #f4f4f9;
+--content-bg-color: #ffffff;
+--text-color: #333;
+--header-color: #4a4a4a;
+--link-color: #007bff;
+--border-color: #e0e0e0;
+--code-bg-color: #e8e8e8;
+--important-bg-color: #fef9e7;
+--important-border-color: #f39c12;
+}
+html {
+scroll-behavior: smooth;
+}
+body {
+font-family: 'Segoe UI', Meiryo, 'Hiragino Kaku Gothic ProN', sans-serif;
+background-color: var(--main-bg-color);
+color: var(--text-color);
+line-height: 1.7;
+margin: 0;
+padding: 20px;
+}
+/* Center content area with appropriate width */
+#main-content {
+background-color: var(--content-bg-color);
+max-width: 800px;
+margin: 0 auto;
+padding: 20px 40px;
+box-shadow: 0 0 10px rgba(0,0,0,0.1);
+border-radius: 8px;
+}
+
+/* Hide sidebar for screen display */
+#sidebar {
+display: none;
+}
+
+/* Table of Contents list style */
+#toc {
+list-style-type: none;
+padding-left: 0;
+border: 1px solid var(--border-color);
+padding: 15px;
+border-radius: 5px;
+background-color: #f9f9f9;
+}
+#toc > li > a {
+font-weight: bold;
+font-size: 1.1em;
+}
+#toc ul {
+list-style-type: none;
+padding-left: 20px;
+margin-top: 5px;
+margin-bottom: 15px;
+}
+#toc li a {
+text-decoration: none;
+color: var(--link-color);
+display: block;
+padding: 4px 0;
+}
+
+/* Heading styles */
+h1 {
+font-size: 2.5em;
+color: var(--header-color);
+border-bottom: 3px solid var(--link-color);
+padding-bottom: 15px;
+margin-top: 0;
+}
+h2 {
+font-size: 2em;
+color: var(--header-color);
+margin-top: 60px;
+border-left: 5px solid var(--link-color);
+padding-left: 15px;
+}
+h3 {
+font-size: 1.6em;
+color: var(--header-color);
+margin-top: 40px;
+border-bottom: 1px solid var(--border-color);
+padding-bottom: 8px;
+}
+h4 {
+font-size: 1.3em;
+color: #5a5a5a;
+margin-top: 30px;
+}
+ul, ol {
+padding-left: 25px;
+}
+li {
+margin-bottom: 10px;
+}
+strong, b {
+font-weight: 600;
+}
+code, .code-like {
+background-color: var(--code-bg-color);
+padding: 2px 6px;
+border-radius: 4px;
+font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+}
+.important {
+border-left: 4px solid var(--important-border-color);
+padding: 10px 15px;
+background-color: var(--important-bg-color);
+margin: 15px 0;
+border-radius: 4px;
+}
+
+/* ===== Print-only styles start here ===== */
+@page {
+size: A4;
+margin: 2.5cm;
+}
+
+@media print {
+body {
+background-color: #fff;
+padding: 0;
+font-size: 11pt; /* Font size suitable for printing */
+}
+#main-content {
+max-width: 100%;
+margin: 0;
+padding: 0;
+box-shadow: none;
+border-radius: 0;
+}
+/* Make links black and underlined for clarity */
+a {
+color: #000 !important;
+text-decoration: underline !important;
+}
+/* Page break before each section (h2) */
+section {
+page-break-before: always;
+}
+/* No page break for the first section after TOC */
+#section1 {
+page-break-before: auto;
+}
+/* Adjust to avoid page breaks in the middle of headings/lists */
+h2, h3, h4 {
+page-break-after: avoid;
+}
+ul, ol, p, .important {
+page-break-inside: avoid;
+}
+.code-like {
+border: 1px solid #ccc;
+}
+}
+/* ===== Print-only styles end here ===== */
+</style>
+</head>
+<body>
+<main id="main-content">
+<h1>Imeck15 Manual do Usuário</h1>
+
+<section id="table_of_contents">
+<h2>Sumário</h2>
+<ul id="toc">
+<li><a href="#section1">1. Introdução</a>
+<ul>
+<li><a href="#s1-1">O que é Imeck15?</a></li>
+<li><a href="#s1-2">Recursos Principais</a></li>
+</ul>
+</li>
+<li><a href="#section2">2. Uso Básico</a>
+<ul>
+<li><a href="#s2-1">Passo 1: Registrando Imagens</a></li>
+<li><a href="#s2-2">Passo 2: Configurando a Área de Reconhecimento</a></li>
+<li><a href="#s2-3">Passo 3: Configurando a Posição do Clique</a></li>
+<li><a href="#s2-4">Passo 4: Iniciando e Parando o Monitoramento</a></li>
+</ul>
+</li>
+<li><a href="#section3">3. Recursos da Tela Principal</a>
+<ul>
+<li><a href="#s3-1">Área de Controle Principal</a></li>
+<li><a href="#s3-2">Área de Imagens Registradas</a></li>
+<li><a href="#s3-3">Área de Configurações e Pré-visualização</a></li>
+</ul>
+</li>
+<li><a href="#section4">4. Funções e Técnicas Detalhadas</a>
+<ul>
+<li><a href="#s4-1">4.1. Benefícios de Configurar a Área de Reconhecimento</a></li>
+<li><a href="#s4-2">4.2. Itens de Configuração por Imagem</a></li>
+<li><a href="#s4-3">4.3. Como Controlar a Ordem do Clique</a></li>
+<li><a href="#s4-4">4.4. Utilizando a Função de Pasta</a></li>
+<li><a href="#s4-5">4.5. Configurações Globais do Aplicativo</a></li>
+</ul>
+</li>
+<li><a href="#section5">5. Otimização de Desempenho</a>
+<ul>
+<li><a href="#s5-1">Passos Básicos de Otimização</a></li>
+<li><a href="#s5-2">Sobre o Modo Eco</a></li>
+</ul>
+</li>
+<li><a href="#section6">6. Várias Janelas</a>
+<ul>
+<li><a href="#s6-1">Monitor de Desempenho</a></li>
+<li><a href="#s6-2">Modo UI Mínima</a></li>
+</ul>
+</li>
+<li><a href="#section7">7. Perguntas Frequentes (FAQ)</a></li>
+<li><a href="#section8">8. Informações de Licença</a></li>
+</ul>
+</section>
+
+<section id="section1">
+<h2>1. Introdução</h2>
+<h3 id="s1-1">O que é Imeck15?</h3>
+<p>Imeck15 é uma ferramenta que reconhece imagens específicas exibidas em uma tela de PC e clica automaticamente em locais predefinidos. É destinado principalmente a automatizar tarefas rotineiras e repetitivas em jogos e aplicativos de PC.</p>
+
+<h3 id="s1-2">Recursos Principais</h3>
+<ul>
+<li><b>Reconhecimento de Imagem:</b> Detecta quando uma imagem registrada (modelo) aparece na tela.</li>
+<li><b>Clique Automático:</b> Clica automaticamente em uma coordenada ou área especificada quando uma imagem é detectada.</li>
+<li><b>Configurações Flexíveis:</b> Permite configuração detalhada para cada imagem, como intervalo de clique, precisão de reconhecimento e posição de clique.</li>
+<li><b>Ajuste de Desempenho:</b> Equipado com várias opções para ajustar a velocidade de processamento e a carga do PC de acordo com o ambiente operacional.</li>
+<li><b>Função de Pasta:</b> Gerencia imagens em pastas, permitindo controle operacional baseado em grupo.</li>
+<li><b>Arrastar e Soltar (Drag & Drop):</b> Reorganiza itens intuitivamente na lista de imagens ou os move para pastas.</li>
+</ul>
+</section>
+
+<section id="section2">
+<h2>2. Uso Básico</h2>
+<p>Aqui estão os quatro passos básicos para começar a usar o Imeck15.</p>
+
+<h3 id="s2-1">Passo 1: Registrando Imagens</h3>
+<p>Registre as imagens que servirão como gatilhos para cliques automáticos.</p>
+<ol>
+<li>Pressione o botão <span class="code-like">[Capturar Imagem]</span> na tela principal.</li>
+<li>Quando o diálogo "Configuração da Área de Reconhecimento" aparecer, selecione <span class="code-like">[Configurar Retângulo]</span>.</li>
+<li>A tela será coberta com uma sobreposição semi-transparente. Arraste o mouse para envolver o alvo que você deseja clicar (como um botão ou ícone). Tente tornar a seleção o menor possível, enquanto ainda captura as características únicas.</li>
+<li>Quando o diálogo de entrada do nome do arquivo aparecer, dê-lhe um nome descritivo e salve-o.</li>
+<li>A imagem que você acabou de registrar será adicionada à lista "Imagens Registradas" à esquerda.</li>
+</ol>
+
+<h3 id="s2-2">Passo 2: Configurando a Área de Reconhecimento</h3>
+<p>Especifique a área onde o Imeck15 buscará por imagens. Limitar esta área reduz significativamente a carga no seu PC.</p>
+<ol>
+<li>Pressione o botão <span class="code-like">[Configurar Área de Reconhecimento]</span> no topo da tela principal.</li>
+<li><span class="code-like">[Configurar Retângulo]</span>: Selecione isso se você deseja buscar apenas dentro de uma região específica de toda a tela.</li>
+<li><span class="code-like">[Configurar Janela]</span>: Selecione isso se você deseja buscar apenas dentro de uma janela de aplicativo específica. Quando você seleciona uma janela, ela calcula automaticamente o fator de escala com base em seu tamanho padrão, melhorando a precisão do reconhecimento de imagem (detalhes abaixo).</li>
+</ol>
+
+<h3 id="s2-3">Passo 3: Configurando a Posição do Clique</h3>
+<p>Configure onde clicar quando a imagem registrada for encontrada.</p>
+<ol>
+<li>Selecione a imagem desejada na lista à esquerda.</li>
+<li>A imagem será exibida na aba "Pré-visualização da Imagem" à direita.</li>
+<li>Na área "Configurações por Imagem" na parte inferior, marque a caixa de seleção <span class="code-like">[Clique em Ponto]</span> ou <span class="code-like">[Clique em Intervalo]</span>.</li>
+<li>O cursor do mouse mudará para uma mira quando estiver sobre a imagem de pré-visualização.</li>
+<ul>
+<li><b>Clique em Ponto:</b> Clique no ponto exato que você deseja atingir. Ele será marcado com um ponto vermelho.</li>
+<li><b>Clique em Intervalo:</b> Arraste o mouse para definir uma área retangular. Ele será exibido como uma caixa azul. O clique ocorrerá em algum lugar dentro desta área (também pode ser configurado para aleatório).</li>
+</ul>
+</ol>
+
+<h3 id="s2-4">Passo 4: Iniciando e Parando o Monitoramento</h3>
+<p>Assim que as configurações estiverem completas, inicie o clique automático.</p>
+<ul>
+<li><b>Iniciar:</b> Pressione o botão <span class="code-like">[Iniciar Monitoramento]</span> no canto superior esquerdo da tela principal. O status mudará para "Monitorando..."</li>
+<li><b>Parar:</b> Pressione o botão <span class="code-like">[Parar Monitoramento]</span>.</li>
+
+</ul>
+<b>Atalhos (Mouse):</b>
+<ul>
+<li><b>Clique Duplo Direito:</b> <b>Parar</b> Monitoramento</li>
+<li><b>Clique Triplo Direito:</b> <b>Iniciar</b> Monitoramento</li>
+</ul>
+</section>
+
+<section id="section3">
+<h2>3. Recursos da Tela Principal</h2>
+
+<h3 id="s3-1">Área de Controle Principal</h3>
+<p>A área de operação no topo da janela, que está sempre visível.</p>
+<ul>
+<li><span class="code-like">[Iniciar Monitoramento]</span>/<span class="code-like">[Parar Monitoramento]</span>: Liga e desliga o clique automático.</li>
+<li><span class="code-like">[Desempenho]</span>: Abre o "Monitor de Desempenho", onde você pode verificar o uso da CPU, FPS, etc.</li>
+<li><span class="code-like">[Configurar Área de Reconhecimento]</span>: Configura a área para buscar imagens.</li>
+<li><span class="code-like">[Modo UI Mínima]</span>: Alterna para uma pequena janela apenas com controles essenciais.</li>
+<li><span class="code-like">[Pasta de Imagens]</span>: Abre a pasta onde as imagens registradas são armazenadas no Explorador.</li>
+<li><b>Exibição de Status:</b> Mostra o estado atual (Ocioso, Monitorando...).</li>
+</ul>
+
+<h3 id="s3-2">Área de Imagens Registradas (Esquerda)</h3>
+<p>A área para gerenciar imagens e pastas registradas.</p>
+<ul>
+<li><b>Lista de Imagens:</b>
+<ul>
+<li>Imagens e pastas registradas são exibidas em formato de árvore.</li>
+<li>Você pode <b>arrastar e soltar</b> itens para alterar a ordem ou movê-los para pastas.</li>
+<li>Você pode selecionar vários itens mantendo <b>Shift</b> ou <b>Ctrl</b> pressionado enquanto clica.</li>
+</ul>
+</li>
+<li><span class="code-like">[▲ Mover Para Cima]</span> / <span class="code-like">[▼ Mover Para Baixo]</span>: Move o item selecionado para cima ou para baixo na lista.</li>
+<li><span class="code-like">[Adicionar Imagem]</span>: Adiciona arquivos de imagem existentes (png, jpg, etc.) à lista.</li>
+<li><span class="code-like">[Capturar Imagem]</span>: Captura uma nova parte da tela para registrar.</li>
+<li><span class="code-like">[Excluir Selecionado]</span>: Exclui os itens atualmente selecionados.</li>
+<li><span class="code-like">[Criar Pasta]</span>: Cria uma pasta para organizar imagens.</li>
+<li><span class="code-like">[Mover Para/Fora da Pasta]</span>: Move imagens para dentro e para fora das pastas.</li>
+<li><b>Clique Direito na Pasta:</b> Clicar com o botão direito em uma pasta abre um menu para configurar seu modo de comportamento.</li>
+</ul>
+
+<h3 id="s3-3">Área de Configurações e Pré-visualização (Direita)</h3>
+<p>Acesse várias informações e configurações trocando de abas.</p>
+<ul>
+<li><b>Pré-visualização da Imagem:</b> Permite pré-visualizar a imagem selecionada e configurar a posição do clique.</li>
+<li><b>Área de Reconhecimento:</b> Exibe uma pré-visualização da área de reconhecimento atualmente configurada.</li>
+<li><b>Registro (Log):</b> Exibe registros de operação.</li>
+<li><b>Auto Escala:</b> Configura as definições de escala de imagem com base no tamanho da janela.</li>
+<li><b>Configurações do App:</b> Configura o comportamento geral do Imeck15.</li>
+<li><b>Uso:</b> Exibe um guia detalhado sobre configurações por imagem.</li>
+<li><b>Configurações por Imagem (Parte Inferior):</b> Configura definições individuais para a imagem selecionada na lista à esquerda.</li>
+</ul>
+</section>
+
+<section id="section4">
+<h2>4. Funções e Técnicas Detalhadas</h2>
+
+<h3 id="s4-1">4.1. Benefícios de Configurar a Área de Reconhecimento</h3>
+<p>Usar <span class="code-like">[Configurar Janela]</span> para definir a área de reconhecimento oferece dois grandes benefícios além de reduzir a carga do PC.</p>
+
+<h4>1. Ajuste Automático de Tamanho com Escala Baseada na Janela</h4>
+<p>Mesmo que o tamanho da janela alvo mude, este recurso mantém a precisão do reconhecimento calculando automaticamente a escala do modelo de imagem.</p>
+<b>Como funciona:</b>
+<ul>
+<li><b>Armazenamento do Tamanho Base:</b> Na primeira vez que você especifica uma janela em particular, você é solicitado a salvar seu tamanho atual como o "tamanho base (escala 1.0x)".</li>
+<li><b>Cálculo Automático de Escala:</b> Subsequentemente, quando você especifica a mesma janela, ela compara o tamanho base com o tamanho atual e calcula automaticamente o fator de escala (por exemplo, 1.2x).</li>
+<li><b>Correspondência de Alta Precisão:</b> Esta escala calculada é aplicada à correspondência de modelo, garantindo reconhecimento preciso mesmo se o tamanho da janela tiver mudado.</li>
+</ul>
+
+<h4>2. Ativação Automática da Janela Antes do Clique</h4>
+<p>Pouco antes de realizar um clique, este recurso verifica se a janela alvo está em primeiro plano (ativa) e a ativa automaticamente se não estiver.</p>
+<b>Como funciona:</b>
+<ul>
+<li><b>Verificação de Estado Ativo:</b> Imediatamente antes de clicar, verifica se a janela alvo é a janela ativa em primeiro plano.</li>
+<li><b>Ativação Forçada:</b> Se a janela estiver oculta atrás de outra ou minimizada, ela restaura a janela e a traz para a frente antes de executar o clique.</li>
+<li><b>Previne Falhas:</b> Esta função previne cliques acidentais em outras janelas, melhorando muito a confiabilidade do processo de automação.</li>
+</ul>
+
+<h3 id="s4-2">4.2. Itens de Configuração por Imagem</h3>
+<p>Configure comportamentos individuais para a imagem selecionada na lista.</p>
+<ul>
+<li><b>Precisão de Reconhecimento (Limite):</b> Configura o quão semelhante uma imagem deve ser para ser considerada uma "correspondência". 0.8 é o padrão; aumentar o valor torna a verificação mais rigorosa (1.0 é uma correspondência perfeita).</li>
+<li><b>ROI Habilitado (Limitar Área de Busca):</b> Quando ativado, isso acelera o processamento buscando apenas em uma área pequena e definida.
+<ul>
+<li><b>Fixo:</b> Configura automaticamente uma área de <b>200x200 pixels</b> centrada na coordenada do clique como o ROI.</li>
+<li><b>Variável:</b> Permite que você <b>configure livremente</b> a área de busca (ROI) arrastando na tela de pré-visualização. Pressione o botão <span class="code-like">[Configurar Área ROI]</span> para habilitar o desenho da área na pré-visualização.</li>
+</ul>
+</li>
+<li><b>Clique de Backup:</b> Funciona como último recurso. Se nenhuma outra imagem normal for encontrada pela duração especificada (em segundos), esta imagem será clicada.</li>
+<li><b>Intervalo (seg):</b> O tempo mínimo de espera após um clique antes que a *mesma imagem* possa ser clicada novamente. <b>Este valor determina a prioridade do clique (um valor menor significa maior prioridade).</b></li>
+<li><b>Debounce (seg):</b> Se a mesma imagem for alvo de clique consecutivamente, isso estende o tempo de espera para o segundo clique para "Intervalo + Tempo de Debounce". Isso cria uma oportunidade para que outras imagens sejam clicadas.</li>
+<li><b>Tipo de Clique:</b> Escolha entre <span class="code-like">[Clique em Ponto]</span>, <span class="code-like">[Clique em Intervalo]</span> e <span class="code-like">[Aleatório no Intervalo]</span>.</li>
+</ul>
+
+<h3 id="s4-3">4.3. Como Controlar a Ordem do Clique</h3>
+<p>Se múltiplas imagens forem encontradas na tela simultaneamente, o Imeck15 prioriza clicar na imagem com o <b>menor valor de "Intervalo"</b>. Você pode usar este mecanismo para controlar a ordem de prioridade do clique.</p>
+<p><b>Exemplo:</b></p>
+<ul>
+<li>Configurar o Intervalo da Imagem A para <b>1.5</b></li>
+<li>Configurar o Intervalo da Imagem B para <b>2.0</b></li>
+</ul>
+<p>→ Mesmo que A e B estejam na tela ao mesmo tempo, a <b>Imagem A</b> (com o intervalo mais curto) sempre será clicada primeiro.</p>
+<div class="important">
+<b>Técnica Avançada:</b><br>
+Em uma tela com múltiplos botões que mudam de estado (desaparecem, ficam cinzas, etc.) após serem clicados, você pode automatizar uma sequência de operações configurando os intervalos na ordem em que você deseja que sejam clicados (por exemplo, 1.5, 2.0, 2.5...).
+</div>
+
+<h3 id="s4-4">4.4. Utilizando a Função de Pasta</h3>
+<p>Organizar imagens em pastas permite controlar o comportamento delas como um grupo. <b>Clique com o botão direito</b> em uma pasta para abrir sua janela de configurações.</p>
+<ul>
+<li><b>Normal:</b> As imagens na pasta são buscadas normalmente.</li>
+<li><b>Parar Busca (Excluído):</b> Todas as imagens na pasta são excluídas da busca. Útil para desabilitar temporariamente um grupo de imagens.</li>
+<li><b>Prioridade de Temporizador:</b> Após um tempo especificado (em minutos) passar, o modo alterna para buscar *apenas* imagens dentro desta pasta. Útil para agrupar uma série de ações que só devem ser executadas em intervalos específicos.</li>
+</ul>
+
+<h4>Modo Prioridade de Reconhecimento de Imagem</h4>
+<p>Este é um recurso poderoso para automatizar uma série de operações que respondem a uma situação específica (por exemplo, uma janela pop-up).</p>
+<p><b>Como funciona:</b></p>
+<ol>
+<li><b>Gatilho:</b> O modo prioridade inicia se <b>mesmo uma única imagem</b> pertencente a esta pasta for encontrada na tela.</li>
+<li><b>Comportamento:</b> Enquanto no modo prioridade, <b>apenas as imagens dentro desta pasta</b> são buscadas e clicadas.</li>
+<li><b>Condições de Desativação:</b> O modo prioridade desativa automaticamente e retorna ao monitoramento normal quando uma das seguintes condições é atendida:
+<ul>
+<li><b>Todas as imagens</b> na pasta foram clicadas pelo menos uma vez (Conclusão).</li>
+<li>Nenhuma imagem da pasta é encontrada por uma <b>duração de tempo limite especificada (segundos)</b>.</li>
+</ul>
+</li>
+</ol>
+<div class="important">
+<b>Exemplo de Uso:</b><br>
+Considere uma janela "Inventário Cheio" que aparece em um jogo.
+<ol>
+<li>Capture todas as imagens relacionadas: o título "Inventário Cheio", o botão "OK", o botão "Cancelar", etc.</li>
+<li>Coloque essas imagens em uma nova pasta chamada "Lidar com Inventário Cheio" e configure seu modo para <b>"Prioridade de Reconhecimento de Imagem"</b>.</li>
+<li>Ajuste os intervalos das imagens dentro da pasta para que o botão "OK" seja clicado por último.</li>
+</ol>
+Com esta configuração, a pasta "Lidar com Inventário Cheio" é normalmente ignorada. Mas no momento em que a janela do inventário aparecer, o Imeck15 a detecta, executa automaticamente as ações necessárias (como clicar em "OK") e depois retorna ao monitoramento normal após a conclusão.
+</div>
+
+<h3 id="s4-5">4.5. Configurações Globais do Aplicativo</h3>
+<p>Ajuste o comportamento geral do Imeck15 na aba "Configurações do App".</p>
+<ul>
+<li><b>Correspondência em Tons de Cinza:</b> Compara imagens em preto e branco. Mais rápido, mas não consegue distinguir cores.</li>
+<li><b>Usar DXCam:</b> Um método de captura de tela mais rápido. Eficaz para capturar telas de jogos, mas pode não funcionar em todos os ambientes.</li>
+<li><b>Pular Quadros:</b> Um valor mais alto diminui a frequência de verificação da tela, reduzindo a carga do PC, mas também diminuindo o tempo de resposta.</li>
+<li><b>Usar OpenCL (Aceleração GPU):</b> Pode acelerar o processamento de imagem se uma GPU compatível estiver presente.</li>
+<li><b>Verificação de Estabilidade da Tela:</b> Detecta a renderização ou efeitos da tela e segura os cliques até que a tela esteja estável. Ajuste o limite para alterar a sensibilidade da verificação.</li>
+<li><b>Modo Leve:</b> Reduz drasticamente a carga do PC, diminuindo a resolução da captura de tela. Você pode escolher entre predefinições (Padrão, Desempenho, Ultra).</li>
+</ul>
+</section>
+
+<section id="section5">
+<h2>5. Otimização de Desempenho</h2>
+<p>Se o Imeck15 parecer lento ou fizer seu PC travar, revise as seguintes configurações.</p>
+
+<h3 id="s5-1">Passos Básicos de Otimização</h3>
+<p>Listados em ordem de eficácia.</p>
+<ol>
+<li><b>Limitar a Área de Reconhecimento:</b> <b>Este é o método mais eficaz.</b> Use configurações de janela ou retângulo para restringir a área de busca ao mínimo.</li>
+<li><b>Habilitar Modo Leve:</b> Habilite isso na aba "Configurações do App". Melhora drasticamente a carga do PC.</li>
+<li><b>Habilitar ROI por Imagem:</b> Isso torna o processamento muito rápido, pois o aplicativo busca apenas na pequena área ao redor do alvo do clique.</li>
+<li><b>Aumentar o Valor de Pular Quadros:</b> Isso é uma compensação com a velocidade de resposta, mas reduzirá a carga.</li>
+<li><b>Usar DXCam:</b> Se seu ambiente suportar, isso fornece captura rápida e com baixa carga da CPU.</li>
+</ol>
+
+<h3 id="s5-2">Sobre o Modo Eco</h3>
+<p>O <span class="code-like">[Modo Eco]</span> na aba "Configurações do App" é um recurso para reduzir ainda mais a carga do PC.</p>
+<b>Como funciona:</b>
+<ul>
+<li><b>Ativação:</b> Ativa automaticamente quando nenhuma imagem reconhecível é encontrada por <b>5 segundos</b> após o último clique.</li>
+<li><b>Comportamento:</b> Quando ativado, a frequência de verificação da tela cai para <b>cerca de uma vez por segundo</b>, reduzindo significativamente o uso da CPU.</li>
+<li><b>Desativação:</b> Se uma imagem for reconhecida e um clique for executado durante o Modo Eco, ele desativa automaticamente e retorna à frequência normal de monitoramento.</li>
+</ul>
+<div class="important">
+Este recurso é particularmente útil ao automatizar tarefas com longos tempos de espera. Ele é habilitado por padrão, mas você pode desativá-lo se sempre precisar da resposta mais rápida possível.
+</div>
+</section>
+
+<section id="section6">
+<h2>6. Várias Janelas</h2>
+<h3 id="s6-1">Monitor de Desempenho</h3>
+<p>Aberto através do botão <span class="code-like">[Desempenho]</span> na tela principal. Permite verificar o uso de CPU/memória, FPS (verificações de quadros por segundo), cliques totais e outras informações em tempo real. Você também pode iniciar/parar o monitoramento ou configurar a área de reconhecimento usando os botões no topo. Atalhos estão disponíveis: <b>Clique duplo direito para parar o monitoramento, clique triplo direito para iniciar o monitoramento</b>.</p>
+
+<h3 id="s6-2">Modo UI Mínima</h3>
+<p>Alternado através do botão <span class="code-like">[Modo UI Mínima]</span>. Isso oculta a janela principal e exibe uma pequena janela com controles essenciais como iniciar/parar o monitoramento.</p>
+</section>
+
+<section id="section7">
+<h2>7. Perguntas Frequentes (FAQ)</h2>
+<p><b>P: Imagens não estão sendo encontradas corretamente.</b></p>
+<p>R: Verifique os seguintes pontos:</p>
+<ul>
+<li>A "Área de Reconhecimento" está configurada corretamente?</li>
+<li>A "Precisão de Reconhecimento" em "Configurações por Imagem" está muito alta? Tente diminuí-la um pouco.</li>
+<li>O tamanho da janela do seu jogo ou aplicativo mudou? Reveja as configurações na aba "Auto Escala" ou tente recapturar a imagem.</li>
+</ul>
+<p><b>P: O aplicativo está pesado e meu PC está travando.</b></p>
+<p>R: Consulte a seção "<a href="#section5">5. Otimização de Desempenho</a>" acima e revise suas configurações.</p>
+<p><b>P: Ele clica no meio de uma transição de tela.</b></p>
+<p>A: Verifique se a "Verificação de Estabilidade da Tela" está habilitada na aba "Configurações do App". Se estiver, tente diminuir o valor do "Limite" um pouco para tornar a verificação mais rigorosa.</p>
+</section>
+
+<section id="section8">
+<h2>8. Informações de Licença</h2>
+<p>O Imeck15 é desenvolvido usando várias bibliotecas de código aberto. Ao redistribuir este aplicativo, você deve cumprir os termos de licença dessas bibliotecas. Verifique o conteúdo do arquivo THIRD-PARTY-NOTICES.txt incluído e a pasta licenses.</p>
+</section>
+
+</main>
+</body>
+</html>

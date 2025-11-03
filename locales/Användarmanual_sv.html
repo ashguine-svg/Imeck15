@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Imeck15 Användarmanual (Reviderad Utgåva)</title>
+<style>
+/* Basic Styles */
+:root {
+--main-bg-color: #f4f4f9;
+--content-bg-color: #ffffff;
+--text-color: #333;
+--header-color: #4a4a4a;
+--link-color: #007bff;
+--border-color: #e0e0e0;
+--code-bg-color: #e8e8e8;
+--important-bg-color: #fef9e7;
+--important-border-color: #f39c12;
+}
+html {
+scroll-behavior: smooth;
+}
+body {
+font-family: 'Segoe UI', Meiryo, 'Hiragino Kaku Gothic ProN', sans-serif;
+background-color: var(--main-bg-color);
+color: var(--text-color);
+line-height: 1.7;
+margin: 0;
+padding: 20px;
+}
+/* Center content area with appropriate width */
+#main-content {
+background-color: var(--content-bg-color);
+max-width: 800px;
+margin: 0 auto;
+padding: 20px 40px;
+box-shadow: 0 0 10px rgba(0,0,0,0.1);
+border-radius: 8px;
+}
+
+/* Hide sidebar for screen display */
+#sidebar {
+display: none;
+}
+
+/* Table of Contents list style */
+#toc {
+list-style-type: none;
+padding-left: 0;
+border: 1px solid var(--border-color);
+padding: 15px;
+border-radius: 5px;
+background-color: #f9f9f9;
+}
+#toc > li > a {
+font-weight: bold;
+font-size: 1.1em;
+}
+#toc ul {
+list-style-type: none;
+padding-left: 20px;
+margin-top: 5px;
+margin-bottom: 15px;
+}
+#toc li a {
+text-decoration: none;
+color: var(--link-color);
+display: block;
+padding: 4px 0;
+}
+
+/* Heading styles */
+h1 {
+font-size: 2.5em;
+color: var(--header-color);
+border-bottom: 3px solid var(--link-color);
+padding-bottom: 15px;
+margin-top: 0;
+}
+h2 {
+font-size: 2em;
+color: var(--header-color);
+margin-top: 60px;
+border-left: 5px solid var(--link-color);
+padding-left: 15px;
+}
+h3 {
+font-size: 1.6em;
+color: var(--header-color);
+margin-top: 40px;
+border-bottom: 1px solid var(--border-color);
+padding-bottom: 8px;
+}
+h4 {
+font-size: 1.3em;
+color: #5a5a5a;
+margin-top: 30px;
+}
+ul, ol {
+padding-left: 25px;
+}
+li {
+margin-bottom: 10px;
+}
+strong, b {
+font-weight: 600;
+}
+code, .code-like {
+background-color: var(--code-bg-color);
+padding: 2px 6px;
+border-radius: 4px;
+font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+}
+.important {
+border-left: 4px solid var(--important-border-color);
+padding: 10px 15px;
+background-color: var(--important-bg-color);
+margin: 15px 0;
+border-radius: 4px;
+}
+
+/* ===== Print-only styles start here ===== */
+@page {
+size: A4;
+margin: 2.5cm;
+}
+
+@media print {
+body {
+background-color: #fff;
+padding: 0;
+font-size: 11pt; /* Font size suitable for printing */
+}
+#main-content {
+max-width: 100%;
+margin: 0;
+padding: 0;
+box-shadow: none;
+border-radius: 0;
+}
+/* Make links black and underlined for clarity */
+a {
+color: #000 !important;
+text-decoration: underline !important;
+}
+/* Page break before each section (h2) */
+section {
+page-break-before: always;
+}
+/* No page break for the first section after TOC */
+#section1 {
+page-break-before: auto;
+}
+/* Adjust to avoid page breaks in the middle of headings/lists */
+h2, h3, h4 {
+page-break-after: avoid;
+}
+ul, ol, p, .important {
+page-break-inside: avoid;
+}
+.code-like {
+border: 1px solid #ccc;
+}
+}
+/* ===== Print-only styles end here ===== */
+</style>
+</head>
+<body>
+<main id="main-content">
+<h1>Imeck15 Användarmanual</h1>
+
+<section id="table_of_contents">
+<h2>Innehållsförteckning</h2>
+<ul id="toc">
+<li><a href="#section1">1. Introduktion</a>
+<ul>
+<li><a href="#s1-1">Vad är Imeck15?</a></li>
+<li><a href="#s1-2">Nyckelfunktioner</a></li>
+</ul>
+</li>
+<li><a href="#section2">2. Grundläggande Användning</a>
+<ul>
+<li><a href="#s2-1">Steg 1: Registrera Bilder</a></li>
+<li><a href="#s2-2">Steg 2: Ställa in Igenkänningsområdet</a></li>
+<li><a href="#s2-3">Steg 3: Ställa in Klickpositionen</a></li>
+<li><a href="#s2-4">Steg 4: Starta och Stoppa Övervakning</a></li>
+</ul>
+</li>
+<li><a href="#section3">3. Huvudskärmsfunktioner</a>
+<ul>
+<li><a href="#s3-1">Huvudkontrollområdet</a></li>
+<li><a href="#s3-2">Område för Registrerade Bilder</a></li>
+<li><a href="#s3-3">Inställnings- och Förhandsvisningsområde</a></li>
+</ul>
+</li>
+<li><a href="#section4">4. Detaljerade Funktioner och Tekniker</a>
+<ul>
+<li><a href="#s4-1">4.1. Fördelar med att Ställa in Igenkänningsområdet</a></li>
+<li><a href="#s4-2">4.2. Inställningsobjekt per Bild</a></li>
+<li><a href="#s4-3">4.3. Hur man Kontrollerar Klickordningen</a></li>
+<li><a href="#s4-4">4.4. Utnyttja Mappfunktionen</a></li>
+<li><a href="#s4-5">4.5. Globala Applikationsinställningar</a></li>
+</ul>
+</li>
+<li><a href="#section5">5. Prestandaoptimering</a>
+<ul>
+<li><a href="#s5-1">Grundläggande Optimeringssteg</a></li>
+<li><a href="#s5-2">Om Eko-läge</a></li>
+</ul>
+</li>
+<li><a href="#section6">6. Diverse Fönster</a>
+<ul>
+<li><a href="#s6-1">Prestandamonitor</a></li>
+<li><a href="#s6-2">Minimalt UI-läge</a></li>
+</ul>
+</li>
+<li><a href="#section7">7. Vanliga Frågor (FAQ)</a></li>
+<li><a href="#section8">8. Licensinformation</a></li>
+</ul>
+</section>
+
+<section id="section1">
+<h2>1. Introduktion</h2>
+<h3 id="s1-1">Vad är Imeck15?</h3>
+<p>Imeck15 är ett verktyg som känner igen specifika bilder som visas på en PC-skärm och automatiskt klickar på förinställda platser. Det är främst avsett för att automatisera rutinmässiga, repetitiva uppgifter i PC-spel och applikationer.</p>
+
+<h3 id="s1-2">Nyckelfunktioner</h3>
+<ul>
+<li><b>Bildigenkänning:</b> Upptäcker när en registrerad bild (mall) visas på skärmen.</li>
+<li><b>Automatisk Klickning:</b> Klickar automatiskt på en specificerad koordinat eller ett område när en bild detekteras.</li>
+<li><b>Flexibla Inställningar:</b> Tillåter detaljerad konfiguration för varje bild, såsom klickintervall, igenkänningsnoggrannhet och klickposition.</li>
+<li><b>Prestandajustering:</b> Utrustad med olika alternativ för att justera bearbetningshastighet och PC-belastning enligt driftsmiljön.</li>
+<li><b>Mappfunktion:</b> Hantera bilder i mappar, vilket möjliggör gruppbaserad operativ kontroll.</li>
+<li><b>Dra och Släpp (Drag & Drop):</b> Ordna om objekt intuitivt i bildlistan eller flytta dem till mappar.</li>
+</ul>
+</section>
+
+<section id="section2">
+<h2>2. Grundläggande Användning</h2>
+<p>Här är de fyra grundläggande stegen för att komma igång med Imeck15.</p>
+
+<h3 id="s2-1">Steg 1: Registrera Bilder</h3>
+<p>Registrera bilderna som kommer att fungera som utlösare för automatiska klick.</p>
+<ol>
+<li>Tryck på knappen <span class="code-like">[Fånga Bild]</span> på huvudskärmen.</li>
+<li>När dialogrutan "Inställning av Igenkänningsområde" visas, välj <span class="code-like">[Ställ in Rektangel]</span>.</li>
+<li>Skärmen täcks av en halvtransparent överläggning. Dra musen för att omsluta målet du vill klicka på (som en knapp eller ikon). Försök att göra markeringen så liten som möjligt samtidigt som de unika funktionerna fångas.</li>
+<li>När dialogrutan för inmatning av filnamn visas, ge den ett beskrivande namn och spara.</li>
+<li>Bilden du just registrerade läggs till i listan "Registrerade Bilder" till vänster.</li>
+</ol>
+
+<h3 id="s2-2">Steg 2: Ställa in Igenkänningsområdet</h3>
+<p>Specificera området där Imeck15 ska söka efter bilder. Att begränsa detta område minskar PC-belastningen avsevärt.</p>
+<ol>
+<li>Tryck på knappen <span class="code-like">[Ställ in Igenkänningsområde]</span> överst på huvudskärmen.</li>
+<li><span class="code-like">[Ställ in Rektangel]</span>: Välj detta om du bara vill söka inom en specifik region av hela skärmen.</li>
+<li><span class="code-like">[Ställ in Fönster]</span>: Välj detta om du bara vill söka inom ett specifikt applikationsfönster. När du väljer ett fönster, beräknar det automatiskt skalningsfaktorn baserat på dess standardstorlek, vilket förbättrar bildigenkänningsnoggrannheten (detaljer nedan).</li>
+</ol>
+
+<h3 id="s2-3">Steg 3: Ställa in Klickpositionen</h3>
+<p>Konfigurera var du ska klicka när den registrerade bilden hittas.</p>
+<ol>
+<li>Välj önskad bild från listan till vänster.</li>
+<li>Bilden kommer att visas i fliken "Bildförhandsvisning" till höger.</li>
+<li>I området "Inställningar per Bild" längst ner, kryssa i rutan <span class="code-like">[Punkt Klick]</span> eller <span class="code-like">[Område Klick]</span>.</li>
+<li>Muspekaren ändras till ett hårkors när den är över förhandsvisningsbilden.</li>
+<ul>
+<li><b>Punkt Klick:</b> Klicka på den exakta plats du vill rikta in dig på. Den markeras med en röd prick.</li>
+<li><b>Område Klick:</b> Dra musen för att definiera ett rektangulärt område. Det visas som en blå ruta. Klicket kommer att ske någonstans inom detta område (kan också ställas in på slumpmässigt).</li>
+</ul>
+</ol>
+
+<h3 id="s2-4">Steg 4: Starta och Stoppa Övervakning</h3>
+<p>När inställningarna är klara, starta den automatiska klickningen.</p>
+<ul>
+<li><b>Starta:</b> Tryck på knappen <span class="code-like">[Starta Övervakning]</span> uppe till vänster på huvudskärmen. Status ändras till "Övervakning pågår..."</li>
+<li><b>Stoppa:</b> Tryck på knappen <span class="code-like">[Stoppa Övervakning]</span>.</li>
+
+</ul>
+<b>Genvägar (Mus):</b>
+<ul>
+<li><b>Höger Dubbelklick:</b> <b>Stoppa</b> Övervakning</li>
+<li><b>Höger Trippelklick:</b> <b>Starta</b> Övervakning</li>
+</ul>
+</section>
+
+<section id="section3">
+<h2>3. Huvudskärmsfunktioner</h2>
+
+<h3 id="s3-1">Huvudkontrollområdet</h3>
+<p>Manöverområdet högst upp i fönstret, som alltid är synligt.</p>
+<ul>
+<li><span class="code-like">[Starta Övervakning]</span>/<span class="code-like">[Stoppa Övervakning]</span>: Växlar automatisk klickning på och av.</li>
+<li><span class="code-like">[Prestanda]</span>: Öppnar "Prestandamonitor", där du kan kontrollera CPU-användning, FPS, etc.</li>
+<li><span class="code-like">[Ställ in Igenkänningsområde]</span>: Ställer in området för att söka efter bilder.</li>
+<li><span class="code-like">[Minimalt UI-läge]</span>: Växlar till ett litet fönster med endast nödvändiga kontroller.</li>
+<li><span class="code-like">[Bildmapp]</span>: Öppnar mappen där registrerade bilder lagras i Utforskaren.</li>
+<li><b>Statusvisning:</b> Visar det aktuella tillståndet (Inaktiv, Övervakning pågår...).</li>
+</ul>
+
+<h3 id="s3-2">Område för Registrerade Bilder (Vänster)</h3>
+<p>Området för att hantera registrerade bilder och mappar.</p>
+<ul>
+<li><b>Bildlista:</b>
+<ul>
+<li>Registrerade bilder och mappar visas i ett trädformat.</li>
+<li>Du kan <b>dra och släppa</b> objekt för att ändra deras ordning eller flytta dem till mappar.</li>
+<li>Du kan välja flera objekt genom att hålla <b>Skift</b> eller <b>Ctrl</b> nedtryckt medan du klickar.</li>
+</ul>
+</li>
+<li><span class="code-like">[▲ Flytta Upp]</span> / <span class="code-like">[▼ Flytta Ner]</span>: Flyttar det valda objektet uppåt eller nedåt i listan.</li>
+<li><span class="code-like">[Lägg till Bild]</span>: Lägger till befintliga bildfiler (png, jpg, etc.) i listan.</li>
+<li><span class="code-like">[Fånga Bild]</span>: Fångar en ny del av skärmen att registrera.</li>
+<li><span class="code-like">[Ta bort Valda]</span>: Tar bort de för närvarande valda objekten.</li>
+<li><span class="code-like">[Skapa Mapp]</span>: Skapar en mapp för att organisera bilder.</li>
+<li><span class="code-like">[Flytta In/Ut ur Mapp]</span>: Flyttar bilder in och ut ur mappar.</li>
+<li><b>Högerklicka på Mapp:</b> Högerklicka på en mapp öppnar en meny för att ställa in dess beteendeläge.</li>
+</ul>
+
+<h3 id="s3-3">Inställnings- och Förhandsvisningsområde (Höger)</h3>
+<p>Åtkomst till olika information och inställningar genom att byta flikar.</p>
+<ul>
+<li><b>Bildförhandsvisning:</b> Tillåter förhandsvisning av den valda bilden och inställning av klickpositionen.</li>
+<li><b>Igenkänningsområde:</b> Visar en förhandsvisning av det för närvarande inställda igenkänningsområdet.</li>
+<li><b>Logg:</b> Visar operationsloggar.</li>
+<li><b>Auto Skala:</b> Konfigurerar bildskalningsinställningar baserat på fönsterstorlek.</li>
+<li><b>App Inställningar:</b> Konfigurerar Imeck15:s övergripande beteende.</li>
+<li><b>Användning:</b> Visar en detaljerad guide om inställningar per bild.</li>
+<li><b>Inställningar per Bild (Botten):</b> Konfigurerar individuella inställningar för bilden som valts i den vänstra listan.</li>
+</ul>
+</section>
+
+<section id="section4">
+<h2>4. Detaljerade Funktioner och Tekniker</h2>
+
+<h3 id="s4-1">4.1. Fördelar med att Ställa in Igenkänningsområdet</h3>
+<p>Att använda <span class="code-like">[Ställ in Fönster]</span> för att definiera igenkänningsområdet ger två stora fördelar utöver att minska PC-belastningen.</p>
+
+<h4>1. Automatisk Storleksjustering med Fönsterbaserad Skalning</h4>
+<p>Även om målfönstrets storlek ändras, bibehåller denna funktion igenkänningsnoggrannheten genom att automatiskt beräkna mallbildens skala.</p>
+<b>Hur det fungerar:</b>
+<ul>
+<li><b>Lagring av Basstorlek:</b> Första gången du specificerar ett visst fönster, uppmanas du att spara dess nuvarande storlek som "basstorleken (1.0x skala)".</li>
+<li><b>Automatisk Skalberäkning:</b> Därefter, när du specificerar samma fönster, jämför det basstorleken med den aktuella storleken och beräknar automatiskt skalfaktorn (t.ex. 1.2x).</li>
+<li><b>Matchning med Hög Noggrannhet:</b> Denna beräknade skala tillämpas på mallmatchning, vilket säkerställer korrekt igenkänning även om fönsterstorleken har ändrats.</li>
+</ul>
+
+<h4>2. Automatisk Fönsteraktivering Före Klickning</h4>
+<p>Precis innan ett klick utförs, kontrollerar denna funktion om målfönstret är i förgrunden (aktivt) och aktiverar det automatiskt om det inte är det.</p>
+<b>Hur det fungerar:</b>
+<ul>
+<li><b>Aktiv Statuskontroll:</b> Omedelbart före klicket, verifierar det om målfönstret är det aktiva förgrundsfönstret.</li>
+<li><b>Tvingad Aktivering:</b> Om fönstret är dolt bakom ett annat eller minimerat, återställer det fönstret och för det till fronten innan klicket utförs.</li>
+<li><b>Förhindrar Feltryck:</b> Denna funktion förhindrar oavsiktliga klick på andra fönster, vilket avsevärt förbättrar tillförlitligheten i automatiseringsprocessen.</li>
+</ul>
+
+<h3 id="s4-2">4.2. Inställningsobjekt per Bild</h3>
+<p>Konfigurera individuella beteenden för bilden som valts i listan.</p>
+<ul>
+<li><b>Igenkänningsnoggrannhet (Tröskel):</b> Ställer in hur lik en bild måste vara för att betraktas som en "matchning". 0.8 är standard; att öka värdet gör kontrollen strängare (1.0 är en perfekt matchning).</li>
+<li><b>ROI Aktiverad (Begränsa Sökområdet):</b> När detta är på, påskyndar det bearbetningen genom att endast söka i ett litet, definierat område.
+<ul>
+<li><b>Fast:</b> Ställer automatiskt in ett <b>200x200 pixlars</b> område centrerat på klickkoordinaten som ROI.</li>
+<li><b>Variabel:</b> Låter dig <b>fritt ställa in</b> sökområdet (ROI) genom att dra på förhandsvisningsskärmen. Tryck på knappen <span class="code-like">[Ställ in ROI-område]</span> för att aktivera ritning av området på förhandsvisningen.</li>
+</ul>
+</li>
+<li><b>Backup Klick:</b> Fungerar som en sista utväg. Om inga andra normala bilder hittas under den specificerade varaktigheten (i sekunder), kommer denna bild att klickas.</li>
+<li><b>Intervall (sek):</b> Den minsta väntetiden efter ett klick innan den *samma bilden* kan klickas igen. <b>Detta värde bestämmer klickprioriteten (ett mindre värde betyder högre prioritet).</b></li>
+<li><b>Debounce (sek):</b> Om samma bild riktas in för klickning i följd, förlänger detta väntetiden för det andra klicket till "Intervall + Debounce Tid". Detta skapar en möjlighet för andra bilder att klickas.</li>
+<li><b>Klick Typ:</b> Välj mellan <span class="code-like">[Punkt Klick]</span>, <span class="code-like">[Område Klick]</span> och <span class="code-like">[Slumpmässigt i Område]</span>.</li>
+</ul>
+
+<h3 id="s4-3">4.3. Hur man Kontrollerar Klickordningen</h3>
+<p>Om flera bilder hittas på skärmen samtidigt, prioriterar Imeck15 att klicka på bilden med det <b>minsta "Intervall"-värdet</b>. Du kan använda denna mekanism för att kontrollera klickprioritetsordningen.</p>
+<p><b>Exempel:</b></p>
+<ul>
+<li>Ställ in Bild A:s Intervall till <b>1.5</b></li>
+<li>Ställ in Bild B:s Intervall till <b>2.0</b></li>
+</ul>
+<p>→ Även om A och B är på skärmen samtidigt, kommer <b>Bild A</b> (med det kortare intervallet) alltid att klickas först.</p>
+<div class="important">
+<b>Avancerad Teknik:</b><br>
+På en skärm med flera knappar som ändrar tillstånd (försvinner, gråas ut, etc.) efter att ha klickats, kan du automatisera en sekvens av operationer genom att ställa in intervallen i den ordning du vill att de ska klickas (t.ex. 1.5, 2.0, 2.5...).
+</div>
+
+<h3 id="s4-4">4.4. Utnyttja Mappfunktionen</h3>
+<p>Att organisera bilder i mappar låter dig kontrollera deras beteende som en grupp. <b>Högerklicka</b> på en mapp för att öppna dess inställningsfönster.</p>
+<ul>
+<li><b>Normal:</b> Bilder i mappen söks som normalt.</li>
+<li><b>Stoppa Sökning (Exkluderad):</b> Alla bilder i mappen är uteslutna från sökningen. Användbart för att tillfälligt inaktivera en grupp bilder.</li>
+<li><b>Timerprioritet:</b> Efter att en specificerad tid (i minuter) har passerat, växlar läget till att söka *endast* efter bilder inom denna mapp. Användbart för att gruppera en serie åtgärder som endast ska köras med specifika intervaller.</li>
+</ul>
+
+<h4>Bildigenkänningsprioritetsläge</h4>
+<p>Detta är en kraftfull funktion för att automatisera en sekvens av operationer som svarar på en specifik situation (t.ex. ett popup-fönster).</p>
+<p><b>Hur det fungerar:</b></p>
+<ol>
+<li><b>Utlösare:</b> Prioritetsläget startar om <b>till och med en bild</b> som tillhör denna mapp hittas på skärmen.</li>
+<li><b>Beteende:</b> I prioritetsläge söks och klickas <b>endast bilder inom denna mapp</b>.</li>
+<li><b>Avaktiveringsvillkor:</b> Prioritetsläget avaktiveras automatiskt och återgår till normal övervakning när ett av följande villkor är uppfyllt:
+<ul>
+<li><b>Alla bilder</b> i mappen har klickats minst en gång (Slutförande).</li>
+<li>Inga bilder från mappen hittas under en specificerad <b>tidsgräns (sekunder)</b>.</li>
+</ul>
+</li>
+</ol>
+<div class="important">
+<b>Exempel på Användning:</b><br>
+Tänk dig ett "Inventarie Fullt" fönster som visas i ett spel.
+<ol>
+<li>Fånga alla relaterade bilder: titeln "Inventarie Fullt", "OK"-knappen, "Avbryt"-knappen, etc.</li>
+<li>Placera dessa bilder i en ny mapp kallad "Hantera Inventarie Fullt" och ställ in dess läge till <b>"Bildigenkänningsprioritet"</b>.</li>
+<li>Justera intervallen för bilderna i mappen så att "OK"-knappen klickas sist.</li>
+</ol>
+Med denna inställning ignoreras "Hantera Inventarie Fullt"-mappen normalt. Men i det ögonblick inventariefönstret visas, detekterar Imeck15 det, utför automatiskt de nödvändiga åtgärderna (som att klicka "OK") och återgår sedan till normal övervakning efter att det är klart.
+</div>
+
+<h3 id="s4-5">4.5. Globala Applikationsinställningar</h3>
+<p>Justera Imeck15:s övergripande beteende i fliken "App Inställningar".</p>
+<ul>
+<li><b>Gråskalematchning:</b> Jämför bilder i svart och vitt. Snabbare, men kan inte skilja färger.</li>
+<li><b>Använd DXCam:</b> En snabbare skärmfångstmetod. Effektiv för att fånga spelskärmar, men kanske inte fungerar i alla miljöer.</li>
+<li><b>Ramskutt:</b> Ett högre värde sänker skärmkontrollfrekvensen, minskar PC-belastningen men sänker också svarstiden.</li>
+<li><b>Använd OpenCL (GPU-acceleration):</b> Kan påskynda bildbehandlingen om en kompatibel GPU är närvarande.</li>
+<li><b>Skärmstabilitetskontroll:</b> Detekterar skärmrendering eller effekter och håller klick tills skärmen är stabil. Justera tröskeln för att ändra kontrollens känslighet.</li>
+<li><b>Lättviktsläge:</b> Minskar PC-belastningen drastiskt genom att sänka skärmfångstupplösningen. Du kan välja från förinställningar (Standard, Prestanda, Ultra).</li>
+</ul>
+</section>
+
+<section id="section5">
+<h2>5. Prestandaoptimering</h2>
+<p>Om Imeck15 känns trög eller får din PC att lagga, granska följande inställningar.</p>
+
+<h3 id="s5-1">Grundläggande Optimeringssteg</h3>
+<p>Listade i ordning efter effektivitet.</p>
+<ol>
+<li><b>Begränsa Igenkänningsområdet:</b> <b>Detta är den mest effektiva metoden.</b> Använd fönster- eller rektangelinställningar för att begränsa sökområdet till det absoluta minimumet.</li>
+<li><b>Aktivera Lättviktsläge:</b> Aktivera detta i fliken "App Inställningar". Det förbättrar PC-belastningen dramatiskt.</li>
+<li><b>Aktivera ROI per Bild:</b> Detta gör bearbetningen mycket snabb, eftersom appen bara söker i det lilla området runt klickmålet.</li>
+<li><b>Öka Ramskutt Värdet:</b> Detta är en kompromiss med svarshastigheten, men det kommer att minska belastningen.</li>
+<li><b>Använd DXCam:</b> Om din miljö stöder det, ger detta snabb, låg-CPU-belastningsfångst.</li>
+</ol>
+
+<h3 id="s5-2">Om Eko-läge</h3>
+<p><span class="code-like">[Eko-läge]</span> i fliken "App Inställningar" är en funktion för att ytterligare minska PC-belastningen.</p>
+<b>Hur det fungerar:</b>
+<ul>
+<li><b>Aktivering:</b> Aktiveras automatiskt när ingen igenkänningsbar bild hittas under <b>5 sekunder</b> efter det senaste klicket.</li>
+<li><b>Beteende:</b> När det är aktiverat, sjunker skärmkontrollfrekvensen till <b>ungefär en gång per sekund</b>, vilket avsevärt minskar CPU-användningen.</li>
+<li><b>Avaktivering:</b> Om en bild känns igen och ett klick utförs under Eko-läge, avaktiveras det automatiskt och återgår till den normala övervakningsfrekvensen.</li>
+</ul>
+<div class="important">
+Denna funktion är särskilt användbar när man automatiserar uppgifter med långa väntetider. Den är aktiverad som standard, men du kan stänga av den om du alltid kräver snabbast möjliga svar.
+</div>
+</section>
+
+<section id="section6">
+<h2>6. Diverse Fönster</h2>
+<h3 id="s6-1">Prestandamonitor</h3>
+<p>Öppnas via <span class="code-like">[Prestanda]</span>-knappen på huvudskärmen. Den låter dig kontrollera CPU-/minnesanvändning, FPS (bildrutor per sekund-kontroller), totala klick och annan information i realtid. Du kan också starta/stoppa övervakning eller ställa in igenkänningsområdet med hjälp av knapparna högst upp. Genvägar är tillgängliga: <b>Höger dubbelklick för att stoppa övervakning, höger trippelklick för att starta övervakning</b>.</p>
+
+<h3 id="s6-2">Minimalt UI-läge</h3>
+<p>Växlas via <span class="code-like">[Minimalt UI-läge]</span>-knappen. Detta döljer huvudfönstret och visar ett litet fönster med väsentliga kontroller som start/stopp övervakning.</p>
+</section>
+
+<section id="section7">
+<h2>7. Vanliga Frågor (FAQ)</h2>
+<p><b>F: Bilder hittas inte korrekt.</b></p>
+<p>S: Kontrollera följande punkter:</p>
+<ul>
+<li>Är "Igenkänningsområdet" inställt korrekt?</li>
+<li>Är "Igenkänningsnoggrannheten" i "Inställningar per Bild" för hög? Försök sänka den något.</li>
+<li>Har fönsterstorleken på ditt spel eller applikation ändrats? Granska inställningarna i fliken "Auto Skala" eller försök fånga bilden igen.</li>
+</ul>
+<p><b>F: Appen är tung och min PC laggar.</b></p>
+<p>S: Vänligen se avsnitt "<a href="#section5">5. Prestandaoptimering</a>" ovan och granska dina inställningar.</p>
+<p><b>F: Den klickar mitt i en skärmövergång.</b></p>
+<p>S: Kontrollera om "Skärmstabilitetskontroll" är aktiverad i fliken "App Inställningar". Om den är det, försök sänka "Tröskel"-värdet något för att göra kontrollen strängare.</p>
+</section>
+
+<section id="section8">
+<h2>8. Licensinformation</h2>
+<p>Imeck15 är utvecklat med hjälp av flera öppen källkodsbibliotek. När du omdistribuerar denna applikation måste du följa licensvillkoren för dessa bibliotek. Vänligen kontrollera innehållet i den inkluderade filen THIRD-PARTY-NOTICES.txt och licenses-mappen.</p>
+</section>
+
+</main>
+</body>
+</html>

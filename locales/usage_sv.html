@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+    body { font-family: sans-serif; font-size: 13px; }
+    h3 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px;}
+    h4 { color: #34495e; margin-top: 15px; margin-bottom: 5px; }
+    p, li { line-height: 1.6; }
+    b { color: #e74c3c; }
+    /* --- ▼▼▼ 修正箇所 ▼▼▼ --- */
+    code { padding: 2px 4px; border-radius: 3px; font-family: monospace; }
+    .important { border-left: 3px solid #f39c12; padding-left: 10px; margin: 10px 0;}
+    /* --- ▲▲▲ 修正箇所 (code から background-color を削除) ▲▲▲ --- */
+</style>
+</head>
+<body>
+    <h3>Imeck15 Guide för Klickinställningar per Bild</h3>
+    <p>
+        Denna guide förklarar hur man konfigurerar klickåtgärder när en registrerad bild hittas. Den är främst avsedd för att automatisera operationer i fönsterbaserade applikationer.
+    </p>
+
+    <h4>1. Hur man Registrerar Bilder för Klickning</h4>
+    <p>
+        Först, registrera bilden som ska fungera som klickmålet. Att använda funktionen "Fånga Bild" är grundmetoden.<br>
+        <b>Tips:</b> Det rekommenderas att fånga <b>små delar</b> som knappar eller ikoner som målet.
+    </p>
+    <ul>
+        <li><b>Anledning 1: Snabbare Bearbetning</b><br>Att söka efter en liten bild är mindre krävande för datorn än att söka på hela skärmen.</li>
+        <li><b>Anledning 2: Exakt Klickning</b><br>Även om flera identiska knappar finns på skärmen, tillåter fångst av endast en specifik del en exakt klickning på det avsedda målet.</li>
+    </ul>
+
+    <h4>2. Hur man Kontrollerar Klickordning (Intervallinställning)</h4>
+    <p>
+        "Intervall" är den minsta väntetiden (i sekunder) efter att ha klickat på en bild innan den <b>samma bilden</b> kan klickas igen.
+    </p>
+    <div class="important">
+        <b>[Viktigt] Klickprioritetsmekanism</b><br>
+        Om flera klickbara bilder hittas på skärmen under övervakning, prioriterar Imeck15 att klicka på den med den <b>kortaste "Intervall"-inställningen</b> och klickar inte på andra bilder. Använd denna mekanism för att kontrollera klicksekvensen.
+    </div>
+
+    <h4>3. Teknik för att Klicka på Flera Platser på En Skärm</h4>
+    <p>
+        Genom att tillämpa "Intervallinställning"-mekanismen kan du få den att klicka sekventiellt på flera platser på en enda skärm.<br>
+        <b>Förutsättning:</b> Bilden eller texten på den klickade platsen måste ändras (försvinna, gråas ut, etc.) efter att ha klickats.
+    </p>
+    <p><b>Exempel på Inställningssteg:</b></p>
+    <ol>
+        <li>Registrera delar A, B och C som du vill klicka på skärmen som separata bilder.</li>
+        <li>Ställ in kortare intervalltider för bilder du vill klicka tidigare. (t.ex. A: <code>1.5</code> sek, B: <code>2.0</code> sek, C: <code>2.5</code> sek)</li>
+        <li>Starta övervakning. Först kommer <b>del A</b> med det kortaste intervallet att klickas.</li>
+        <li>Efter klickning, om del A försvinner från skärmen, kommer <b>del B</b> att bli nästa klickmål i den efterföljande övervakningscykeln.</li>
+        <li>På liknande sätt kommer <b>del C</b> att klickas sist.</li>
+    </ol>
+
+    <h4>4. Hur man Justerar Igenkänningsnoggrannhet och Område</h4>
+    <ul>
+        <li><b>Igenkänningströskel:</b><br>Denna inställning bestämmer hur lika bilder måste vara för att betraktas som en "matchning". Ett värde runt <code>0.8</code> är vanligtvis tillräckligt, men att ställa in det på <code>0.9</code> eller högre kan vara effektivt för att strikt särskilja mindre skillnader som textvariationer.</li>
+        <li><b>Sökområde (ROI Inställning):</b><br>Att aktivera "ROI Aktiverad" begränsar sökningen till ett <b>200x200 pixlars område</b> centrerat runt klickkoordinaten. Detta påskyndar bearbetningen avsevärt och minskar kraftigt belastningen på datorn. (Variabel ROI-läge tillåter fri inställning av området).</li>
+        <li><b>ROI Områdes Specifikation:</b><br>Istället för ett 200x200 område centrerat på klickpositionen, tillåter denna funktion dig att specificera ett specifikt område att fokusera på och utse en separat klickposition.</li>
+    </ul>
+
+    <h4>5. "Debounce" Inställning för Speciella Situationer</h4>
+    <p>
+        "Debounce" används för komplexa operationer som "klicka på bild A med ett kort intervall, klicka sedan på en annan bild B, och efter en kort paus, klicka på bild A igen för att fortsätta till nästa skärm."
+    </p>
+    <p>
+        <b>Mekanism:</b> Att ställa in en debounce-tid förlänger väntetiden för det andra klicket till <b>"Intervall + Debounce Tid"</b> när samma bild är målet i följd. Detta skapar en möjlighet för andra bilder att klickas först.
+    </p>
+</body>
+</html>

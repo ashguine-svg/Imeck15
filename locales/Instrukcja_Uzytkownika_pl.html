@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Imeck15 Instrukcja Użytkownika (Wydanie Poprawione)</title>
+<style>
+/* Basic Styles */
+:root {
+--main-bg-color: #f4f4f9;
+--content-bg-color: #ffffff;
+--text-color: #333;
+--header-color: #4a4a4a;
+--link-color: #007bff;
+--border-color: #e0e0e0;
+--code-bg-color: #e8e8e8;
+--important-bg-color: #fef9e7;
+--important-border-color: #f39c12;
+}
+html {
+scroll-behavior: smooth;
+}
+body {
+font-family: 'Segoe UI', Meiryo, 'Hiragino Kaku Gothic ProN', sans-serif;
+background-color: var(--main-bg-color);
+color: var(--text-color);
+line-height: 1.7;
+margin: 0;
+padding: 20px;
+}
+/* Center content area with appropriate width */
+#main-content {
+background-color: var(--content-bg-color);
+max-width: 800px;
+margin: 0 auto;
+padding: 20px 40px;
+box-shadow: 0 0 10px rgba(0,0,0,0.1);
+border-radius: 8px;
+}
+
+/* Hide sidebar for screen display */
+#sidebar {
+display: none;
+}
+
+/* Table of Contents list style */
+#toc {
+list-style-type: none;
+padding-left: 0;
+border: 1px solid var(--border-color);
+padding: 15px;
+border-radius: 5px;
+background-color: #f9f9f9;
+}
+#toc > li > a {
+font-weight: bold;
+font-size: 1.1em;
+}
+#toc ul {
+list-style-type: none;
+padding-left: 20px;
+margin-top: 5px;
+margin-bottom: 15px;
+}
+#toc li a {
+text-decoration: none;
+color: var(--link-color);
+display: block;
+padding: 4px 0;
+}
+
+/* Heading styles */
+h1 {
+font-size: 2.5em;
+color: var(--header-color);
+border-bottom: 3px solid var(--link-color);
+padding-bottom: 15px;
+margin-top: 0;
+}
+h2 {
+font-size: 2em;
+color: var(--header-color);
+margin-top: 60px;
+border-left: 5px solid var(--link-color);
+padding-left: 15px;
+}
+h3 {
+font-size: 1.6em;
+color: var(--header-color);
+margin-top: 40px;
+border-bottom: 1px solid var(--border-color);
+padding-bottom: 8px;
+}
+h4 {
+font-size: 1.3em;
+color: #5a5a5a;
+margin-top: 30px;
+}
+ul, ol {
+padding-left: 25px;
+}
+li {
+margin-bottom: 10px;
+}
+strong, b {
+font-weight: 600;
+}
+code, .code-like {
+background-color: var(--code-bg-color);
+padding: 2px 6px;
+border-radius: 4px;
+font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+}
+.important {
+border-left: 4px solid var(--important-border-color);
+padding: 10px 15px;
+background-color: var(--important-bg-color);
+margin: 15px 0;
+border-radius: 4px;
+}
+
+/* ===== Print-only styles start here ===== */
+@page {
+size: A4;
+margin: 2.5cm;
+}
+
+@media print {
+body {
+background-color: #fff;
+padding: 0;
+font-size: 11pt; /* Font size suitable for printing */
+}
+#main-content {
+max-width: 100%;
+margin: 0;
+padding: 0;
+box-shadow: none;
+border-radius: 0;
+}
+/* Make links black and underlined for clarity */
+a {
+color: #000 !important;
+text-decoration: underline !important;
+}
+/* Page break before each section (h2) */
+section {
+page-break-before: always;
+}
+/* No page break for the first section after TOC */
+#section1 {
+page-break-before: auto;
+}
+/* Adjust to avoid page breaks in the middle of headings/lists */
+h2, h3, h4 {
+page-break-after: avoid;
+}
+ul, ol, p, .important {
+page-break-inside: avoid;
+}
+.code-like {
+border: 1px solid #ccc;
+}
+}
+/* ===== Print-only styles end here ===== */
+</style>
+</head>
+<body>
+<main id="main-content">
+<h1>Imeck15 Instrukcja Użytkownika</h1>
+
+<section id="table_of_contents">
+<h2>Spis Treści</h2>
+<ul id="toc">
+<li><a href="#section1">1. Wprowadzenie</a>
+<ul>
+<li><a href="#s1-1">Co to jest Imeck15?</a></li>
+<li><a href="#s1-2">Kluczowe Funkcje</a></li>
+</ul>
+</li>
+<li><a href="#section2">2. Podstawowe Użycie</a>
+<ul>
+<li><a href="#s2-1">Krok 1: Rejestrowanie Obrazów</a></li>
+<li><a href="#s2-2">Krok 2: Ustawianie Obszaru Rozpoznawania</a></li>
+<li><a href="#s2-3">Krok 3: Ustawianie Pozycji Kliknięcia</a></li>
+<li><a href="#s2-4">Krok 4: Rozpoczynanie i Zatrzymywanie Monitorowania</a></li>
+</ul>
+</li>
+<li><a href="#section3">3. Funkcje Ekranu Głównego</a>
+<ul>
+<li><a href="#s3-1">Główny Obszar Kontrolny</a></li>
+<li><a href="#s3-2">Obszar Zarejestrowanych Obrazów</a></li>
+<li><a href="#s3-3">Obszar Ustawień i Podglądu</a></li>
+</ul>
+</li>
+<li><a href="#section4">4. Szczegółowe Funkcje i Techniki</a>
+<ul>
+<li><a href="#s4-1">4.1. Korzyści z Ustawiania Obszaru Rozpoznawania</a></li>
+<li><a href="#s4-2">4.2. Elementy Ustawień dla Obrazu</a></li>
+<li><a href="#s4-3">4.3. Jak Kontrolować Kolejność Kliknięć</a></li>
+<li><a href="#s4-4">4.4. Wykorzystanie Funkcji Folderu</a></li>
+<li><a href="#s4-5">4.5. Globalne Ustawienia Aplikacji</a></li>
+</ul>
+</li>
+<li><a href="#section5">5. Optymalizacja Wydajności</a>
+<ul>
+<li><a href="#s5-1">Podstawowe Kroki Optymalizacji</a></li>
+<li><a href="#s5-2">O Trybie Eco</a></li>
+</ul>
+</li>
+<li><a href="#section6">6. Różne Okna</a>
+<ul>
+<li><a href="#s6-1">Monitor Wydajności</a></li>
+<li><a href="#s6-2">Minimalny Tryb UI</a></li>
+</ul>
+</li>
+<li><a href="#section7">7. Często Zadawane Pytania (FAQ)</a></li>
+<li><a href="#section8">8. Informacje Licencyjne</a></li>
+</ul>
+</section>
+
+<section id="section1">
+<h2>1. Wprowadzenie</h2>
+<h3 id="s1-1">Co to jest Imeck15?</h3>
+<p>Imeck15 to narzędzie, które rozpoznaje określone obrazy wyświetlane na ekranie komputera i automatycznie klika w ustalone wcześniej lokalizacje. Jest ono przeznaczone przede wszystkim do automatyzacji rutynowych, powtarzalnych zadań w grach i aplikacjach PC.</p>
+
+<h3 id="s1-2">Kluczowe Funkcje</h3>
+<ul>
+<li><b>Rozpoznawanie Obrazu:</b> Wykrywa, kiedy na ekranie pojawia się zarejestrowany obraz (szablon).</li>
+<li><b>Automatyczne Klikanie:</b> Automatycznie klika w określoną współrzędną lub obszar po wykryciu obrazu.</li>
+<li><b>Elastyczne Ustawienia:</b> Umożliwia szczegółową konfigurację dla każdego obrazu, taką jak interwał kliknięcia, dokładność rozpoznawania i pozycja kliknięcia.</li>
+<li><b>Dostrajanie Wydajności:</b> Wyposażony w różne opcje dostosowania szybkości przetwarzania i obciążenia komputera w zależności od środowiska operacyjnego.</li>
+<li><b>Funkcja Folderu:</b> Zarządzanie obrazami w folderach, umożliwiające kontrolę operacyjną opartą na grupach.</li>
+<li><b>Przeciągnij i Upuść (Drag & Drop):</b> Intuicyjne przestawianie elementów na liście obrazów lub przenoszenie ich do folderów.</li>
+</ul>
+</section>
+
+<section id="section2">
+<h2>2. Podstawowe Użycie</h2>
+<p>Oto cztery podstawowe kroki, aby rozpocząć korzystanie z Imeck15.</p>
+
+<h3 id="s2-1">Krok 1: Rejestrowanie Obrazów</h3>
+<p>Zarejestruj obrazy, które będą służyć jako wyzwalacze dla automatycznych kliknięć.</p>
+<ol>
+<li>Naciśnij przycisk <span class="code-like">[Przechwyć Obraz]</span> na ekranie głównym.</li>
+<li>Gdy pojawi się okno dialogowe „Ustawienie Obszaru Rozpoznawania”, wybierz <span class="code-like">[Ustaw Prostokąt]</span>.</li>
+<li>Ekran zostanie pokryty półprzezroczystą nakładką. Przeciągnij myszą, aby otoczyć cel, który chcesz kliknąć (jak przycisk lub ikonę). Postaraj się, aby zaznaczenie było jak najmniejsze, jednocześnie wychwytując unikalne cechy.</li>
+<li>Gdy pojawi się okno dialogowe wprowadzania nazwy pliku, nadaj mu opisową nazwę i zapisz.</li>
+<li>Właśnie zarejestrowany obraz zostanie dodany do listy „Zarejestrowane Obrazy” po lewej stronie.</li>
+</ol>
+
+<h3 id="s2-2">Krok 2: Ustawianie Obszaru Rozpoznawania</h3>
+<p>Określ obszar, w którym Imeck15 będzie szukał obrazów. Ograniczenie tego obszaru znacznie zmniejsza obciążenie komputera.</p>
+<ol>
+<li>Naciśnij przycisk <span class="code-like">[Ustaw Obszar Rozpoznawania]</span> u góry ekranu głównego.</li>
+<li><span class="code-like">[Ustaw Prostokąt]</span>: Wybierz to, jeśli chcesz szukać tylko w określonym regionie całego ekranu.</li>
+<li><span class="code-like">[Ustaw Okno]</span>: Wybierz to, jeśli chcesz szukać tylko w określonym oknie aplikacji. Po wybraniu okna automatycznie oblicza współczynnik skalowania na podstawie jego standardowego rozmiaru, poprawiając dokładność rozpoznawania obrazu (szczegóły poniżej).</li>
+</ol>
+
+<h3 id="s2-3">Krok 3: Ustawianie Pozycji Kliknięcia</h3>
+<p>Skonfiguruj, gdzie kliknąć, gdy zostanie znaleziony zarejestrowany obraz.</p>
+<ol>
+<li>Wybierz żądany obraz z listy po lewej stronie.</li>
+<li>Obraz zostanie wyświetlony w zakładce „Podgląd Obrazu” po prawej stronie.</li>
+<li>W obszarze „Ustawienia dla Obrazu” na dole zaznacz pole wyboru <span class="code-like">[Kliknięcie Punktowe]</span> lub <span class="code-like">[Kliknięcie Zakresowe]</span>.</li>
+<li>Kursor myszy zmieni się w celownik, gdy znajdzie się nad obrazem podglądu.</li>
+<ul>
+<li><b>Kliknięcie Punktowe:</b> Kliknij dokładnie to miejsce, w które chcesz wycelować. Zostanie ono oznaczone czerwoną kropką.</li>
+<li><b>Kliknięcie Zakresowe:</b> Przeciągnij myszą, aby zdefiniować prostokątny obszar. Zostanie on wyświetlony jako niebieskie pole. Kliknięcie nastąpi gdzieś w tym obszarze (można również ustawić na losowe).</li>
+</ul>
+</ol>
+
+<h3 id="s2-4">Krok 4: Rozpoczynanie i Zatrzymywanie Monitorowania</h3>
+<p>Po zakończeniu ustawień uruchom automatyczne klikanie.</p>
+<ul>
+<li><b>Start:</b> Naciśnij przycisk <span class="code-like">[Rozpocznij Monitorowanie]</span> w lewym górnym rogu ekranu głównego. Status zmieni się na „Monitorowanie...”</li>
+<li><b>Stop:</b> Naciśnij przycisk <span class="code-like">[Zatrzymaj Monitorowanie]</span>.</li>
+
+</ul>
+<b>Skróty (Mysz):</b>
+<ul>
+<li><b>Prawy Podwójny Klik:</b> <b>Zatrzymaj</b> Monitorowanie</li>
+<li><b>Prawy Potrójny Klik:</b> <b>Rozpocznij</b> Monitorowanie</li>
+</ul>
+</section>
+
+<section id="section3">
+<h2>3. Funkcje Ekranu Głównego</h2>
+
+<h3 id="s3-1">Główny Obszar Kontrolny</h3>
+<p>Obszar operacyjny u góry okna, który jest zawsze widoczny.</p>
+<ul>
+<li><span class="code-like">[Rozpocznij Monitorowanie]</span>/<span class="code-like">[Zatrzymaj Monitorowanie]</span>: Włącza i wyłącza automatyczne klikanie.</li>
+<li><span class="code-like">[Wydajność]</span>: Otwiera „Monitor Wydajności”, gdzie można sprawdzić użycie CPU, FPS itp.</li>
+<li><span class="code-like">[Ustaw Obszar Rozpoznawania]</span>: Ustawia obszar wyszukiwania obrazów.</li>
+<li><span class="code-like">[Minimalny Tryb UI]</span>: Przełącza na małe okno tylko z niezbędnymi elementami sterującymi.</li>
+<li><span class="code-like">[Folder Obrazów]</span>: Otwiera folder, w którym przechowywane są zarejestrowane obrazy w Eksploratorze.</li>
+<li><b>Wyświetlanie Statusu:</b> Pokazuje aktualny stan (Bezczynny, Monitorowanie...).</li>
+</ul>
+
+<h3 id="s3-2">Obszar Zarejestrowanych Obrazów (Lewy)</h3>
+<p>Obszar do zarządzania zarejestrowanymi obrazami i folderami.</p>
+<ul>
+<li><b>Lista Obrazów:</b>
+<ul>
+<li>Zarejestrowane obrazy i foldery są wyświetlane w formacie drzewa.</li>
+<li>Możesz <b>przeciągać i upuszczać</b> elementy, aby zmienić ich kolejność lub przenieść je do folderów.</li>
+<li>Możesz zaznaczyć wiele elementów, trzymając wciśnięty klawisz <b>Shift</b> lub <b>Ctrl</b> podczas klikania.</li>
+</ul>
+</li>
+<li><span class="code-like">[▲ Przenieś W górę]</span> / <span class="code-like">[▼ Przenieś W dół]</span>: Przesuwa wybrany element w górę lub w dół na liście.</li>
+<li><span class="code-like">[Dodaj Obraz]</span>: Dodaje istniejące pliki obrazów (png, jpg, itp.) do listy.</li>
+<li><span class="code-like">[Przechwyć Obraz]</span>: Przechwytuje nową część ekranu do zarejestrowania.</li>
+<li><span class="code-like">[Usuń Wybrane]</span>: Usuwa aktualnie wybrane elementy.</li>
+<li><span class="code-like">[Utwórz Folder]</span>: Tworzy folder do organizowania obrazów.</li>
+<li><span class="code-like">[Przenieś Do/Poza Folder]</span>: Przenosi obrazy do i z folderów.</li>
+<li><b>Prawy Klik na Folder:</b> Prawy klik na folderze otwiera menu, aby ustawić jego tryb zachowania.</li>
+</ul>
+
+<h3 id="s3-3">Obszar Ustawień i Podglądu (Prawy)</h3>
+<p>Uzyskaj dostęp do różnych informacji i ustawień poprzez przełączanie zakładek.</p>
+<ul>
+<li><b>Podgląd Obrazu:</b> Umożliwia podgląd wybranego obrazu i ustawienie pozycji kliknięcia.</li>
+<li><b>Obszar Rozpoznawania:</b> Wyświetla podgląd aktualnie ustawionego obszaru rozpoznawania.</li>
+<li><b>Log:</b> Wyświetla dzienniki operacji.</li>
+<li><b>Auto Skala:</b> Konfiguruje ustawienia skalowania obrazu na podstawie rozmiaru okna.</li>
+<li><b>Ustawienia Aplikacji:</b> Konfiguruje ogólne zachowanie Imeck15.</li>
+<li><b>Użycie:</b> Wyświetla szczegółowy przewodnik dotyczący ustawień dla obrazu.</li>
+<li><b>Ustawienia dla Obrazu (Dół):</b> Konfiguruje indywidualne ustawienia dla obrazu wybranego na liście po lewej stronie.</li>
+</ul>
+</section>
+
+<section id="section4">
+<h2>4. Szczegółowe Funkcje i Techniki</h2>
+
+<h3 id="s4-1">4.1. Korzyści z Ustawiania Obszaru Rozpoznawania</h3>
+<p>Użycie <span class="code-like">[Ustaw Okno]</span> do zdefiniowania obszaru rozpoznawania oferuje dwie główne korzyści oprócz zmniejszenia obciążenia komputera.</p>
+
+<h4>1. Automatyczna Regulacja Rozmiaru ze Skalowaniem Opartym na Oknie</h4>
+<p>Nawet jeśli rozmiar okna docelowego ulegnie zmianie, ta funkcja utrzymuje dokładność rozpoznawania poprzez automatyczne obliczanie skali obrazu szablonu.</p>
+<b>Jak to działa:</b>
+<ul>
+<li><b>Przechowywanie Rozmiaru Bazowego:</b> Przy pierwszym określeniu danego okna zostaniesz poproszony o zapisanie jego bieżącego rozmiaru jako „rozmiaru bazowego (skala 1.0x)”.</li>
+<li><b>Automatyczne Obliczanie Skali:</b> Następnie, po określeniu tego samego okna, porównuje ono rozmiar bazowy z bieżącym rozmiarem i automatycznie oblicza współczynnik skalowania (np. 1.2x).</li>
+<li><b>Dopasowanie z Wysoką Dokładnością:</b> Ta obliczona skala jest stosowana do dopasowywania szablonów, zapewniając dokładne rozpoznawanie nawet po zmianie rozmiaru okna.</li>
+</ul>
+
+<h4>2. Automatyczna Aktywacja Okna Przed Kliknięciem</h4>
+<p>Tuż przed wykonaniem kliknięcia, ta funkcja sprawdza, czy okno docelowe jest na pierwszym planie (aktywne), i automatycznie je aktywuje, jeśli nie jest.</p>
+<b>Jak to działa:</b>
+<ul>
+<li><b>Sprawdzenie Stanu Aktywnego:</b> Bezpośrednio przed kliknięciem, weryfikuje, czy okno docelowe jest aktywnym oknem na pierwszym planie.</li>
+<li><b>Wymuszona Aktywacja:</b> Jeśli okno jest ukryte za innym lub zminimalizowane, przywraca okno i przenosi je na pierwszy plan przed wykonaniem kliknięcia.</li>
+<li><b>Zapobiega Błędnym Kliknięciom:</b> Ta funkcja zapobiega przypadkowym kliknięciom w inne okna, znacznie poprawiając niezawodność procesu automatyzacji.</li>
+</ul>
+
+<h3 id="s4-2">4.2. Elementy Ustawień dla Obrazu</h3>
+<p>Skonfiguruj indywidualne zachowania dla obrazu wybranego na liście.</p>
+<ul>
+<li><b>Dokładność Rozpoznawania (Próg):</b> Ustawia, jak bardzo obraz musi być podobny, aby został uznany za „dopasowanie”. 0.8 jest standardem; zwiększenie wartości zaostrza kontrolę (1.0 to idealne dopasowanie).</li>
+<li><b>ROI Włączone (Ogranicz Obszar Wyszukiwania):</b> Po włączeniu przyspiesza to przetwarzanie, ponieważ przeszukuje tylko mały, zdefiniowany obszar.
+<ul>
+<li><b>Stałe:</b> Automatycznie ustawia obszar <b>200x200 pikseli</b> wyśrodkowany na współrzędnej kliknięcia jako ROI.</li>
+<li><b>Zmienne:</b> Umożliwia <b>swobodne ustawienie</b> obszaru wyszukiwania (ROI) poprzez przeciąganie na ekranie podglądu. Naciśnij przycisk <span class="code-like">[Ustaw Obszar ROI]</span>, aby włączyć rysowanie obszaru na podglądzie.</li>
+</ul>
+</li>
+<li><b>Kliknięcie Zapasowe:</b> Działa jako ostateczność. Jeśli w określonym czasie (w sekundach) nie zostaną znalezione żadne inne normalne obrazy, ten obraz zostanie kliknięty.</li>
+<li><b>Interwał (sek):</b> Minimalny czas oczekiwania po kliknięciu, zanim *ten sam obraz* będzie mógł zostać ponownie kliknięty. <b>Ta wartość określa priorytet kliknięcia (mniejsza wartość oznacza wyższy priorytet).</b></li>
+<li><b>Debounce (sek):</b> Jeśli ten sam obraz jest kolejno celem kliknięcia, wydłuża to czas oczekiwania na drugie kliknięcie do „Interwał + Czas Debounce”. Tworzy to okazję do kliknięcia innych obrazów.</li>
+<li><b>Typ Kliknięcia:</b> Wybierz pomiędzy <span class="code-like">[Kliknięcie Punktowe]</span>, <span class="code-like">[Kliknięcie Zakresowe]</span> i <span class="code-like">[Losowo w Zakresie]</span>.</li>
+</ul>
+
+<h3 id="s4-3">4.3. Jak Kontrolować Kolejność Kliknięć</h3>
+<p>Jeśli wiele obrazów zostanie znalezionych na ekranie jednocześnie, Imeck15 priorytetyzuje kliknięcie obrazu z <b>najmniejszą wartością „Interwał”</b>. Możesz użyć tego mechanizmu do kontrolowania kolejności priorytetów kliknięć.</p>
+<p><b>Przykład:</b></p>
+<ul>
+<li>Ustaw Interwał Obrazu A na <b>1.5</b></li>
+<li>Ustaw Interwał Obrazu B na <b>2.0</b></li>
+</ul>
+<p>→ Nawet jeśli A i B są na ekranie w tym samym czasie, <b>Obraz A</b> (z krótszym interwałem) zawsze zostanie kliknięty jako pierwszy.</p>
+<div class="important">
+<b>Zaawansowana Technika:</b><br>
+Na ekranie z wieloma przyciskami, które zmieniają stan (znikają, stają się szare itp.) po kliknięciu, możesz zautomatyzować sekwencję operacji, ustawiając interwały w kolejności, w jakiej mają być klikane (np. 1.5, 2.0, 2.5...).
+</div>
+
+<h3 id="s4-4">4.4. Wykorzystanie Funkcji Folderu</h3>
+<p>Organizowanie obrazów w foldery pozwala kontrolować ich zachowanie jako grupy. <b>Prawy klik</b> na folderze, aby otworzyć okno jego ustawień.</p>
+<ul>
+<li><b>Normalny:</b> Obrazy w folderze są przeszukiwane normalnie.</li>
+<li><b>Zatrzymaj Wyszukiwanie (Wykluczone):</b> Wszystkie obrazy w folderze są wykluczone z wyszukiwania. Przydatne do tymczasowego wyłączania grupy obrazów.</li>
+<li><b>Priorytet Zegara:</b> Po upływie określonego czasu (w minutach) tryb przełącza się na wyszukiwanie *tylko* obrazów w tym folderze. Przydatne do grupowania serii działań, które powinny być uruchamiane tylko w określonych odstępach czasu.</li>
+</ul>
+
+<h4>Tryb Priorytetu Rozpoznawania Obrazu</h4>
+<p>Jest to potężna funkcja do automatyzacji sekwencji operacji, które reagują na określoną sytuację (np. okno wyskakujące).</p>
+<p><b>Jak to działa:</b></p>
+<ol>
+<li><b>Wyzwalacz:</b> Tryb priorytetowy rozpoczyna się, jeśli <b>nawet jeden obraz</b> należący do tego folderu zostanie znaleziony na ekranie.</li>
+<li><b>Zachowanie:</b> W trybie priorytetowym <b>przeszukiwane i klikane są tylko obrazy w tym folderze</b>.</li>
+<li><b>Warunki Dezaktywacji:</b> Tryb priorytetowy automatycznie dezaktywuje się i powraca do normalnego monitorowania, gdy spełniony jest jeden z poniższych warunków:
+<ul>
+<li><b>Wszystkie obrazy</b> w folderze zostały kliknięte co najmniej raz (Zakończenie).</li>
+<li>W określonym <b>czasie oczekiwania (w sekundach)</b> nie znaleziono obrazów z folderu.</li>
+</ul>
+</li>
+</ol>
+<div class="important">
+<b>Przykład Użycia:</b><br>
+Rozważmy okno „Pełny Ekwipunek”, które pojawia się w grze.
+<ol>
+<li>Przechwyć wszystkie powiązane obrazy: tytuł „Pełny Ekwipunek”, przycisk „OK”, przycisk „Anuluj” itp.</li>
+<li>Umieść te obrazy w nowym folderze o nazwie „Obsługa Pełnego Ekwipunku” i ustaw jego tryb na <b>„Priorytet Rozpoznawania Obrazu”</b>.</li>
+<li>Dostosuj interwały obrazów w folderze, aby przycisk „OK” został kliknięty jako ostatni.</li>
+</ol>
+Dzięki tej konfiguracji folder „Obsługa Pełnego Ekwipunku” jest normalnie ignorowany. Ale w momencie pojawienia się okna ekwipunku, Imeck15 wykrywa je, automatycznie wykonuje niezbędne czynności (jak kliknięcie „OK”), a następnie po zakończeniu powraca do normalnego monitorowania.
+</div>
+
+<h3 id="s4-5">4.5. Globalne Ustawienia Aplikacji</h3>
+<p>Dostosuj ogólne zachowanie Imeck15 w zakładce „Ustawienia Aplikacji”.</p>
+<ul>
+<li><b>Dopasowanie w Skali Szarości:</b> Porównuje obrazy w czerni i bieli. Szybsze, ale nie może rozróżniać kolorów.</li>
+<li><b>Użyj DXCam:</b> Szybsza metoda przechwytywania ekranu. Skuteczna w przechwytywaniu ekranów gier, ale może nie działać we wszystkich środowiskach.</li>
+<li><b>Pomijanie Klatek:</b> Wyższa wartość obniża częstotliwość sprawdzania ekranu, zmniejszając obciążenie komputera, ale także spowalniając czas reakcji.</li>
+<li><b>Użyj OpenCL (Akceleracja GPU):</b> Może przyspieszyć przetwarzanie obrazu, jeśli obecny jest kompatybilny GPU.</li>
+<li><b>Sprawdzenie Stabilności Ekranu:</b> Wykrywa renderowanie lub efekty ekranu i wstrzymuje kliknięcia, dopóki ekran nie będzie stabilny. Dostosuj próg, aby zmienić czułość sprawdzania.</li>
+<li><b>Tryb Lekki:</b> Drastycznie zmniejsza obciążenie komputera, obniżając rozdzielczość przechwytywania ekranu. Możesz wybierać spośród presetów (Standardowy, Wydajność, Ultra).</li>
+</ul>
+</section>
+
+<section id="section5">
+<h2>5. Optymalizacja Wydajności</h2>
+<p>Jeśli Imeck15 działa powoli lub powoduje spowolnienie komputera, przejrzyj poniższe ustawienia.</p>
+
+<h3 id="s5-1">Podstawowe Kroki Optymalizacji</h3>
+<p>Wymienione w kolejności skuteczności.</p>
+<ol>
+<li><b>Ogranicz Obszar Rozpoznawania:</b> <b>Jest to najskuteczniejsza metoda.</b> Użyj ustawień okna lub prostokąta, aby zawęzić obszar wyszukiwania do absolutnego minimum.</li>
+<li><b>Włącz Tryb Lekki:</b> Włącz to w zakładce „Ustawienia Aplikacji”. Drastycznie poprawia to obciążenie komputera.</li>
+<li><b>Włącz ROI dla Obrazu:</b> Dzięki temu przetwarzanie jest bardzo szybkie, ponieważ aplikacja przeszukuje tylko mały obszar wokół celu kliknięcia.</li>
+<li><b>Zwiększ Wartość Pomijania Klatek:</b> Jest to kompromis z szybkością reakcji, ale zmniejszy obciążenie.</li>
+<li><b>Użyj DXCam:</b> Jeśli Twoje środowisko to obsługuje, zapewnia to szybkie przechwytywanie z niskim obciążeniem CPU.</li>
+</ol>
+
+<h3 id="s5-2">O Trybie Eco</h3>
+<p><span class="code-like">[Tryb Eco]</span> w zakładce „Ustawienia Aplikacji” to funkcja dodatkowo redukująca obciążenie komputera.</p>
+<b>Jak to działa:</b>
+<ul>
+<li><b>Aktywacja:</b> Aktywuje się automatycznie, gdy w ciągu <b>5 sekund</b> po ostatnim kliknięciu nie zostanie znaleziony żaden rozpoznawalny obraz.</li>
+<li><b>Zachowanie:</b> Po aktywacji częstotliwość sprawdzania ekranu spada do <b>około raz na sekundę</b>, co znacznie zmniejsza zużycie CPU.</li>
+<li><b>Dezaktywacja:</b> Jeśli obraz zostanie rozpoznany i kliknięcie zostanie wykonane w Trybie Eco, dezaktywuje się on automatycznie i powraca do normalnej częstotliwości monitorowania.</li>
+</ul>
+<div class="important">
+Ta funkcja jest szczególnie przydatna podczas automatyzacji zadań z długimi czasami oczekiwania. Jest ona domyślnie włączona, ale można ją wyłączyć, jeśli zawsze potrzebujesz najszybszej możliwej reakcji.
+</div>
+</section>
+
+<section id="section6">
+<h2>6. Różne Okna</h2>
+<h3 id="s6-1">Monitor Wydajności</h3>
+<p>Otwierany za pomocą przycisku <span class="code-like">[Wydajność]</span> na ekranie głównym. Umożliwia sprawdzanie użycia CPU/pamięci, FPS (sprawdzanie klatek na sekundę), całkowitej liczby kliknięć i innych informacji w czasie rzeczywistym. Możesz także rozpocząć/zatrzymać monitorowanie lub ustawić obszar rozpoznawania za pomocą przycisków u góry. Dostępne są skróty: <b>Prawy podwójny klik, aby zatrzymać monitorowanie, prawy potrójny klik, aby rozpocząć monitorowanie</b>.</p>
+
+<h3 id="s6-2">Minimalny Tryb UI</h3>
+<p>Przełączany za pomocą przycisku <span class="code-like">[Minimalny Tryb UI]</span>. Ukrywa on główne okno i wyświetla małe okno z niezbędnymi elementami sterującymi, takimi jak rozpoczynanie/zatrzymywanie monitorowania.</p>
+</section>
+
+<section id="section7">
+<h2>7. Często Zadawane Pytania (FAQ)</h2>
+<p><b>P: Obrazy nie są znajdowane poprawnie.</b></p>
+<p>O: Proszę sprawdzić następujące punkty:</p>
+<ul>
+<li>Czy „Obszar Rozpoznawania” jest ustawiony poprawnie?</li>
+<li>Czy „Dokładność Rozpoznawania” w „Ustawieniach dla Obrazu” jest za wysoka? Spróbuj ją nieco obniżyć.</li>
+<li>Czy rozmiar okna Twojej gry lub aplikacji uległ zmianie? Przejrzyj ustawienia w zakładce „Auto Skala” lub spróbuj ponownie przechwycić obraz.</li>
+</ul>
+<p><b>P: Aplikacja jest ciężka i mój komputer spowalnia.</b></p>
+<p>O: Proszę odnieść się do sekcji „<a href="#section5">5. Optymalizacja Wydajności</a>” powyżej i przejrzeć swoje ustawienia.</p>
+<p><b>P: Klika w środku przejścia ekranu.</b></p>
+<p>O: Sprawdź, czy „Sprawdzenie Stabilności Ekranu” jest włączone w zakładce „Ustawienia Aplikacji”. Jeśli tak, spróbuj nieco obniżyć wartość „Progu”, aby zaostrzyć kontrolę.</p>
+</section>
+
+<section id="section8">
+<h2>8. Informacje Licencyjne</h2>
+<p>Imeck15 jest rozwijany przy użyciu kilku bibliotek open-source. Podczas ponownej dystrybucji tej aplikacji musisz przestrzegać warunków licencyjnych tych bibliotek. Proszę sprawdzić zawartość załączonego pliku THIRD-PARTY-NOTICES.txt oraz folderu licenses.</p>
+</section>
+
+</main>
+</body>
+</html>

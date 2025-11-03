@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+    body { font-family: sans-serif; font-size: 13px; }
+    h3 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px;}
+    h4 { color: #34495e; margin-top: 15px; margin-bottom: 5px; }
+    p, li { line-height: 1.6; }
+    b { color: #e74c3c; }
+    /* --- ▼▼▼ 修正箇所 ▼▼▼ --- */
+    code { padding: 2px 4px; border-radius: 3px; font-family: monospace; }
+    .important { border-left: 3px solid #f39c12; padding-left: 10px; margin: 10px 0;}
+    /* --- ▲▲▲ 修正箇所 (code から background-color を削除) ▲▲▲ --- */
+</style>
+</head>
+<body>
+    <h3>Imeck15 Kuva-kohtaisten Napsautusasetusten Opas</h3>
+    <p>
+        Tämä opas selittää, kuinka napsautustoiminnot määritetään, kun rekisteröity kuva löydetään. Se on ensisijaisesti tarkoitettu toimintojen automatisointiin ikkunoituissa sovelluksissa.
+    </p>
+
+    <h4>1. Kuinka Kuvia Rekisteröidään Napsautusta Varten</h4>
+    <p>
+        Rekisteröi ensin kuva, joka toimii napsautuksen kohteena. "Tallenna Kuva" -toiminnon käyttäminen on perusmenetelmä.<br>
+        <b>Vinkki:</b> On suositeltavaa tallentaa kohteeksi <b>pieniä osia</b>, kuten painikkeita tai kuvakkeita.
+    </p>
+    <ul>
+        <li><b>Syy 1: Nopeampi Käsittely</b><br>Pienen kuvan etsiminen on vähemmän vaativaa tietokoneelle kuin koko näytön etsiminen.</li>
+        <li><b>Syy 2: Tarkka Napsautus</b><br>Vaikka näytöllä olisi useita identtisiä painikkeita, vain tietyn osan tallentaminen mahdollistaa tarkan napsautuksen aiottuun kohteeseen.</li>
+    </ul>
+
+    <h4>2. Kuinka Ohjata Napsautusjärjestystä (Väliasetus)</h4>
+    <p>
+        "Väli" on lyhin odotusaika (sekunneissa) kuvan napsauttamisen jälkeen, ennen kuin <b>samaa kuvaa</b> voidaan napsauttaa uudelleen.
+    </p>
+    <div class="important">
+        <b>[Tärkeää] Napsautusprioriteettimekanismi</b><br>
+        Jos valvonnassa näytöltä löytyy useita napsautettavia kuvia, Imeck15 priorisoi sen napsauttamisen, jolla on <b>lyhin "Väli"-asetus</b>, eikä napsauta muita kuvia. Käytä tätä mekanismia napsautusjärjestyksen hallintaan.
+    </div>
+
+    <h4>3. Tekniikka Useiden Kohteiden Napsauttamiseen Yhdellä Näytöllä</h4>
+    <p>
+        Soveltamalla "Väliasetus"-mekanismia voit saada sen napsauttamaan useita kohteita peräkkäin yhdellä näytöllä.<br>
+        <b>Esivaatimus:</b> Napsautetussa kohdassa olevan kuvan tai tekstin on muututtava (kadottava, muuttuttava harmaaksi tms.) sen jälkeen, kun sitä on napsautettu.
+    </p>
+    <p><b>Esimerkki Asennusvaiheista:</b></p>
+    <ol>
+        <li>Rekisteröi näytöllä napsautettavat osat A, B ja C erillisinä kuvina.</li>
+        <li>Aseta lyhyemmät väliajat niille kuville, jotka haluat napsauttaa aikaisemmin. (esim. A: <code>1.5</code> sek, B: <code>2.0</code> sek, C: <code>2.5</code> sek)</li>
+        <li>Aloita valvonta. Ensin napsautetaan <b>osa A</b>, jolla on lyhyin väli.</li>
+        <li>Jos osa A katoaa näytöltä napsautuksen jälkeen, <b>osa B</b> tulee seuraavaksi napsautuksen kohteeksi seuraavassa valvontajaksossa.</li>
+        <li>Samoin <b>osa C</b> napsautetaan viimeisenä.</li>
+    </ol>
+
+    <h4>4. Kuinka Säätää Tunnistustarkkuutta ja -aluetta</h4>
+    <ul>
+        <li><b>Tunnistuskynnys:</b><br>Tämä asetus määrittää, kuinka samankaltaisia kuvien on oltava, jotta niitä pidetään "osumana". Arvo noin <code>0.8</code> on yleensä riittävä, mutta asettaminen arvoon <code>0.9</code> tai korkeampaan voi olla tehokasta pienten erojen, kuten tekstivaihteluiden, tiukkaan erotteluun.</li>
+        <li><b>Haku-alue (ROI Asetus):</b><br>"ROI Käytössä" -toiminnon ottaminen käyttöön rajoittaa hakukohteen <b>200x200 pikselin alueelle</b>, joka on keskitetty napsautuskoordinaatin ympärille. Tämä nopeuttaa käsittelyä merkittävästi ja vähentää suuresti tietokoneen kuormitusta. (Muuttuva ROI-tila mahdollistaa alueen vapaan asettamisen).</li>
+        <li><b>ROI Alueen Määritys:</b><br>Sen sijaan, että käytettäisiin napsautuskohtaan keskitettyä 200x200 aluetta, tämä ominaisuus mahdollistaa tietyn alueen määrittämisen, johon keskitytään, ja erillisen napsautuskohdan nimeämisen.</li>
+    </ul>
+
+    <h4>5. "Debounce"-asetus Erikoistilanteisiin</h4>
+    <p>
+        "Debounce"-toimintoa käytetään monimutkaisissa toiminnoissa, kuten "napsauta kuvaa A lyhyellä välillä, napsauta sitten toista kuvaa B ja napsauta lyhyen tauon jälkeen kuvaa A uudelleen siirtyäksesi seuraavaan näyttöön."
+    </p>
+    <p>
+        <b>Mekanismi:</b> Debounce-ajan asettaminen pidentää toisen napsautuksen odotusaikaa <b>"Väli + Debounce-aikaan"</b>, kun sama kuva on peräkkäin kohteena. Tämä luo mahdollisuuden, että muut kuvat napsautetaan ensin.
+    </p>
+</body>
+</html>

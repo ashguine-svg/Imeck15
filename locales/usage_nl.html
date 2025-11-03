@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+    body { font-family: sans-serif; font-size: 13px; }
+    h3 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px;}
+    h4 { color: #34495e; margin-top: 15px; margin-bottom: 5px; }
+    p, li { line-height: 1.6; }
+    b { color: #e74c3c; }
+    /* --- ▼▼▼ 修正箇所 ▼▼▼ --- */
+    code { padding: 2px 4px; border-radius: 3px; font-family: monospace; }
+    .important { border-left: 3px solid #f39c12; padding-left: 10px; margin: 10px 0;}
+    /* --- ▲▲▲ 修正箇所 (code から background-color を削除) ▲▲▲ --- */
+</style>
+</head>
+<body>
+    <h3>Imeck15 Gids voor Klikinstellingen per Afbeelding</h3>
+    <p>
+        Deze gids legt uit hoe u klikacties configureert wanneer een geregistreerde afbeelding wordt gevonden. Het is voornamelijk bedoeld voor het automatiseren van bewerkingen in venstergebaseerde applicaties.
+    </p>
+
+    <h4>1. Hoe Afbeeldingen voor Klikken te Registreren</h4>
+    <p>
+        Registreer eerst de afbeelding die als klikdoel zal dienen. Het gebruik van de functie "Afbeelding Vastleggen" is de basismethode.<br>
+        <b>Tip:</b> Het wordt aanbevolen om <b>kleine onderdelen</b> zoals knoppen of pictogrammen als doel vast te leggen.
+    </p>
+    <ul>
+        <li><b>Reden 1: Snellere Verwerking</b><br>Het zoeken naar een kleine afbeelding is minder veeleisend voor de pc dan het zoeken op het hele scherm.</li>
+        <li><b>Reden 2: Nauwkeurig Klikken</b><br>Zelfs als er meerdere identieke knoppen op het scherm bestaan, maakt het vastleggen van slechts een specifiek onderdeel nauwkeurig klikken op het beoogde doel mogelijk.</li>
+    </ul>
+
+    <h4>2. Hoe de Klikvolgorde te Regelen (Intervalinstelling)</h4>
+    <p>
+        Het "Interval" is de minimale wachttijd (in seconden) na het klikken op een afbeelding voordat de <b>zelfde afbeelding</b> opnieuw kan worden geklikt.
+    </p>
+    <div class="important">
+        <b>[Belangrijk] Klikprioriteitsmechanisme</b><br>
+        Als er meerdere klikbare afbeeldingen op het scherm worden gevonden tijdens de monitoring, geeft Imeck15 prioriteit aan het klikken op die met de <b>kortste "Interval"-instelling</b> en klikt het niet op andere afbeeldingen. Gebruik dit mechanisme om de klikvolgorde te regelen.
+    </div>
+
+    <h4>3. Techniek voor het Klikken op Meerdere Locaties op Eén Scherm</h4>
+    <p>
+        Door het "Intervalinstelling"-mechanisme toe te passen, kunt u het sequentieel op meerdere locaties op één scherm laten klikken.<br>
+        <b>Vereiste:</b> De afbeelding of tekst op de geklikte locatie moet veranderen (verdwijnen, grijs worden, enz.) nadat erop is geklikt.
+    </p>
+    <p><b>Voorbeeld Configuratiestappen:</b></p>
+    <ol>
+        <li>Registreer delen A, B en C die u op het scherm wilt klikken als afzonderlijke afbeeldingen.</li>
+        <li>Stel kortere intervaltijden in voor afbeeldingen die u eerder wilt klikken. (bijv. A: <code>1.5</code> sec, B: <code>2.0</code> sec, C: <code>2.5</code> sec)</li>
+        <li>Start de monitoring. Eerst wordt <b>deel A</b> met het kortste interval geklikt.</li>
+        <li>Als deel A na het klikken van het scherm verdwijnt, wordt <b>deel B</b> het volgende klikdoel in de volgende monitoringcyclus.</li>
+        <li>Op dezelfde manier wordt <b>deel C</b> als laatste geklikt.</li>
+    </ol>
+
+    <h4>4. Hoe de Herkenningsnauwkeurigheid en het Bereik aan te Passen</h4>
+    <ul>
+        <li><b>Herkenning Drempel:</b><br>Deze instelling bepaalt hoe vergelijkbaar afbeeldingen moeten zijn om als een "overeenkomst" te worden beschouwd. Een waarde rond <code>0.8</code> is meestal voldoende, maar het instellen op <code>0.9</code> of hoger kan effectief zijn voor het strikt onderscheiden van kleine verschillen, zoals tekstvariaties.</li>
+        <li><b>Zoekbereik (ROI Instelling):</b><br>Het inschakelen van "ROI Ingeschakeld" beperkt het zoekdoel tot een <b>200x200 pixel gebied</b> gecentreerd rond de klikcoördinaat. Dit versnelt de verwerking aanzienlijk en vermindert de belasting van de pc sterk. (Variabele ROI-modus maakt het mogelijk om het bereik vrij in te stellen).</li>
+        <li><b>ROI Bereik Specificatie:</b><br>In plaats van een 200x200 bereik gecentreerd op de klikpositie, stelt deze functie u in staat om een specifiek gebied op te geven om op te focussen en een afzonderlijke klikpositie aan te wijzen.</li>
+    </ul>
+
+    <h4>5. "Debounce" Instelling voor Speciale Situaties</h4>
+    <p>
+        "Debounce" wordt gebruikt voor complexe bewerkingen zoals "klik op afbeelding A met een kort interval, klik dan op een andere afbeelding B, en na een korte pauze, klik opnieuw op afbeelding A om door te gaan naar het volgende scherm."
+    </p>
+    <p>
+        <b>Mechanisme:</b> Het instellen van een debounce-tijd verlengt de wachttijd voor de tweede klik tot <b>"Interval + Debounce Tijd"</b> wanneer dezelfde afbeelding achtereenvolgens wordt getarget. Dit creëert een kans voor andere afbeeldingen om eerst te worden geklikt.
+    </p>
+</body>
+</html>

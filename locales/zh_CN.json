@@ -346,5 +346,16 @@
   "log_countdown_started": "检测到备用图像 '%s'。开始 %s 秒倒计时。",
   "log_countdown_cancelled": "检测到普通图像，取消备用倒计时。",
   "log_countdown_executing": "%s 秒已过。执行备用单击。",
-  "warn_capture_disabled_scale": "自动缩放期间捕获的图像将不匹配。\n请以 1.0 倍比例捕获图像。"
+  "rename_button": "重命名",
+  "warn_rename_title": "重命名错误",
+  "warn_rename_no_selection": "请选择要重命名的项目（图像或文件夹）。",
+  "rename_dialog_title": "更改名称",
+  "rename_dialog_prompt": "请输入新名称:",
+  "log_rename_cancelled": "重命名操作已取消。",
+  "log_rename_error_empty": "新名称为空。无法重命名。",
+  "log_rename_error_exists": "错误：名为 '%s' 的项目已存在。",
+  "log_rename_error_general": "重命名过程中发生错误: %s",
+  "log_rename_warn_not_in_order": "警告：在顺序列表中未找到重命名的项目 '%s'（文件重命名成功）。",
+  "log_rename_success": "已将项目 '%s' 重命名为 '%s'。",
+  "log_rename_error_order_list": "文件重命名成功，但在更新顺序列表时发生错误: %s"
 }
