@@ -1,4 +1,5 @@
 # ui.py (ImportError および QCursor NameError 修正版)
+# ★★★ 選択ダイアログの写り込み防止のためタイマー遅延を追加 ★★★
 
 import sys
 import json
@@ -612,9 +613,32 @@ class UIManager(QMainWindow):
         if self.core_engine: self.core_engine.cleanup()
         self.stopMonitoringRequested.emit(); QApplication.instance().quit(); event.accept()
 
+    # --- ▼▼▼ 修正箇所 (setRecAreaDialog と _handle_rec_area_selection) ▼▼▼ ---
+
+    def _handle_rec_area_selection(self, method: str):
+        """
+        (スロット) RecAreaSelectionDialog からのシグナルを受け取ります。
+        QTimer.singleShotを使用して、ダイアログが閉じるのを待ってから
+        CoreEngineにシグナルを転送します。
+        """
+        # 0msタイマーで、現在のイベントループ処理(ダイアログの非表示)が
+        # 完了した後に setRecAreaMethodSelected シグナルを発行します。
+        # (50msなど小さな待機時間を指定すると、より確実になりますが、通常は0msで十分です)
+        QTimer.singleShot(0, lambda: self.setRecAreaMethodSelected.emit(method))
+
     def setRecAreaDialog(self):
         """Shows the dialog to choose recognition area selection method."""
-        dialog = RecAreaSelectionDialog(self.locale_manager, self); dialog.selectionMade.connect(self.setRecAreaMethodSelected); dialog.move(QCursor.pos()); dialog.exec()
+        dialog = RecAreaSelectionDialog(self.locale_manager, self)
+        
+        # ★★★ 修正: 間に _handle_rec_area_selection を挟む ★★★
+        # 変更前: dialog.selectionMade.connect(self.setRecAreaMethodSelected)
+        dialog.selectionMade.connect(self._handle_rec_area_selection)
+        # ★★★ 修正完了 ★★★
+        
+        dialog.move(QCursor.pos())
+        dialog.exec()
+
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
     def adjust_initial_size(self):
         """Adjusts the initial window size after widgets are potentially rendered."""
