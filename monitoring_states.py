@@ -132,7 +132,13 @@ class CountdownState(State):
         if elapsed_time >= self.duration:
             # ★★★ 7. ログを翻訳キーに置き換え ★★★
             context.logger.log("log_countdown_executing", f"{self.duration:.1f}")
-            context._execute_final_backup_click(self.trigger_match['path'])
+            
+            # --- ▼▼▼ 修正箇所 ▼▼▼ ---
+            # _execute_final_backup_click ではなく _execute_click を呼ぶ
+            # self.trigger_match は _find_best_match の結果辞書
+            context._execute_click(self.trigger_match)
+            # --- ▲▲▲ 修正完了 ▲▲▲ ---
+            
             context.transition_to(IdleState(context))
             context._cooldown_until = time.time() + 1.0
             return

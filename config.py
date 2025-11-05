@@ -400,8 +400,8 @@ class ConfigManager:
 
     def create_folder(self, folder_name: str):
         if not folder_name:
-            # ★★★ 11. ハードコードされた文字列を翻訳キーに変更 ★★★
-            return False, "log_create_folder_error_empty"
+            # ★★★ 11. 修正 ★★★
+            return False, self.logger.locale_manager.tr("log_create_folder_error_empty")
         try:
             folder_path = self.base_dir / folder_name
             if folder_path.exists():
@@ -420,8 +420,8 @@ class ConfigManager:
             dest_folder_path = Path(dest_folder_path_str)
             
             if not source_path.exists() or not dest_folder_path.is_dir():
-                # ★★★ 12. ハードコードされた文字列を翻訳キーに変更 ★★★
-                return False, "log_move_item_error_not_exists"
+                # ★★★ 12. 修正 ★★★
+                return False, self.logger.locale_manager.tr("log_move_item_error_not_exists")
 
             dest_path = dest_folder_path / source_path.name
             if dest_path.exists():

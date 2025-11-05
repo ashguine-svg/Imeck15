@@ -661,11 +661,16 @@ class CoreEngine(QObject):
                             timer_data['priority'] = max(0, remaining_sec / 60.0) # 分単位
                     
                     cpu_percent = 0.0
+                    
+                    # --- ▼▼▼ エラー箇所 (インデント修正済み) ▼▼▼ ---
+                    # 577行目の 'if'
                     if self.performance_monitor:
+                        # 579行目の 'try:' ( 'if' の内側にインデント)
                         try:
                             cpu_percent = self.performance_monitor.get_last_cpu()
                         except Exception:
                             cpu_percent = 0.0 # 取得失敗
+                    # --- ▲▲▲ 修正完了 ▲▲▲ ---
                     
                     fps_value = self.current_fps
                     
@@ -847,24 +852,30 @@ class CoreEngine(QObject):
                         task_data = {'path': path, 'settings': data['settings'], 'template': template_image, 'scale': t['scale']}
                         t_shape = t['shape']
 
-                        if use_cl:
+                        # --- ▼▼▼ 修正箇所 (OpenCLでもスレッドプールを利用) ▼▼▼ ---
+                        if self.thread_pool:
+                            # OpenCLが有効でも、タスクの投入自体はスレッドプールで行う
+                            future = self.thread_pool.submit(_match_template_task, screen_image, task_data, s_shape, t_shape)
+                            futures.append(future)
+                        else:
+                            # フォールバック (スレッドプールが利用できない場合)
                             match_result = _match_template_task(screen_image, task_data, s_shape, t_shape)
                             if match_result:
                                 results.append(match_result)
-                        else:
-                            if self.thread_pool:
-                                future = self.thread_pool.submit(_match_template_task, screen_image, task_data, s_shape, t_shape)
-                                futures.append(future)
+                        # --- ▲▲▲ 修正完了 ▲▲▲ ---
                     except Exception as e:
                          self.logger.log("Error during template processing for %s (scale %s): %s", Path(path).name, t.get('scale', 'N/A'), str(e))
 
-        if not use_cl:
+        # --- ▼▼▼ 修正箇所 (futuresの処理をループの外に移動) ▼▼▼ ---
+        # with self.cache_lock: の外側（インデントを戻す）で結果を収集します
+        if futures:
             for f in futures:
                 try:
                     match_result = f.result();
                     if match_result: results.append(match_result)
                 except Exception as e:
                      self.logger.log("Error getting result from match thread: %s", str(e))
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
         if not results: return []
         best_match_overall = max(results, key=lambda r: r['confidence']); best_match_path = best_match_overall['path']; best_match_scale = best_match_overall['scale']
