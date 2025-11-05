@@ -109,11 +109,12 @@ class CoreEngine(QObject):
 
         self.priority_timers = {}
         self.folder_children_map = {}
-
+        
         cpu_cores = os.cpu_count() or 8
-        worker_threads = min(max(1, cpu_cores // 4), 2)
-        self.logger.log("log_info_cores", cpu_cores, worker_threads)
-        self.thread_pool = ThreadPoolExecutor(max_workers=worker_threads)
+        worker_threads = min(max(1, cpu_cores // 4), 4)
+        self.worker_threads = worker_threads
+        self.logger.log("log_info_cores", cpu_cores, self.worker_threads)
+        self.thread_pool = ThreadPoolExecutor(max_workers=self.worker_threads)
         self.cache_lock = threading.Lock()
 
         self.click_timer = None
