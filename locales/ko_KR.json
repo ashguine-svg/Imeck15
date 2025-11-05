@@ -119,7 +119,7 @@
   "error_already_running_text": "Imeck15가 이미 실행 중입니다.",
   "init_dialog_error_not_found": "오류: InitializationDialog를 찾을 수 없습니다.",
   "init_dialog_error_exec": "초기화 대화 상자 실행 중 오류 발생: %s",
-  "log_info_cores": "CPU 논리 코어: %s, 인식 스레드: %s (최대 2)",
+  "log_info_cores": "CPU 논리 코어: %s, 인식 스레드: %s (최대 %s)",
   "log_warn_set_foreground_failed": "경고: 창을 전면으로 가져오지 못했습니다. 이는 일반적으로 OS 사양으로 인한 것이며 종종 문제가 되지 않습니다.",
   "log_warn_activate_window_error": "경고: 창 활성화 중 예상치 못한 오류 발생: %s",
   "log_linux_workaround_error_manager": "Linux UI 정지 해결 오류: UIManager를 찾을 수 없음.",

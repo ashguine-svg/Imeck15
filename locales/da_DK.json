@@ -119,7 +119,7 @@
   "error_already_running_text": "Imeck15 kører allerede.",
   "init_dialog_error_not_found": "Fejl: InitializationDialog blev ikke fundet.",
   "init_dialog_error_exec": "Fejl under udførelse af initialiseringsdialog: %s",
-  "log_info_cores": "CPU Logiske Kerner: %s, Genkendelsestråde: %s (maks. 2)",
+  "log_info_cores": "Logiske CPU-kerner: %s, Genkendelsestråde: %s (Maks %s)",
   "log_warn_set_foreground_failed": "Advarsel: Kunne ikke bringe vinduet i forgrunden. Dette skyldes normalt OS-specifikationer og er ofte ikke et problem.",
   "log_warn_activate_window_error": "Advarsel: Uventet fejl under vinduesaktivering: %s",
   "log_linux_workaround_error_manager": "Linux UI-fryse-løsning Fejl: UIManager blev ikke fundet.",

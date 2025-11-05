@@ -118,7 +118,7 @@
   "error_already_running_text": "Imeck15は既に起動しています。",
   "init_dialog_error_not_found": "エラー: InitializationDialog が見つかりません。",
   "init_dialog_error_exec": "初期化ダイアログの実行中にエラー: %s",
-  "log_info_cores": "CPU論理コア数: %s, 認識スレッド数: %s (最大2)",
+  "log_info_cores": "CPU論理コア数: %s, 認識スレッド数: %s (最大%s)",
   "log_warn_set_foreground_failed": "警告: ウィンドウの最前面化に失敗しました。これはOSの仕様によるもので、通常は問題ありません。",
   "log_warn_activate_window_error": "警告: ウィンドウのアクティブ化中に予期せぬエラーが発生しました: %s",
   "log_linux_workaround_error_manager": "Linux UIフリーズ対策エラー: UIManagerが見つかりません。",

@@ -119,7 +119,7 @@
   "error_already_running_text": "Imeck15 पहले से ही चल रहा है।",
   "init_dialog_error_not_found": "त्रुटि: InitializationDialog नहीं मिला।",
   "init_dialog_error_exec": "आरंभिकरण डायलॉग निष्पादन के दौरान त्रुटि: %s",
-  "log_info_cores": "CPU लॉजिकल कोर: %s, पहचान थ्रेड: %s (अधिकतम 2)",
+  "log_info_cores": "CPU लॉजिकल कोर: %s, रिकग्निशन थ्रेड्स: %s (अधिकतम %s)",
   "log_warn_set_foreground_failed": "चेतावनी: विंडो को अग्रभूमि में लाने में विफल। यह आमतौर पर OS विशिष्टताओं के कारण होता है और अक्सर कोई समस्या नहीं होती है।",
   "log_warn_activate_window_error": "चेतावनी: विंडो सक्रियण के दौरान अप्रत्याशित त्रुटि: %s",
   "log_linux_workaround_error_manager": "लिनक्स UI फ्रीज़ वर्कअराउंड त्रुटि: UIManager नहीं मिला।",
