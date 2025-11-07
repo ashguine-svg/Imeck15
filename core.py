@@ -1,4 +1,5 @@
 # core.py (Linuxキャプチャロジック 最終修正版)
+# ★★★ D&D安定化とUI非同期化（仕様書）対応版 ★★★
 
 import sys
 import threading
@@ -66,6 +67,11 @@ class CoreEngine(QObject):
     clickCountUpdated = Signal(int)
     
     statsUpdated = Signal(int, str, dict, float, float)
+    
+    # --- ▼▼▼ 修正箇所 1/11 (仕様書 [40] シグナル追加) ▼▼▼ ---
+    # 目的: UIスレッドにツリーの更新を安全に要求する
+    treeUpdateRequested = Signal()
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
     def __init__(self, ui_manager, capture_manager, config_manager, logger, performance_monitor, locale_manager):
         super().__init__()
@@ -325,6 +331,12 @@ class CoreEngine(QObject):
                 try: self.config_manager.remove_item(path_str); self.logger.log("log_item_deleted", Path(path_str).name); deleted_count += 1
                 except Exception as e: last_error = str(e); self.logger.log("log_item_delete_failed", Path(path_str).name, last_error); failed_count += 1
             if failed_count > 0: QMessageBox.critical(self.ui_manager, self.locale_manager.tr("error_title_delete_failed"), self.locale_manager.tr("error_message_delete_failed", failed_count) + f"\n{last_error}")
+            
+            # --- ▼▼▼ 修正箇所 2/11 (仕様書 [40]) ▼▼▼ ---
+            if deleted_count > 0:
+                self.treeUpdateRequested.emit()
+            # --- ▲▲▲ 修正完了 ▲▲▲ ---
+
         finally:
             if self.thread_pool: self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
             else: self.ui_manager.set_tree_enabled(True)
@@ -340,7 +352,13 @@ class CoreEngine(QObject):
         if ok and folder_name:
             success, message_key_or_text = self.config_manager.create_folder(folder_name)
             if success:
-                self.logger.log(message_key_or_text); self.ui_manager.update_image_tree()
+                self.logger.log(message_key_or_text)
+                
+                # --- ▼▼▼ 修正箇所 3/11 (仕様書 [40]) ▼▼▼ ---
+                # self.ui_manager.update_image_tree() # 削除
+                self.treeUpdateRequested.emit() # 変更
+                # --- ▲▲▲ 修正完了 ▲▲▲ ---
+                
                 if self.thread_pool: self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
                 else: self.ui_manager.set_tree_enabled(True)
             else: QMessageBox.warning(self.ui_manager, self.locale_manager.tr("error_title_create_folder"), self.locale_manager.tr(message_key_or_text))
@@ -360,15 +378,22 @@ class CoreEngine(QObject):
     def move_items_into_folder(self, source_paths: list, dest_folder_path_str: str):
         self.ui_manager.set_tree_enabled(False)
         if self.thread_pool:
-            self.thread_pool.submit(self._move_items_and_rebuild_async, source_paths, dest_folder_path_str).add_done_callback(self._on_cache_build_done)
+            # --- ▼▼▼ 修正箇所 4/11 (仕様書 [39] 非同期) ▼▼▼ ---
+            # _on_cache_build_done ではなく、新しいI/O専用コールバック _on_move_items_done を使う
+            self.thread_pool.submit(self._move_items_async, source_paths, dest_folder_path_str).add_done_callback(self._on_move_items_done)
+            # --- ▲▲▲ 修正完了 ▲▲▲ ---
         else:
             self.logger.log("[WARN] Thread pool not available. Moving items and rebuilding cache synchronously.")
             try:
-                self._move_items_and_rebuild_async(source_paths, dest_folder_path_str)
+                # --- ▼▼▼ 修正箇所 4/11 (仕様書 [39] 非同期) ▼▼▼ ---
+                self._move_items_async(source_paths, dest_folder_path_str) # _move_items_and_rebuild_async から変更
+                self._on_move_items_done(None) # _on_cache_build_done から変更
+                # --- ▲▲▲ 修正完了 ▲▲▲ ---
             finally:
-                self._on_cache_build_done(None)
+                pass # コールバックがUIを処理する
     
-    def _move_items_and_rebuild_async(self, source_paths: list, dest_folder_path_str: str):
+    def _move_items_async(self, source_paths: list, dest_folder_path_str: str):
+        """ (ワーカースレッド) 選択されたアイテムを移動します。キャッシュ構築は行いません。"""
         moved_count = 0; failed_count = 0; final_message = ""
         try:
             for source_path_str in source_paths:
@@ -378,13 +403,52 @@ class CoreEngine(QObject):
                 else: 
                     self.logger.log("log_move_item_failed", self.locale_manager.tr(message_or_key)); failed_count += 1; final_message = self.locale_manager.tr(message_or_key)
             
-            if failed_count > 0: 
-                self.logger.log("[ERROR] _move_items_and_rebuild_async failed count: %s, LastError: %s", failed_count, final_message)
+            return (moved_count, failed_count, final_message)
 
         except Exception as e:
-            self.logger.log("[ERROR] _move_items_and_rebuild_async: %s", str(e))
-        
-        self._build_template_cache()
+            self.logger.log("[ERROR] _move_items_async: %s", str(e))
+            return (moved_count, failed_count, str(e))
+
+        # --- ▼▼▼ 修正箇所 5/11 (仕様書 [39] 非同期) ▼▼▼ ---
+        # self._build_template_cache() # 削除 (I/Oと重い処理を分離)
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
+
+    # --- ▼▼▼ 修正箇所 6/11 (仕様書 [39] 非同期) ▼▼▼ ---
+    def _on_move_items_done(self, future):
+        """
+        (UIスレッド) アイテムの移動(I/O)完了後に呼び出されます。
+        D&Dによる視覚的なツリーの変更は既に完了しているため、
+        ここではUIの再構築は行わず、ロック解除とキャッシュ構築のみを行います。
+        """
+        try:
+            if future:
+                moved_count, failed_count, final_message = future.result()
+                if failed_count > 0: 
+                    self.logger.log("[ERROR] _move_items_async failed count: %s, LastError: %s", failed_count, final_message)
+            
+            # --- ▼▼▼ 修正箇所 ▼▼▼ ---
+            # (仕様書 [39][40])
+            # 1. UIツリーの更新をリクエスト
+            
+            # self.treeUpdateRequested.emit() # ★★★ この行をコメントアウト (削除) ★★★
+            # 理由: D&D操作(image_tree_widget.py)によってUIツリーは
+            # 既に視覚的に正しい状態になっているため、ここでファイルから
+            # 再読み込み(update_image_tree)すると、OSのキャッシュが
+            # 原因で移動したアイテムが消える競合が発生する。
+            
+            # --- ▲▲▲ 修正完了 ▲▲▲ ---
+            
+            # 2. UIを即時ロック解除
+            self.ui_manager.set_tree_enabled(True) 
+            # 3. 重いキャッシュ構築をバックグラウンドで実行
+            if self.thread_pool:
+                # このコールバックはUIをロックせず、完了シグナルも発行しない
+                self.thread_pool.submit(self._build_template_cache) 
+            
+        except Exception as e:
+            self.logger.log("[ERROR] _on_move_items_done: %s", str(e))
+            # エラーが発生した場合も、UIのロックは解除する
+            self.ui_manager.set_tree_enabled(True)
 
     def move_item_out_of_folder(self):
         source_path_str, name = self.ui_manager.get_selected_item_path(); lm = self.locale_manager.tr
@@ -394,7 +458,13 @@ class CoreEngine(QObject):
         dest_folder_path_str = str(self.config_manager.base_dir)
         success, message_or_key = self.config_manager.move_item(source_path_str, dest_folder_path_str)
         if success:
-            self.logger.log(message_or_key); self.ui_manager.update_image_tree()
+            self.logger.log(message_or_key)
+
+            # --- ▼▼▼ 修正箇所 7/11 (仕様書 [40]) ▼▼▼ ---
+            # self.ui_manager.update_image_tree() # 削除
+            self.treeUpdateRequested.emit() # 変更
+            # --- ▲▲▲ 修正完了 ▲▲▲ ---
+
             if self.thread_pool: self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
             else: self.ui_manager.set_tree_enabled(True)
         else: QMessageBox.critical(self.ui_manager, lm("error_title_move_out_failed"), self.locale_manager.tr(message_or_key))
@@ -411,6 +481,11 @@ class CoreEngine(QObject):
             
             if success:
                 self.logger.log(message_or_key)
+
+                # --- ▼▼▼ 修正箇所 8/11 (仕様書 [40]) ▼▼▼ ---
+                self.treeUpdateRequested.emit()
+                # --- ▲▲▲ 修正完了 ▲▲▲ ---
+                
                 if self.thread_pool:
                     self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
                 else:
@@ -512,7 +587,11 @@ class CoreEngine(QObject):
         else: self.ui_manager.set_tree_enabled(True)
 
     def on_order_changed(self):
+        # --- ▼▼▼ 修正箇所 9/11 (仕様書 [39] UIロック解除) ▼▼▼ ---
+        # UI操作(D&D, Up/Down)はデバウンスされるため、ここに来た時点で
+        # UIをロックする必要がある
         self.ui_manager.set_tree_enabled(False)
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
         
         try:
             if hasattr(self.ui_manager, 'save_tree_order'):
@@ -522,19 +601,30 @@ class CoreEngine(QObject):
                 data_to_save = {}
         except Exception as e:
             self.logger.log("log_error_get_order_data", str(e))
-            self.ui_manager.set_tree_enabled(True)
+            self.ui_manager.set_tree_enabled(True) # エラー時はロック解除
             return
 
         if self.thread_pool:
-            self.thread_pool.submit(self._save_order_and_rebuild_async, data_to_save).add_done_callback(self._on_cache_build_done)
+            # --- ▼▼▼ 修正箇所 9/11 (仕様書 [39] 非同期) ▼▼▼ ---
+            # 1. ワーカースレッドでI/Oタスクを実行
+            # 2. 完了コールバックを _on_order_save_done に変更
+            self.thread_pool.submit(self._save_order_async, data_to_save).add_done_callback(self._on_order_save_done)
+            # --- ▲▲▲ 修正完了 ▲▲▲ ---
         else:
             self.logger.log("[WARN] Thread pool not available. Saving order and rebuilding cache synchronously.")
             try:
-                self._save_order_and_rebuild_async(data_to_save)
+                # --- ▼▼▼ 修正箇所 9/11 (仕様書 [39] 非同期) ▼▼▼ ---
+                self._save_order_async(data_to_save) # _save_order_and_rebuild_async から変更
+                self._on_order_save_done(None) # コールバックを手動実行
+                # --- ▲▲▲ 修正完了 ▲▲▲ ---
             finally:
-                self._on_cache_build_done(None)
+                pass # _on_order_save_done がUIをアンロックする
                 
-    def _save_order_and_rebuild_async(self, data_to_save: dict):
+    def _save_order_async(self, data_to_save: dict):
+        """
+        (ワーカースレッド) UIスレッドから渡された順序データでJSONファイルのみを上書きします。
+        キャッシュ構築は行いません。
+        """
         try:
             if hasattr(self.config_manager, 'save_tree_order_data'):
                 self.config_manager.save_tree_order_data(data_to_save)
@@ -545,7 +635,29 @@ class CoreEngine(QObject):
         except Exception as e: 
             self.logger.log("log_error_save_order", str(e))
         
-        self._build_template_cache()
+        # --- ▼▼▼ 修正箇所 10/11 (仕様書 [39] 非同期) ▼▼▼ ---
+        # self._build_template_cache() # 削除 (I/Oと重い処理を分離)
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
+    
+    # --- ▼▼▼ 修正箇所 11/11 (仕様書 [39] 非同期) ▼▼▼ ---
+    def _on_order_save_done(self, future):
+        """
+        (UIスレッド) 順序の保存(I/O)完了後に呼び出されます。
+        UIを即座にロック解除し、キャッシュ構築をバックグラウンドで開始します。
+        """
+        try:
+            if future: future.result() # I/Oタスク中の例外をキャッチ
+        except Exception as e: 
+            self.logger.log("log_error_on_order_save_done", str(e))
+        finally:
+            # (仕様書 [39] 非同期)
+            # 1. UIのロックを即座に解除
+            self.ui_manager.set_tree_enabled(True)
+            # 2. 重いキャッシュ構築をバックグラウンドタスクとして投入
+            # (このタスクはUIをロックせず、完了シグナルも不要)
+            if self.thread_pool:
+                self.thread_pool.submit(self._build_template_cache)
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
         
     def _build_template_cache(self):
         with self.cache_lock:

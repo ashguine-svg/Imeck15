@@ -219,8 +219,28 @@ class ConfigManager:
 
     def save_image_order(self, order_list: list, folder_path=None):
         order_path = Path(folder_path) / self.sub_order_filename if folder_path else self.base_dir / self.image_order_filename
-        with open(order_path, 'w', encoding='utf-8') as f:
-            json.dump(order_list, f, indent=2, ensure_ascii=False)
+        
+        # --- ▼▼▼ 修正箇所 (ファイルI/Oの同期) ▼▼▼ ---
+        try:
+            with open(order_path, 'w', encoding='utf-8') as f:
+                json.dump(order_list, f, indent=2, ensure_ascii=False)
+                
+                # 1. Pythonの内部バッファをフラッシュ
+                f.flush()
+                
+                # 2. OSのファイルキャッシュをディスクに同期 (Linux/macOS向け)
+                #    これにより、書き込み直後の読み取りで古いデータが返されるのを防ぎます。
+                if hasattr(os, 'fsync'):
+                    os.fsync(f.fileno())
+                    
+        except Exception as e:
+             # save_image_order は通常ログを記録しませんが、
+             # この重要な処理でエラーが発生した場合に備えてログを残します。
+             if hasattr(self, 'logger') and self.logger:
+                 # log_error_save_order_sync (新しいキー)
+                 self.logger.log("log_error_save_order_sync", str(order_path), str(e))
+             else:
+                 print(f"[ERROR] Failed to save/sync order file {order_path}: {e}")
             
     def save_tree_order_data(self, data_to_save: dict):
         """
@@ -345,25 +365,47 @@ class ConfigManager:
     
     # --- 修正箇所B (get_ordered_item_list を完全なコードに置き換え) ---
     def get_ordered_item_list(self) -> list:
+        """
+        保存された順序リストを読み込み、現在ディスク上に存在する
+        ファイル/フォルダのみを、その順序で返します。
+        (LinuxのI/O競合を防ぐため、ディスクスキャンによる自動修復は行いません)
+        """
+        
+        # 1. 保存されている順序リストを読み込む
         ordered_paths_str = self.load_image_order()
+        
         try:
-            all_items = {p for p in self.base_dir.iterdir() if p.is_dir() or p.suffix.lower() in ('.png', '.jpg', '.jpeg', '.bmp')}
+            # 2. 現在ディスク上に存在するアイテムをすべて取得
+            all_items_on_disk = {p for p in self.base_dir.iterdir() if p.is_dir() or p.suffix.lower() in ('.png', '.jpg', '.jpeg', '.bmp')}
         except FileNotFoundError:
-            all_items = set()
+            all_items_on_disk = set()
             
-        all_item_paths_str = {str(p) for p in all_items}
+        all_item_paths_str_on_disk = {str(p) for p in all_items_on_disk}
+
+        final_order = []
         
-        final_order = [path_str for path_str in ordered_paths_str if path_str in all_item_paths_str]
-        for item in sorted(list(all_items)):
-            if str(item) not in final_order:
-                final_order.append(str(item))
-        
-        if final_order != ordered_paths_str:
+        # 3. 順序リストを走査し、ディスクに存在するアイテムだけを
+        #    final_order に追加する
+        for path_str in ordered_paths_str:
+            if path_str in all_item_paths_str_on_disk:
+                final_order.append(path_str)
+                # 処理済みのアイテムをディスクリストから削除
+                all_item_paths_str_on_disk.remove(path_str)
+
+        # 4. (修正ロジック) 
+        #    順序リストには無かったが、ディスク上には存在したアイテム
+        #    (例: 手動でコピーしたファイル) があれば、
+        #    それらをソートしてリストの末尾に追加する
+        if all_item_paths_str_on_disk:
+            new_items_sorted = sorted(list(all_item_paths_str_on_disk))
+            final_order.extend(new_items_sorted)
+            
+            # ディスク上に新しいアイテムがあった場合のみ、
+            # 順序ファイルを更新する
             self.save_image_order(final_order)
-        
-        # ★★★ 'None' ではなく、必ずリスト [Path(p)] を返すようにします ★★★
+
+        # 5. Pathオブジェクトのリストとして返す
         return [Path(p) for p in final_order]
-    # --- 修正完了 ---
 
     def get_hierarchical_list(self):
         structured_list = []
