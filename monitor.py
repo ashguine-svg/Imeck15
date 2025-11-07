@@ -102,6 +102,16 @@ class PerformanceMonitor(QDialog):
     # update_monitoring_status メソッドは削除されました
     # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
+    # ★★★ 修正箇所: on_language_changed メソッドを追加 (仕様書 [27] 対応) ★★★
+    def on_language_changed(self):
+        """
+        言語が変更されたときにUIのテキストを再翻訳します。
+        (LocaleManager.languageChanged シグナルから呼び出されます)
+        """
+        lm = self.locale_manager.tr
+        self.setWindowTitle(lm("monitor_window_title"))
+    # ★★★ 修正完了 ★★★
+
     def update_performance_info(self):
         try:
             self.last_cpu_percent = self.process.cpu_percent(interval=None) 

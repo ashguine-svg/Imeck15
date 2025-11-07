@@ -111,9 +111,12 @@ class CoreEngine(QObject):
         self.folder_children_map = {}
         
         cpu_cores = os.cpu_count() or 8
-        worker_threads = min(max(1, cpu_cores // 4), 4)
+        
+        max_thread_limit = 4 # 1. 最大値を「4」として変数に定義
+        
+        worker_threads = min(max(1, cpu_cores // 4), max_thread_limit)
         self.worker_threads = worker_threads
-        self.logger.log("log_info_cores", cpu_cores, self.worker_threads)
+        self.logger.log("log_info_cores", cpu_cores, self.worker_threads, max_thread_limit)
         self.thread_pool = ThreadPoolExecutor(max_workers=self.worker_threads)
         self.cache_lock = threading.Lock()
 

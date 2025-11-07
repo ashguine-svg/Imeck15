@@ -4,6 +4,9 @@ import sys
 import os
 import socket
 
+# ★★★ 修正箇所 1/4: ctypes をインポート ★★★
+import ctypes 
+
 # 実行されたスクリプト自身の場所を特定し、モジュール検索パスの先頭に追加する
 try:
     if getattr(sys, 'frozen', False):
@@ -84,6 +87,18 @@ class Logger(QObject):
 
 
 def main():
+    
+    # ★★★ 修正箇所 2/4: QApplicationインスタンス化の前に DPI-Awareness を設定 ★★★
+    if sys.platform == 'win32':
+        try:
+            # SetProcessDPIAware() の呼び出しで、UIを96DPIに固定 (仕様書推奨)
+            ctypes.windll.user32.SetProcessDPIAware()
+            print("[INFO] SetProcessDPIAware() called. Application is now DPI-Unaware.")
+        except Exception as e:
+            print(f"[WARN] Failed to call SetProcessDPIAware(): {e}")
+            pass # 失敗しても続行
+    # ★★★ 修正完了 ★★★
+
     temp_app_for_check = QApplication.instance() or QApplication(sys.argv)
     
     # ★★★ 5. LocaleManagerを早期にインスタンス化 ★★★
@@ -185,6 +200,9 @@ def main():
     # performance_monitor.toggleMonitoringRequested.connect(ui_manager.toggle_monitoring)
     performance_monitor.connect_signals()
     
+    # ★★★ 修正箇所 3/4: monitor.py の言語変更シグナルを接続 (仕様書 [27] 対応) ★★★
+    locale_manager.languageChanged.connect(performance_monitor.on_language_changed)
+    
     # --- ▲▲▲ 修正完了 ▲▲▲ ---
     
     # --- 起動シーケンス (変更なし) ---
@@ -208,6 +226,9 @@ def main():
         
         QTimer.singleShot(200, run_initialization_dialog)
 
+    # ★★★ 修正箇所 4/4: logger インスタンスを渡す (仕様書 [26] 確認) ★★★
+    ui_manager.logger = logger
+    
     sys.exit(app.exec())
 
 
