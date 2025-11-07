@@ -119,17 +119,6 @@ def main():
     
     app = temp_app_for_check
     
-    # --- ▼▼▼ 修正箇所 (UIスタイルを "Fusion" に固定) ▼▼▼ ---
-    # PySide6 6.4.x が古いUIスタイルで描画されるのを防ぎ、
-    # 6.5.x 系と近い見た目の "Fusion" スタイルを強制的に適用します。
-    try:
-        app.setStyle("Fusion")
-        print("[INFO] Application style set to 'Fusion'.")
-    except Exception as e:
-        print(f"[WARN] Failed to set 'Fusion' style: {e}")
-    # --- ▲▲▲ 修正完了 ▲▲▲ ---
-
-    
     # LoggerとLocaleManagerは作成済み
     config_manager = ConfigManager(logger) # ConfigManagerにもLoggerを渡す
     capture_manager = CaptureManager(logger) # CaptureManagerにもLoggerを渡す

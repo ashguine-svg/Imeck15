@@ -219,28 +219,8 @@ class ConfigManager:
 
     def save_image_order(self, order_list: list, folder_path=None):
         order_path = Path(folder_path) / self.sub_order_filename if folder_path else self.base_dir / self.image_order_filename
-        
-        # --- ▼▼▼ 修正箇所 (ファイルI/Oの同期) ▼▼▼ ---
-        try:
-            with open(order_path, 'w', encoding='utf-8') as f:
-                json.dump(order_list, f, indent=2, ensure_ascii=False)
-                
-                # 1. Pythonの内部バッファをフラッシュ
-                f.flush()
-                
-                # 2. OSのファイルキャッシュをディスクに同期 (Linux/macOS向け)
-                #    これにより、書き込み直後の読み取りで古いデータが返されるのを防ぎます。
-                if hasattr(os, 'fsync'):
-                    os.fsync(f.fileno())
-                    
-        except Exception as e:
-             # save_image_order は通常ログを記録しませんが、
-             # この重要な処理でエラーが発生した場合に備えてログを残します。
-             if hasattr(self, 'logger') and self.logger:
-                 # log_error_save_order_sync (新しいキー)
-                 self.logger.log("log_error_save_order_sync", str(order_path), str(e))
-             else:
-                 print(f"[ERROR] Failed to save/sync order file {order_path}: {e}")
+        with open(order_path, 'w', encoding='utf-8') as f:
+            json.dump(order_list, f, indent=2, ensure_ascii=False)
             
     def save_tree_order_data(self, data_to_save: dict):
         """
@@ -365,51 +345,29 @@ class ConfigManager:
     
     # --- 修正箇所B (get_ordered_item_list を完全なコードに置き換え) ---
     def get_ordered_item_list(self) -> list:
-        """
-        保存された順序リストを読み込み、現在ディスク上に存在する
-        ファイル/フォルダのみを、その順序で返します。
-        (LinuxのI/O競合を防ぐため、ディスクスキャンによる自動修復は行いません)
-        """
-        
-        # 1. 保存されている順序リストを読み込む
         ordered_paths_str = self.load_image_order()
-        
         try:
-            # 2. 現在ディスク上に存在するアイテムをすべて取得
-            all_items_on_disk = {p for p in self.base_dir.iterdir() if p.is_dir() or p.suffix.lower() in ('.png', '.jpg', '.jpeg', '.bmp')}
+            all_items = {p for p in self.base_dir.iterdir() if p.is_dir() or p.suffix.lower() in ('.png', '.jpg', '.jpeg', '.bmp')}
         except FileNotFoundError:
-            all_items_on_disk = set()
+            all_items = set()
             
-        all_item_paths_str_on_disk = {str(p) for p in all_items_on_disk}
-
-        final_order = []
+        all_item_paths_str = {str(p) for p in all_items}
         
-        # 3. 順序リストを走査し、ディスクに存在するアイテムだけを
-        #    final_order に追加する
-        for path_str in ordered_paths_str:
-            if path_str in all_item_paths_str_on_disk:
-                final_order.append(path_str)
-                # 処理済みのアイテムをディスクリストから削除
-                all_item_paths_str_on_disk.remove(path_str)
-
-        # 4. (修正ロジック) 
-        #    順序リストには無かったが、ディスク上には存在したアイテム
-        #    (例: 手動でコピーしたファイル) があれば、
-        #    それらをソートしてリストの末尾に追加する
-        if all_item_paths_str_on_disk:
-            new_items_sorted = sorted(list(all_item_paths_str_on_disk))
-            final_order.extend(new_items_sorted)
-            
-            # ディスク上に新しいアイテムがあった場合のみ、
-            # 順序ファイルを更新する
+        final_order = [path_str for path_str in ordered_paths_str if path_str in all_item_paths_str]
+        for item in sorted(list(all_items)):
+            if str(item) not in final_order:
+                final_order.append(str(item))
+        
+        if final_order != ordered_paths_str:
             self.save_image_order(final_order)
-
-        # 5. Pathオブジェクトのリストとして返す
+        
+        # ★★★ 'None' ではなく、必ずリスト [Path(p)] を返すようにします ★★★
         return [Path(p) for p in final_order]
+    # --- 修正完了 ---
 
     def get_hierarchical_list(self):
         structured_list = []
-        for item_path in self.get_ordered_item_list():
+        for item_path in self.get_ordered_item_list(): # 修正済みのトップレベル関数
             if item_path.is_file():
                 structured_list.append({'type': 'image', 'path': str(item_path), 'name': item_path.name})
             elif item_path.is_dir():
@@ -422,17 +380,40 @@ class ConfigManager:
                     'settings': folder_settings
                 }
                 
+                # --- ▼▼▼ 修正箇所 (get_ordered_item_list と同じロジックを適用) ▼▼▼
+                
+                # 1. フォルダ内の順序 (e.g., _sub_order.json) を読み込む
                 ordered_child_names = self.load_image_order(item_path)
-                all_child_images = {p for p in item_path.iterdir() if p.is_file() and p.suffix.lower() in ('.png', '.jpg', '.jpeg', '.bmp')}
-                all_child_names = {p.name for p in all_child_images}
                 
-                final_child_order_names = [name for name in ordered_child_names if name in all_child_names]
-                for child_name in sorted(list(all_child_names)):
-                    if child_name not in final_child_order_names:
-                        final_child_order_names.append(child_name)
+                # 2. フォルダ内のディスクをスキャン
+                try:
+                    all_child_images_on_disk = {p for p in item_path.iterdir() if p.is_file() and p.suffix.lower() in ('.png', '.jpg', '.jpeg', '.bmp')}
+                except FileNotFoundError:
+                    all_child_images_on_disk = set()
+
+                all_child_names_on_disk = {p.name for p in all_child_images_on_disk}
                 
-                if final_child_order_names != ordered_child_names:
+                final_child_order_names = []
+                
+                # 3. 順序リストを走査し、ディスクに存在するアイテムだけを追加
+                #    (JSONを「正」とし、ディスクスキャンの結果でフィルタリングする)
+                for name in ordered_child_names:
+                    if name in all_child_names_on_disk:
+                        final_child_order_names.append(name)
+                        # 処理済みのアイテムをディスクリストから削除
+                        all_child_names_on_disk.remove(name)
+                        
+                # 4. (フォールバック) 順序リストになかったがディスクにあったアイテム
+                #    (D&D操作とは関係ない、手動でのファイル追加などに対応)
+                if all_child_names_on_disk:
+                    new_child_names_sorted = sorted(list(all_child_names_on_disk))
+                    final_child_order_names.extend(new_child_names_sorted)
+                    
+                    # ディスク上に新しいアイテムがあった場合のみ、
+                    # 順序ファイル (_sub_order.json) を更新する
                     self.save_image_order(final_child_order_names, item_path)
+                
+                # --- ▲▲▲ 修正完了 ▲▲▲ ---
                 
                 for child_name in final_child_order_names:
                     child_path = item_path / child_name

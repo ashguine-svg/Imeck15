@@ -125,7 +125,7 @@ class DraggableTreeWidget(QTreeWidget):
         self._remove_dummy_indicator()
         super().dragLeaveEvent(event)
 
-    # (前回修正した dropEvent をベースに、競合ロジックを修正)
+    # (前回修正した dropEvent をそのまま貼り付け)
     def dropEvent(self, event):
         if self.last_highlighted_item:
             self.last_highlighted_item.setBackground(0, QBrush(Qt.transparent))
@@ -227,26 +227,11 @@ class DraggableTreeWidget(QTreeWidget):
                 item.setSelected(True)
             self.scrollToItem(inserted_items[0])
 
-        # --- ▼▼▼ 修正箇所 (D&D 競合バグ修正) ▼▼▼ ---
-        # 
-        # 目的: D&Dによる「フォルダ移動」と「順序変更」のシグナル競合を解消する
-        
-        is_move_operation = (source_parent != dest_parent)
-
-        if is_move_operation:
-            # 1.「フォルダ移動」の場合
+        if source_parent != dest_parent:
             dest_path = str(self.config_manager.base_dir) if dest_parent is None else dest_parent.data(0, Qt.UserRole)
             source_paths = [path for _, path in cloned_items_data if path]
             if source_paths and dest_path:
-                # itemsMoved シグナル *のみ* を発行する
-                # (ui.py 側で orderUpdated のタイマーをキャンセルする)
                 self.itemsMoved.emit(source_paths, dest_path)
-        else:
-            # 2.「順序変更」(同じ親の中での並び替え) の場合
-            # orderUpdated シグナル *のみ* を発行する
-            self.orderUpdated.emit()
-            
-        # (以前は両方発行される可能性があった `self.orderUpdated.emit()` を else 句に移動)
-        # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
+        self.orderUpdated.emit()
         event.accept()

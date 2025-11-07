@@ -1,6 +1,5 @@
 # ui.py (ImportError および QCursor NameError 修正版)
 # ★★★ 選択ダイアログの写り込み防止のためタイマー遅延を追加 ★★★
-# ★★★ D&D安定化とUI非同期化（仕様書）対応版 ★★★
 
 import sys
 import json
@@ -86,15 +85,6 @@ class UIManager(QMainWindow):
         self.save_timer.setSingleShot(True)
         self.save_timer.setInterval(1000)
         self.is_processing_tree_change = False
-        
-        # --- ▼▼▼ 修正箇所 1/7 (仕様書 [38] デバウンスタイマー) ▼▼▼ ---
-        # 目的: D&Dやボタン操作による順序変更のI/Oをデバウンスする
-        self.tree_order_debounce_timer = QTimer(self)
-        self.tree_order_debounce_timer.setSingleShot(True)
-        
-        # ★★★ 修正: 5000ms (5秒) のフリーズは長すぎるため 500ms (0.5秒) に短縮 ★★★
-        self.tree_order_debounce_timer.setInterval(500) 
-        # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
         self.app_config = self.config_manager.load_app_config()
         self.locale_manager.load_locale(self.app_config.get("language", "en_US"))
@@ -454,32 +444,15 @@ class UIManager(QMainWindow):
         self.image_tree.itemSelectionChanged.connect(self.on_image_tree_selection_changed)
         self.image_tree.itemClicked.connect(self.on_image_tree_item_clicked)
         self.image_tree.customContextMenuRequested.connect(self.on_tree_context_menu)
+        self.image_tree.orderUpdated.connect(self.orderChanged.emit)
+        self.image_tree.itemsMoved.connect(self.itemsMovedIntoFolder.emit)
         
-        # --- ▼▼▼ 修正箇所 2/7 (仕様書 [38] デバウンスタイマー接続) ▼▼▼ ---
-        # 既存の orderUpdated 接続は DraggableTreeWidget (D&D完了時) のため残す
-        self.image_tree.orderUpdated.connect(self._start_order_debounce_timer) 
-        # デバウンスタイマーがタイムアウトした時に orderChanged を発行
-        self.tree_order_debounce_timer.timeout.connect(self.orderChanged.emit)
-        # --- ▲▲▲ 修正完了 ▲▲▲ ---
-        
-        # ★★★ 修正: D&Dでのフォルダ移動と順序変更が競合する問題を修正 ★★★
-        self.image_tree.itemsMoved.connect(self.on_items_moved_by_drag)
-
         self.rename_button.clicked.connect(self.on_rename_button_clicked)
         
         self.set_rec_area_button_main_ui.clicked.connect(self.setRecAreaDialog)
         if self.core_engine:
             self.clear_rec_area_button_main_ui.clicked.connect(self.core_engine.clear_recognition_area)
             self.core_engine.windowScaleCalculated.connect(self._update_capture_button_state)
-            
-            # --- ▼▼▼ 修正箇所 3/7 (仕様書 [40] 非同期UI更新) ▼▼▼ ---
-            # 目的: core_engine がDB変更完了時にUI更新を要求するための接続
-            # (core.py 側で treeUpdateRequested = Signal() が追加される前提)
-            try:
-                self.core_engine.treeUpdateRequested.connect(self.update_image_tree)
-            except AttributeError:
-                self.logger.log("[WARN] core_engine.treeUpdateRequested signal not found during connection.")
-            # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
         self.item_settings_widgets['threshold'].valueChanged.connect(self._emit_settings_for_save)
         self.item_settings_widgets['interval_time'].valueChanged.connect(self._emit_settings_for_save)
@@ -1101,9 +1074,7 @@ class UIManager(QMainWindow):
             # フォルダ内のアイテムの場合
             index = parent.indexOfChild(item)
             if index > 0:
-                # --- ▼▼▼ 修正箇所 4/7 (仕様書 [38] UIロック解除) ▼▼▼ ---
-                # self.set_tree_enabled(False) # 削除
-                # --- ▲▲▲ 修正完了 ▲▲▲ ---
+                self.set_tree_enabled(False)
                 taken_item = parent.takeChild(index)
                 parent.insertChild(index - 1, taken_item)
                 self.image_tree.setCurrentItem(taken_item) # 選択状態を維持
@@ -1113,20 +1084,16 @@ class UIManager(QMainWindow):
             # トップレベルのアイテムの場合
             index = self.image_tree.indexOfTopLevelItem(item)
             if index > 0:
-                # --- ▼▼▼ 修正箇所 4/7 (仕様書 [38] UIロック解除) ▼▼▼ ---
-                # self.set_tree_enabled(False) # 削除
-                # --- ▲▲▲ 修正完了 ▲▲▲ ---
+                self.set_tree_enabled(False)
                 taken_item = self.image_tree.takeTopLevelItem(index)
                 self.image_tree.insertTopLevelItem(index - 1, taken_item)
                 self.image_tree.setCurrentItem(taken_item)
             else:
                 return
         
-        # --- ▼▼▼ 修正箇所 4/7 (仕様書 [38] デバウンス開始) ▼▼▼ ---
-        # self.orderChanged.emit() # 変更
-        self._start_order_debounce_timer()
-        # self.set_tree_enabled(True) # 削除
-        # --- ▲▲▲ 修正完了 ▲▲▲ ---
+        # 順序の変更を通知
+        self.orderChanged.emit()
+        self.set_tree_enabled(True)
         
     def move_item_down(self):
         # 選択されたアイテムを取得
@@ -1142,9 +1109,7 @@ class UIManager(QMainWindow):
             # フォルダ内のアイテムの場合
             index = parent.indexOfChild(item)
             if index < parent.childCount() - 1: 
-                # --- ▼▼▼ 修正箇所 5/7 (仕様書 [38] UIロック解除) ▼▼▼ ---
-                # self.set_tree_enabled(False) # 削除
-                # --- ▲▲▲ 修正完了 ▲▲▲ ---
+                self.set_tree_enabled(False)
                 taken_item = parent.takeChild(index)
                 parent.insertChild(index + 1, taken_item)
                 self.image_tree.setCurrentItem(taken_item) # 選択状態を維持
@@ -1154,20 +1119,16 @@ class UIManager(QMainWindow):
             # トップレベルのアイテムの場合
             index = self.image_tree.indexOfTopLevelItem(item)
             if index < self.image_tree.topLevelItemCount() - 1: 
-                # --- ▼▼▼ 修正箇所 5/7 (仕様書 [38] UIロック解除) ▼▼▼ ---
-                # self.set_tree_enabled(False) # 削除
-                # --- ▲▲▲ 修正完了 ▲▲▲ ---
+                self.set_tree_enabled(False)
                 taken_item = self.image_tree.takeTopLevelItem(index)
                 self.image_tree.insertTopLevelItem(index + 1, taken_item)
                 self.image_tree.setCurrentItem(taken_item)
             else:
                 return
         
-        # --- ▼▼▼ 修正箇所 5/7 (仕様書 [38] デバウンス開始) ▼▼▼ ---
-        # self.orderChanged.emit() # 変更
-        self._start_order_debounce_timer()
-        # self.set_tree_enabled(True) # 削除
-        # --- ▲▲▲ 修正完了 ▲▲▲ ---
+        # 順序の変更を通知
+        self.orderChanged.emit()
+        self.set_tree_enabled(True)
 
     def save_tree_order(self):
         """
@@ -1415,48 +1376,3 @@ class UIManager(QMainWindow):
         else:
              if self.performance_monitor and 'perf' in self.normal_ui_geometries and not self.performance_monitor.isVisible():
                  self.performance_monitor.show()
-
-    # --- ▼▼▼ 修正箇所 6/7 (仕様書 [38] 指定メソッド追加) ▼▼▼ ---
-    
-    def _start_order_debounce_timer(self):
-        """
-        (仕様書 [38] Item 2)
-        順序変更デバウンスタイマーを開始（またはリセット）します。
-        D&Dやボタン操作(Up/Down)から呼び出されます。
-        """
-        # self.logger.log("[DEBUG] Order change detected, starting debounce timer (500ms)...")
-        # 500ms以内に連続で操作された場合、タイマーをリセットしてI/Oを待機させる
-        self.tree_order_debounce_timer.start()
-
-    def on_log_message(self, message: str):
-        """
-        (仕様書 [38] Item 3)
-        ロガーからのメッセージを update_log に中継します。
-        (注: main.py で logReady が update_log に直接接続されているため、
-         このメソッドは仕様書準拠のために追加されていますが、
-         現在の接続ロジックでは呼び出されない可能性があります)
-        """
-        self.update_log(message)
-        
-    # --- ▲▲▲ 修正完了 ▲▲▲ ---
-
-    # --- ▼▼▼ 修正箇所 7/7 (D&D競合バグ修正) ▼▼▼ ---
-    def on_items_moved_by_drag(self, source_paths, dest_folder_path):
-        """
-        D&Dによるフォルダ移動 (itemsMoved) と順序変更 (orderUpdated) の
-        シグナル競合を解決します。
-        
-        D&Dでフォルダにアイテムが *移動した* 場合は、
-        itemsMovedIntoFolder シグナルを発行し、
-        順序変更 (orderChanged) のデバウンスタイマーは *停止* します。
-        """
-        # 1. フォルダ移動シグナルを発行 (core.py がファイル移動とUI更新を担当)
-        self.itemsMovedIntoFolder.emit(source_paths, dest_folder_path)
-        
-        # 2. 順序変更タイマーを停止
-        # (ファイル移動処理 (core.py) が順序保存とUI更新を行うため、
-        #  D&D完了時の orderUpdated -> orderChanged の流れをキャンセルする)
-        if self.tree_order_debounce_timer.isActive():
-            # self.logger.log("[DEBUG] D&D move detected. Cancelling orderChanged debounce timer.")
-            self.tree_order_debounce_timer.stop()
-    # --- ▲▲▲ 修正完了 ▲▲▲ ---
