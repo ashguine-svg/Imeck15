@@ -198,7 +198,9 @@ class UIManager(QMainWindow):
         self.image_tree = DraggableTreeWidget(self.config_manager)
         
         self.image_tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self.image_tree.setDragDropMode(QAbstractItemView.InternalMove)
+        
+        self.image_tree.setDragDropMode(QAbstractItemView.DragDrop) # ← 修正後
+
         self.image_tree.setDragEnabled(True)
         self.image_tree.setAcceptDrops(True)
         self.image_tree.setDropIndicatorShown(False)
