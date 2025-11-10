@@ -200,7 +200,7 @@
   "log_window_base_size_saved": "Tamaño base guardado para la ventana '%s'.",
   "log_window_scale_calc": "Escala de la ventana '%s': %sx (corregida a 1.0)",
   "log_error_base_size_process": "Error al procesar la respuesta del tamaño base: %s",
-  "log_window_scale_applied": "Aplicando escala de ventana %sx.",
+  "log_window_scale_applied": "Aplicando escala de ventana %s.",
   "log_window_scale_not_applied": "La escala de ventana calculada %sx no fue aplicada.",
   "log_error_apply_scale_process": "Error al procesar la respuesta de aplicación de escala: %s",
   "log_rec_area_set": "Área de reconocimiento establecida: %s",
@@ -328,7 +328,6 @@
   "log_dxcam_cleanup_error": "[WARN] Error al liberar los recursos de DXCam: %s",
   "log_scale_search_enabled": "Búsqueda de escala habilitada: Buscando en %s pasos (Centro: %s).",
   "log_capture_scale_applied": "Aplicando escala de captura global (Modo Ligero) %s.",
-  "log_window_scale_applied": "Aplicando escala de ventana %s.",
   "log_final_scales": "Escalas de búsqueda de plantilla finales: [%s]",
   "log_cache_build_complete": "Construcción de la caché de plantillas completa. Normal: %s elementos, Respaldo: %s elementos",
   "log_priority_timers": "Carpetas de Prioridad por Temporizador: %s",
@@ -357,5 +356,8 @@
   "log_rename_error_general": "Ocurrió un error durante el renombrado: %s",
   "log_rename_warn_not_in_order": "Advertencia: El elemento renombrado '%s' no se encontró en la lista de orden (el renombrado del archivo fue exitoso).",
   "log_rename_success": "Se renombró el elemento '%s' a '%s'.",
-  "log_rename_error_order_list": "El renombrado del archivo fue exitoso, pero ocurrió un error al actualizar la lista de orden: %s"
+  "log_rename_error_order_list": "El renombrado del archivo fue exitoso, pero ocurrió un error al actualizar la lista de orden: %s",
+  "context_menu_env_header": "--- [Entornos recopilados (Últimos %s)]",
+  "context_menu_env_entry": "- App: %s, Res: %s, DPI: %s, Escala: %.2f",
+  "context_menu_env_entry_no_app": "- App: (Ninguna), Res: %s, DPI: %s, Escala: %.2f"
 }

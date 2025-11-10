@@ -200,7 +200,7 @@
   "log_window_base_size_saved": "Lagret basisstørrelse for vindu '%s'.",
   "log_window_scale_calc": "Vindu '%s' skala: %sx (korrigert til 1.0)",
   "log_error_base_size_process": "Feil under behandling av basisstørrelse-respons: %s",
-  "log_window_scale_applied": "Bruker vindus-skala %sx.",
+  "log_window_scale_applied": "Bruker vindus-skala %s.",
   "log_window_scale_not_applied": "Beregnet vindus-skala %sx ble ikke brukt.",
   "log_error_apply_scale_process": "Feil under behandling av bruk skala-respons: %s",
   "log_rec_area_set": "Angitt gjenkjenningsområde: %s",
@@ -329,7 +329,6 @@
   "log_dxcam_cleanup_error": "[ADVARSEL] Feil ved frigivelse av DXCam-ressurser: %s",
   "log_scale_search_enabled": "Skalasøk aktivert: Søker i %s trinn (Senter: %s).",
   "log_capture_scale_applied": "Bruker global fangst-skala (Lettvekt-modus) %s.",
-  "log_window_scale_applied": "Bruker vindus-skala %s.",
   "log_final_scales": "Endelige mal-søkeskalaer: [%s]",
   "log_cache_build_complete": "Mal-cache-bygging fullført. Normal: %s elementer, Sikkerhetskopi: %s elementer",
   "log_priority_timers": "Timerprioritetsmapper: %s",
@@ -347,7 +346,6 @@
   "log_countdown_cancelled": "Normalt bilde oppdaget, avbryter sikkerhetskopi-nedtelling.",
   "log_countdown_executing": "%s sekunder har gått. Utfører sikkerhetskopi klikk.",
   "log_image_saved_success": "Lagret bilde: %s",
-  "log_rec_area_cleared": "Tømte gjenkjenningsområde.",
   "warn_capture_disabled_scale": "Bilder fanget under auto-skalering vil ikke samsvare.\nVennligst fang bilder ved 1.0x skala.",
   "rename_button": "Gi nytt navn",
   "warn_rename_title": "Feil ved nytt navn",
@@ -360,5 +358,8 @@
   "log_rename_error_general": "En feil oppstod under gi nytt navn: %s",
   "log_rename_warn_not_in_order": "Advarsel: Elementet som fikk nytt navn '%s' ble ikke funnet i rekkefølgelisten (filnavnebytte var vellykket).",
   "log_rename_success": "Gitt element '%s' nytt navn til '%s'.",
-  "log_rename_error_order_list": "Filnavnebytte lyktes, men det oppstod en feil under oppdatering av rekkefølgelisten: %s"
+  "log_rename_error_order_list": "Filnavnebytte lyktes, men det oppstod en feil under oppdatering av rekkefølgelisten: %s",
+  "context_menu_env_header": "--- [Innsamlede miljøer (Siste %s)]",
+  "context_menu_env_entry": "- App: %s, Res: %s, DPI: %s, Skala: %.2f",
+  "context_menu_env_entry_no_app": "- App: (Ingen), Res: %s, DPI: %s, Skala: %.2f"
 }

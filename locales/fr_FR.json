@@ -200,7 +200,7 @@
   "log_window_base_size_saved": "Taille de base enregistrée pour la fenêtre '%s'.",
   "log_window_scale_calc": "Échelle fenêtre '%s': %sx (corrigée à 1.0)",
   "log_error_base_size_process": "Erreur de traitement de la réponse de taille de base: %s",
-  "log_window_scale_applied": "Application de l'échelle de fenêtre %sx.",
+  "log_window_scale_applied": "Application de l'échelle de fenêtre %s.",
   "log_window_scale_not_applied": "L'échelle de fenêtre calculée %sx n'a pas été appliquée.",
   "log_error_apply_scale_process": "Erreur de traitement de la réponse d'application d'échelle: %s",
   "log_rec_area_set": "Zone de reconnaissance définie: %s",
@@ -329,7 +329,6 @@
   "log_dxcam_cleanup_error": "[WARN] Erreur lors de la libération des ressources DXCam: %s",
   "log_scale_search_enabled": "Recherche d'échelle activée: Recherche en %s étapes (Centre: %s).",
   "log_capture_scale_applied": "Application de l'échelle de capture globale (mode Léger) %s.",
-  "log_window_scale_applied": "Application de l'échelle de fenêtre %s.",
   "log_final_scales": "Échelles finales de recherche de modèle: [%s]",
   "log_cache_build_complete": "Construction du cache de modèle terminée. Normal: %s éléments, Sauvegarde: %s éléments",
   "log_priority_timers": "Dossiers de Priorité Minuterie: %s",
@@ -359,5 +358,8 @@
   "log_rename_error_general": "Une erreur est survenue lors du renommage: %s",
   "log_rename_warn_not_in_order": "Avertissement: L'élément renommé '%s' n'a pas été trouvé dans la liste d'ordre (le renommage du fichier a réussi).",
   "log_rename_success": "Élément renommé de '%s' à '%s'.",
-  "log_rename_error_order_list": "Le renommage du fichier a réussi, mais une erreur est survenue lors de la mise à jour de la liste d'ordre: %s"
+  "log_rename_error_order_list": "Le renommage du fichier a réussi, mais une erreur est survenue lors de la mise à jour de la liste d'ordre: %s",
+  "context_menu_env_header": "--- [Environnements collectés (%s derniers)]",
+  "context_menu_env_entry": "- App: %s, Rés: %s, DPI: %s, Scale: %.2f",
+  "context_menu_env_entry_no_app": "- App: (Aucune), Rés: %s, DPI: %s, Scale: %.2f"
 }

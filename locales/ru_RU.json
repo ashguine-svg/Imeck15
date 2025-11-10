@@ -200,7 +200,7 @@
   "log_window_base_size_saved": "Сохранен базовый размер для окна '%s'.",
   "log_window_scale_calc": "Масштаб окна '%s': %sx (исправлено до 1.0)",
   "log_error_base_size_process": "Ошибка при обработке ответа базового размера: %s",
-  "log_window_scale_applied": "Применение масштаба окна %sx.",
+  "log_window_scale_applied": "Применение масштаба окна %s.",
   "log_window_scale_not_applied": "Рассчитанный масштаб окна %sx не был применен.",
   "log_error_apply_scale_process": "Ошибка при обработке ответа о применении масштаба: %s",
   "log_rec_area_set": "Установлена область распознавания: %s",
@@ -328,7 +328,6 @@
   "log_dxcam_cleanup_error": "[ПРЕДУПРЕЖДЕНИЕ] Ошибка при освобождении ресурсов DXCam: %s",
   "log_scale_search_enabled": "Поиск масштаба включен: Поиск в %s шагов (Центр: %s).",
   "log_capture_scale_applied": "Применение глобального масштаба захвата (облегченный режим) %s.",
-  "log_window_scale_applied": "Применение масштаба окна %s.",
   "log_final_scales": "Конечные масштабы поиска шаблона: [%s]",
   "log_cache_build_complete": "Построение кэша шаблонов завершено. Обычные: %s элементов, Резервные: %s элементов",
   "log_priority_timers": "Папки с приоритетом таймера: %s",
@@ -358,5 +357,8 @@
   "log_rename_warn_not_in_order": "Предупреждение: Переименованный элемент '%s' не найден в списке порядка (переименование файла прошло успешно).",
   "log_rename_success": "Элемент '%s' переименован в '%s'.",
   "log_rename_error_order_list": "Переименование файла прошло успешно, но при обновлении списка порядка произошла ошибка: %s",
-  "error_rename_title": "Ошибка переименования"
+  "error_rename_title": "Ошибка переименования",
+  "context_menu_env_header": "--- [Собранные среды (Последние %s)]",
+  "context_menu_env_entry": "- Прил: %s, Разр: %s, DPI: %s, Масшт: %.2f",
+  "context_menu_env_entry_no_app": "- Прил: (Нет), Разр: %s, DPI: %s, Масшт: %.2f"
 }

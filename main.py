@@ -170,7 +170,7 @@ def main():
     core_engine.windowScaleCalculated.connect(ui_manager.on_window_scale_calculated)
     core_engine.askToSaveWindowBaseSizeSignal.connect(ui_manager.show_prompt_to_save_base_size)
     core_engine.askToApplyWindowScaleSignal.connect(ui_manager.show_prompt_to_apply_scale)
-
+    core_engine.appContextChanged.connect(ui_manager.on_app_context_changed)
     ui_manager.startMonitoringRequested.connect(core_engine.start_monitoring)
     ui_manager.stopMonitoringRequested.connect(core_engine.stop_monitoring)
     ui_manager.loadImagesRequested.connect(core_engine.load_images_into_manager)

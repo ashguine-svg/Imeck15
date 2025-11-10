@@ -200,7 +200,7 @@
   "log_window_base_size_saved": "Sparade basstorlek för fönster '%s'.",
   "log_window_scale_calc": "Fönster '%s' skala: %sx (korrigerad till 1.0)",
   "log_error_base_size_process": "Fel vid bearbetning av basstorleksvar: %s",
-  "log_window_scale_applied": "Tillämpar fönsterskala %sx.",
+  "log_window_scale_applied": "Tillämpar fönsterskala %s.",
   "log_window_scale_not_applied": "Beräknad fönsterskala %sx tillämpades inte.",
   "log_error_apply_scale_process": "Fel vid bearbetning av tillämpa skala-var: %s",
   "log_rec_area_set": "Igenkänningsområde inställt: %s",
@@ -329,7 +329,6 @@
   "log_dxcam_cleanup_error": "[VARNING] Fel vid frigöring av DXCam-resurser: %s",
   "log_scale_search_enabled": "Skalasökning aktiverad: Söker i %s steg (Centrum: %s).",
   "log_capture_scale_applied": "Tillämpar global fångstskala (Lättviktsläge) %s.",
-  "log_window_scale_applied": "Tillämpar fönsterskala %s.",
   "log_final_scales": "Slutliga mall-sökskalor: [%s]",
   "log_cache_build_complete": "Mallcachen byggd klar. Normal: %s objekt, Backup: %s objekt",
   "log_priority_timers": "Timerprioritetsmappar: %s",
@@ -347,7 +346,6 @@
   "log_countdown_cancelled": "Normal bild detekterad, avbryter backup nedräkning.",
   "log_countdown_executing": "%s sekunder förflutna. Utför backup klick.",
   "log_image_saved_success": "Sparade bild: %s",
-  "log_rec_area_cleared": "Rensade igenkänningsområde.",
   "warn_capture_disabled_scale": "Bilder fångade under auto-skalning kommer inte att matcha.\nVänligen fånga bilder vid 1.0x skala.",
   "rename_button": "Byt Namn",
   "warn_rename_title": "Fel vid Byt Namn",
@@ -360,5 +358,8 @@
   "log_rename_error_general": "Ett fel uppstod under byta namn: %s",
   "log_rename_warn_not_in_order": "Varning: Objektet med nytt namn '%s' hittades inte i ordningslistan (filnamnsbyte lyckades).",
   "log_rename_success": "Bytte namn på objekt '%s' till '%s'.",
-  "log_rename_error_order_list": "Filnamnsbyte lyckades, men ett fel uppstod vid uppdatering av ordningslistan: %s"
+  "log_rename_error_order_list": "Filnamnsbyte lyckades, men ett fel uppstod vid uppdatering av ordningslistan: %s",
+  "context_menu_env_header": "--- [Insamlade miljöer (Senaste %s)]",
+  "context_menu_env_entry": "- App: %s, Res: %s, DPI: %s, Skala: %.2f",
+  "context_menu_env_entry_no_app": "- App: (Ingen), Res: %s, DPI: %s, Skala: %.2f"
 }

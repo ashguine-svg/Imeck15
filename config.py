@@ -4,6 +4,7 @@ import json
 import shutil
 from pathlib import Path
 import os
+import threading # ★ 1. threading をインポート
 
 class ConfigManager:
     # ★★★ 1. __init__ で logger を受け取る ★★★
@@ -16,6 +17,12 @@ class ConfigManager:
         self.sub_order_filename = "_sub_order.json"
         self.app_config_path = self.base_dir / "app_config.json"
         self.window_scales_path = self.base_dir / "window_scales.json"
+
+        # ★ 2. ロック機構の初期化
+        # JSONファイルごとの書き込み競合を防ぐためのロック辞書
+        self.item_json_locks = {}
+        # ロック辞書にアクセスするための共通ロック
+        self.item_json_locks_lock = threading.Lock()
 
         self._cleanup_orphaned_json_files()
 
@@ -140,45 +147,101 @@ class ConfigManager:
             # ★★★ 7. print を self.logger.log に変更 (翻訳キー使用) ★★★
             self.logger.log("log_window_scales_save_error", str(e))
 
+    # ★ 3. ロック取得用ヘルパーメソッド (RLock に修正)
+    def _get_item_json_lock(self, json_path: Path) -> threading.Lock:
+        """指定されたJSONパスに対応するロックを取得または生成します。"""
+        with self.item_json_locks_lock:
+            # str(json_path) をキーにすることで、異なるPathオブジェクトでも
+            # 同じファイルパスなら同じロックを共有できるようにする
+            path_key = str(json_path)
+            if path_key not in self.item_json_locks:
+                # ★★★ 修正: Lock から RLock (再入可能ロック) に変更 ★★★
+                self.item_json_locks[path_key] = threading.RLock()
+            return self.item_json_locks[path_key]
+
+    # --- ▼▼▼ (新規追加) フィルタリング用ヘルパーメソッド ▼▼▼ ---
+    def _filter_item_by_app(self, item_settings: dict, current_app_name: str) -> bool:
+        """
+        (新規) アイテムの設定と現在のアプリ名に基づき、
+        そのアイテムを採用するかどうかを決定します。
+        """
+        # アプリ名が指定されていない場合 (全表示モード) は常に採用
+        if not current_app_name:
+            return True
+
+        env_list = item_settings.get("environment_info", [])
+
+        # 1. 環境情報が記録されていない場合は「共通」とみなし採用
+        if not env_list:
+            return True
+
+        has_matching_app = False
+        has_any_app_name = False
+
+        for entry in env_list:
+            app_name = entry.get("app_name")
+            if app_name:
+                has_any_app_name = True
+                if app_name == current_app_name:
+                    has_matching_app = True
+                    break # 一致するものを発見
+        
+        # 2. 一致するアプリ名が見つかった場合は採用
+        if has_matching_app:
+            return True
+        
+        # 3. アプリ名が記録されているが、一致するものがない場合は不採用
+        if has_any_app_name and not has_matching_app:
+            return False
+
+        # 4. アプリ名が一切記録されていない (app_name: None や 解像度のみ) 場合は採用
+        return True
+    # --- ▲▲▲ (新規追加) フィルタリング用ヘルパーメソッド ▲▲▲ ---
+
     def _get_setting_path(self, item_path: Path) -> Path:
         if item_path.is_dir():
             return item_path / self.folder_config_filename
         return item_path.with_suffix('.json')
 
+    # ★ 4. load_item_setting にロックを追加
     def load_item_setting(self, item_path: Path) -> dict:
         setting_path = self._get_setting_path(item_path)
-        if item_path.is_dir():
-            default_setting = {
-                'mode': 'normal',
-                'priority_image_timeout': 10,
-                'priority_interval': 10,
-                'priority_timeout': 5,
-            }
-        else:
-            default_setting = {
-                'image_path': str(item_path),
-                'click_position': None,
-                'click_rect': None,
-                'roi_enabled': False,
-                'roi_mode': 'fixed',
-                'roi_rect': None,
-                'roi_rect_variable': None, 
-                'point_click': True,
-                'range_click': False,
-                'random_click': False,
-                'interval_time': 1.5,
-                'backup_click': False,
-                'backup_time': 300.0,
-                'threshold': 0.8,
-                'debounce_time': 0.0
-            }
-        
-        if not setting_path.exists():
-            return default_setting
+        # 対応するファイルロックを取得
+        file_lock = self._get_item_json_lock(setting_path)
+
+        with file_lock: # ロックを取得してファイル操作
+            if item_path.is_dir():
+                default_setting = {
+                    'mode': 'normal',
+                    'priority_image_timeout': 10,
+                    'priority_interval': 10,
+                    'priority_timeout': 5,
+                }
+            else:
+                default_setting = {
+                    'image_path': str(item_path),
+                    'click_position': None,
+                    'click_rect': None,
+                    'roi_enabled': False,
+                    'roi_mode': 'fixed',
+                    'roi_rect': None,
+                    'roi_rect_variable': None, 
+                    'point_click': True,
+                    'range_click': False,
+                    'random_click': False,
+                    'interval_time': 1.5,
+                    'backup_click': False,
+                    'backup_time': 300.0,
+                    'threshold': 0.8,
+                    'debounce_time': 0.0
+                }
             
-        try:
-            with open(setting_path, 'r', encoding='utf-8') as f:
-                setting = json.load(f)
+            if not setting_path.exists():
+                return default_setting
+                
+            try:
+                with open(setting_path, 'r', encoding='utf-8') as f:
+                    setting = json.load(f)
 
                 if item_path.is_dir() and 'is_excluded' in setting:
                     if setting['is_excluded']:
@@ -194,19 +257,24 @@ class ConfigManager:
                 for key, value in default_setting.items():
                     setting.setdefault(key, value)
                 return setting
-        except (json.JSONDecodeError, Exception) as e:
-            # ★★★ 8. print を self.logger.log に変更 (翻訳キー使用) ★★★
-            self.logger.log("log_item_setting_load_error", str(setting_path), str(e))
-            return default_setting
+            except (json.JSONDecodeError, Exception) as e:
+                # ★★★ 8. print を self.logger.log に変更 (翻訳キー使用) ★★★
+                self.logger.log("log_item_setting_load_error", str(setting_path), str(e))
+                return default_setting
 
+    # ★ 5. save_item_setting にロックを追加
     def save_item_setting(self, item_path: Path, setting: dict):
         setting_path = self._get_setting_path(item_path)
-        try:
-            with open(setting_path, 'w', encoding='utf-8') as f:
-                json.dump(setting, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            # ★★★ 9. print を self.logger.log に変更 (翻訳キー使用) ★★★
-            self.logger.log("log_item_setting_save_error", str(setting_path), str(e))
+        # 対応するファイルロックを取得
+        file_lock = self._get_item_json_lock(setting_path)
+
+        with file_lock: # ロックを取得してファイル操作
+            try:
+                with open(setting_path, 'w', encoding='utf-8') as f:
+                    json.dump(setting, f, indent=2, ensure_ascii=False)
+            except Exception as e:
+                # ★★★ 9. print を self.logger.log に変更 (翻訳キー使用) ★★★
+                self.logger.log("log_item_setting_save_error", str(setting_path), str(e))
 
     def load_image_order(self, folder_path=None) -> list:
         order_path = Path(folder_path) / self.sub_order_filename if folder_path else self.base_dir / self.image_order_filename
@@ -343,6 +411,52 @@ class ConfigManager:
             # ★ 修正: log_rename_item_error_general -> log_rename_error_general
             return False, self.logger.locale_manager.tr("log_rename_error_general", str(e))
     
+    # ★ 6. 環境情報更新メソッド (RLock で保護するよう修正)
+    def update_environment_info(self, item_path_str: str, env_data: dict):
+        """
+        (ワーカースレッドから実行)
+        指定されたアイテムのJSONを安全に読み込み、
+        新しい環境情報 (env_data) が既存でなければ追加して保存します。
+        """
+        if not item_path_str:
+            return
+            
+        try:
+            item_path = Path(item_path_str)
+            
+            # ★★★ 修正箇所 1/2: 先にロックを取得する ★★★
+            setting_path = self._get_setting_path(item_path)
+            file_lock = self._get_item_json_lock(setting_path)
+
+            with file_lock: # ★★★ 修正箇所 2/2: メソッド全体をロックする ★★★
+                # 1. 既存の設定を安全に読み込む (RLockなのでデッドロックしない)
+                current_settings = self.load_item_setting(item_path)
+                
+                # 2. environment_info リストを取得 (なければ新規作成)
+                env_list = current_settings.get("environment_info", [])
+                
+                # 3. 重複チェック
+                is_duplicate = False
+                for existing_env in env_list:
+                    # env_data の内容が完全に一致するかチェック
+                    if existing_env == env_data:
+                        is_duplicate = True
+                        break
+                
+                # 4. 重複がなければ追加
+                if not is_duplicate:
+                    env_list.append(env_data)
+                    current_settings["environment_info"] = env_list
+                    
+                    # 5. 設定を安全に保存する (RLockなのでデッドロックしない)
+                    self.save_item_setting(item_path, current_settings)
+                    self.logger.log("[DEBUG] Environment info updated for %s", item_path.name)
+                # else:
+                    # self.logger.log("[DEBUG] Environment info already exists for %s", item_path.name)
+
+        except Exception as e:
+            self.logger.log("[ERROR] Failed to update environment info for %s: %s", item_path_str, str(e))
+
     # --- 修正箇所B (get_ordered_item_list を完全なコードに置き換え) ---
     def get_ordered_item_list(self) -> list:
         ordered_paths_str = self.load_image_order()
@@ -365,13 +479,31 @@ class ConfigManager:
         return [Path(p) for p in final_order]
     # --- 修正完了 ---
 
-    def get_hierarchical_list(self):
+    # --- ▼▼▼ (修正) フィルタリング対応の get_hierarchical_list ▼▼▼ ---
+    def get_hierarchical_list(self, current_app_name: str = None):
         structured_list = []
-        for item_path in self.get_ordered_item_list(): # 修正済みのトップレベル関数
+        
+        # get_ordered_item_list は変更不要 (ソートされた全パスを取得)
+        for item_path in self.get_ordered_item_list(): 
+            
+            # ★ フィルタリングのために設定を先に読み込む
+            item_settings = self.load_item_setting(item_path)
+            
+            # ★ フィルタリングロジックの呼び出し
+            if not self._filter_item_by_app(item_settings, current_app_name):
+                continue # 不採用の場合はスキップ
+
+            # --- (以下、採用されたアイテムのみ処理) ---
+            
             if item_path.is_file():
-                structured_list.append({'type': 'image', 'path': str(item_path), 'name': item_path.name})
+                structured_list.append({
+                    'type': 'image', 
+                    'path': str(item_path), 
+                    'name': item_path.name,
+                    'settings': item_settings # ★ 読み込んだ設定を渡す
+                })
             elif item_path.is_dir():
-                folder_settings = self.load_item_setting(item_path)
+                folder_settings = item_settings # フォルダ設定として使用
                 folder_item = {
                     'type': 'folder', 
                     'path': str(item_path), 
@@ -417,9 +549,20 @@ class ConfigManager:
                 
                 for child_name in final_child_order_names:
                     child_path = item_path / child_name
-                    folder_item['children'].append({'type': 'image', 'path': str(child_path), 'name': child_path.name})
+                    
+                    # ★ フォルダ内の子画像もフィルタリングする
+                    child_settings = self.load_item_setting(child_path)
+                    if self._filter_item_by_app(child_settings, current_app_name):
+                        folder_item['children'].append({
+                            'type': 'image', 
+                            'path': str(child_path), 
+                            'name': child_path.name,
+                            'settings': child_settings # ★ 読み込んだ設定を渡す
+                        })
+                        
                 structured_list.append(folder_item)
         return structured_list
+    # --- ▲▲▲ (修正) フィルタリング対応完了 ▲▲▲ ---
 
     def create_folder(self, folder_name: str):
         if not folder_name:

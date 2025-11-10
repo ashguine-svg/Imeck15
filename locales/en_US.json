@@ -200,7 +200,7 @@
   "log_window_base_size_saved": "Saved base size for window '%s'.",
   "log_window_scale_calc": "Window '%s' scale: %sx (corrected to 1.0)",
   "log_error_base_size_process": "Error processing base size response: %s",
-  "log_window_scale_applied": "Applying window scale %sx.",
+  "log_window_scale_applied": "Applying window scale %s.",
   "log_window_scale_not_applied": "Calculated window scale %sx was not applied.",
   "log_error_apply_scale_process": "Error processing apply scale response: %s",
   "log_rec_area_set": "Set recognition area: %s",
@@ -329,7 +329,6 @@
   "log_dxcam_cleanup_error": "[WARN] Error releasing DXCam resources: %s",
   "log_scale_search_enabled": "Scale search enabled: Searching in %s steps (Center: %s).",
   "log_capture_scale_applied": "Applying global capture scale (Lightweight mode) %s.",
-  "log_window_scale_applied": "Applying window scale %s.",
   "log_final_scales": "Final template search scales: [%s]",
   "log_cache_build_complete": "Template cache build complete. Normal: %s items, Backup: %s items",
   "log_priority_timers": "Timer Priority Folders: %s",
@@ -347,7 +346,6 @@
   "log_countdown_cancelled": "Normal image detected, cancelling backup countdown.",
   "log_countdown_executing": "%s seconds elapsed. Executing backup click.",
   "log_image_saved_success": "Saved image: %s",
-  "log_rec_area_cleared": "Cleared recognition area.",
   "warn_capture_disabled_scale": "Images captured during auto-scale will not match.\nPlease capture images at 1.0x scale.",
   "rename_button": "Rename",
   "warn_rename_title": "Rename Error",
@@ -360,5 +358,8 @@
   "log_rename_error_general": "An error occurred during rename: %s",
   "log_rename_warn_not_in_order": "Warning: Renamed item '%s' not found in order list (file rename was successful).",
   "log_rename_success": "Renamed item '%s' to '%s'.",
-  "log_rename_error_order_list": "File rename succeeded, but an error occurred while updating the order list: %s"
+  "log_rename_error_order_list": "File rename succeeded, but an error occurred while updating the order list: %s",
+  "context_menu_env_header": "--- [Collected Environments (Last %s)]",
+  "context_menu_env_entry": "- App: %s, Res: %s, DPI: %s, Scale: %.2f",
+  "context_menu_env_entry_no_app": "- App: (None), Res: %s, DPI: %s, Scale: %.2f"
 }

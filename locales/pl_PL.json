@@ -200,7 +200,7 @@
   "log_window_base_size_saved": "Zapisano rozmiar bazowy dla okna '%s'.",
   "log_window_scale_calc": "Skala okna '%s': %sx (skorygowana do 1.0)",
   "log_error_base_size_process": "Błąd przetwarzania odpowiedzi rozmiaru bazowego: %s",
-  "log_window_scale_applied": "Stosowanie skali okna %sx.",
+  "log_window_scale_applied": "Stosowanie skali okna %s.",
   "log_window_scale_not_applied": "Obliczona skala okna %sx nie została zastosowana.",
   "log_error_apply_scale_process": "Błąd przetwarzania odpowiedzi zastosowania skali: %s",
   "log_rec_area_set": "Ustawiono obszar rozpoznawania: %s",
@@ -329,7 +329,6 @@
   "log_dxcam_cleanup_error": "[OSTRZEŻENIE] Błąd podczas zwalniania zasobów DXCam: %s",
   "log_scale_search_enabled": "Włączono wyszukiwanie skali: Wyszukiwanie w %s krokach (Środek: %s).",
   "log_capture_scale_applied": "Stosowanie globalnej skali przechwytywania (Tryb Lekki) %s.",
-  "log_window_scale_applied": "Stosowanie skali okna %s.",
   "log_final_scales": "Ostateczne skale wyszukiwania szablonu: [%s]",
   "log_cache_build_complete": "Budowa pamięci podręcznej szablonu zakończona. Normalne: %s elementów, Zapasowe: %s elementów",
   "log_priority_timers": "Foldery Priorytetu Zegara: %s",
@@ -347,7 +346,6 @@
   "log_countdown_cancelled": "Wykryto normalny obraz, anulowanie odliczania zapasowego.",
   "log_countdown_executing": "Upłynęło %s sekund. Wykonywanie kliknięcia zapasowego.",
   "log_image_saved_success": "Zapisano obraz: %s",
-  "log_rec_area_cleared": "Wyczyszczono obszar rozpoznawania.",
   "warn_capture_disabled_scale": "Obrazy przechwycone podczas auto-skalowania nie będą pasować.\nProszę przechwytywać obrazy w skali 1.0x.",
   "rename_button": "Zmień Nazwę",
   "warn_rename_title": "Błąd Zmiany Nazwy",
@@ -360,5 +358,8 @@
   "log_rename_error_general": "Wystąpił błąd podczas zmiany nazwy: %s",
   "log_rename_warn_not_in_order": "Ostrzeżenie: Zmieniony element '%s' nie znaleziony na liście kolejności (zmiana nazwy pliku powiodła się).",
   "log_rename_success": "Zmieniono nazwę elementu '%s' na '%s'.",
-  "log_rename_error_order_list": "Zmiana nazwy pliku powiodła się, ale wystąpił błąd podczas aktualizacji listy kolejności: %s"
+  "log_rename_error_order_list": "Zmiana nazwy pliku powiodła się, ale wystąpił błąd podczas aktualizacji listy kolejności: %s",
+  "context_menu_env_header": "--- [Zebrane środowiska (Ostatnie %s)]",
+  "context_menu_env_entry": "- Aplik: %s, Rozdz: %s, DPI: %s, Skala: %.2f",
+  "context_menu_env_entry_no_app": "- Aplik: (Brak), Rozdz: %s, DPI: %s, Skala: %.2f"
 }

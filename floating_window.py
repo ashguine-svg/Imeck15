@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout # ★ QVBoxLayout をインポート
 )
 from PySide6.QtGui import QPainter, QColor, QFontMetrics
-from PySide6.QtCore import Qt, Signal, QPoint
+from PySide6.QtCore import Qt, Signal, QPoint, QEvent # ★ QEvent を追加
 
 class FloatingWindow(QDialog):
     """
@@ -69,6 +69,10 @@ class FloatingWindow(QDialog):
             self.start_button, self.stop_button, self.capture_button, 
             self.set_rec_area_button, self.toggle_ui_button, self.close_button
         ]
+        
+        for btn in buttons_list:
+            btn.installEventFilter(self)
+        
         
         # ボタンのスタイルとサイズを設定
         button_radius = int(button_height / 2) # 角丸（円形）のための半径
@@ -168,6 +172,28 @@ class FloatingWindow(QDialog):
         # 最小幅を自動調整し、最大幅を設定
         self.setMinimumWidth(self.sizeHint().width())
         self.setMaximumWidth(960) # ご要望の最大幅
+    
+    def eventFilter(self, watched_object, event):
+        """
+        インストールされたイベントフィルター。
+        ボタンに対する右クリックイベントをすべて無視します。
+        """
+        buttons_list = [
+            self.start_button, self.stop_button, self.capture_button, 
+            self.set_rec_area_button, self.toggle_ui_button, self.close_button
+        ]
+
+        # 監視対象がリスト内のボタンであり、
+        # イベントが「右クリック」のプレスまたはダブルクリックの場合
+        if watched_object in buttons_list and \
+           (event.type() == QEvent.Type.MouseButtonPress or event.type() == QEvent.Type.MouseButtonDblClick) and \
+           event.button() == Qt.MouseButton.RightButton:
+            
+            # イベントを無視 (Trueを返す) し、Qtに処理させない
+            return True
+
+        # それ以外のイベントは通常通り処理する
+        return super().eventFilter(watched_object, event)
     
     def on_stats_updated(self, click_count: int, uptime_str: str, timer_data: dict, cpu: float, fps: float):
         """CoreEngineから統計情報を受け取るスロット"""

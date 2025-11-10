@@ -200,7 +200,7 @@
   "log_window_base_size_saved": "Peruskoko tallennettu ikkunalle '%s'.",
   "log_window_scale_calc": "Ikkunan '%s' skaalaus: %sx (korjattu arvoon 1.0)",
   "log_error_base_size_process": "Virhe peruskoon vastauksen käsittelyssä: %s",
-  "log_window_scale_applied": "Sovelletaan ikkunan skaalaa %sx.",
+  "log_window_scale_applied": "Sovelletaan ikkunan skaalaa %s.",
   "log_window_scale_not_applied": "Laskettua ikkunan skaalaa %sx ei sovellettu.",
   "log_error_apply_scale_process": "Virhe skaalan soveltamisen vastauksen käsittelyssä: %s",
   "log_rec_area_set": "Tunnistusalue asetettu: %s",
@@ -329,7 +329,6 @@
   "log_dxcam_cleanup_error": "[VAROITUS] Virhe DXCam-resurssien vapauttamisessa: %s",
   "log_scale_search_enabled": "Skaalaushaku käytössä: Haetaan %s askeleessa (Keski: %s).",
   "log_capture_scale_applied": "Sovelletaan globaalia tallennusskaalaa (Kevyt tila) %s.",
-  "log_window_scale_applied": "Sovelletaan ikkunan skaalaa %s.",
   "log_final_scales": "Lopulliset mallin hakuskaalat: [%s]",
   "log_cache_build_complete": "Mallin välimuistin rakentaminen valmis. Normaali: %s kohdetta, Varmuuskopio: %s kohdetta",
   "log_priority_timers": "Ajastinprioriteettikansiot: %s",
@@ -347,7 +346,6 @@
   "log_countdown_cancelled": "Normaali kuva havaittu, peruutetaan varmuuskopio-lähtölaskenta.",
   "log_countdown_executing": "%s sekuntia kulunut. Suoritetaan varmuuskopio-napsautus.",
   "log_image_saved_success": "Kuva tallennettu: %s",
-  "log_rec_area_cleared": "Tunnistusalue tyhjennetty.",
   "warn_capture_disabled_scale": "Auto-skaalauksen aikana tallennetut kuvat eivät täsmää.\nTallenna kuvat skaalalla 1.0x.",
   "rename_button": "Nimeä Uudelleen",
   "warn_rename_title": "Nimeämisvirhe",
@@ -360,5 +358,8 @@
   "log_rename_error_general": "Virhe nimeämisen aikana: %s",
   "log_rename_warn_not_in_order": "Varoitus: Uudelleen nimettyä kohdetta '%s' ei löydy järjestysluettelosta (tiedoston nimeäminen onnistui).",
   "log_rename_success": "Kohde '%s' nimettiin uudelleen nimellä '%s'.",
-  "log_rename_error_order_list": "Tiedoston nimeäminen onnistui, mutta virhe järjestysluettelon päivityksen aikana: %s"
+  "log_rename_error_order_list": "Tiedoston nimeäminen onnistui, mutta virhe järjestysluettelon päivityksen aikana: %s",
+  "context_menu_env_header": "--- [Kerätyt ympäristöt (Viimeiset %s)]",
+  "context_menu_env_entry": "- App: %s, Res: %s, DPI: %s, Skaala: %.2f",
+  "context_menu_env_entry_no_app": "- App: (Ei ole), Res: %s, DPI: %s, Skaala: %.2f"
 }

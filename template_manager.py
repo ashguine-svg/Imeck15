@@ -21,7 +21,7 @@ class TemplateManager:
         self.config_manager = config_manager
         self.logger = logger # Loggerインスタンスを保持
 
-    def build_cache(self, app_config, current_window_scale, effective_capture_scale, is_monitoring, existing_priority_timers):
+    def build_cache(self, app_config, current_window_scale, effective_capture_scale, is_monitoring, existing_priority_timers, current_app_name: str = None):
         """
         設定に基づいてテンプレートキャッシュを構築します。
 
@@ -31,9 +31,7 @@ class TemplateManager:
             effective_capture_scale (float): 軽量化モードなどを考慮した実効キャプチャスケール。
             is_monitoring (bool): 現在監視中かどうかのフラグ。
             existing_priority_timers (dict): 既存の優先タイマー情報。
-
-        Returns:
-            tuple: (normal_cache, backup_cache, priority_timers, folder_children_map) を返します。
+            current_app_name (str, optional): フィルタリング対象のアプリ名。
         """
         normal_cache = {}
         backup_cache = {}
@@ -70,7 +68,8 @@ class TemplateManager:
         log_scales = ", ".join([f"{s:.3f}" for s in scales])
         self.logger.log("log_final_scales", log_scales)
         
-        hierarchical_list = self.config_manager.get_hierarchical_list()
+        # ★ 修正: get_hierarchical_list に current_app_name を渡す
+        hierarchical_list = self.config_manager.get_hierarchical_list(current_app_name)
         
         for item_data in hierarchical_list:
             if item_data['type'] == 'folder':

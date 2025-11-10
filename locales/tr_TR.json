@@ -200,7 +200,7 @@
   "log_window_base_size_saved": "Pencere '%s' için temel boyut kaydedildi.",
   "log_window_scale_calc": "Pencere '%s' ölçeği: %sx (1.0'a düzeltildi)",
   "log_error_base_size_process": "Temel boyut yanıtı işlenirken hata: %s",
-  "log_window_scale_applied": "Pencere ölçeği %sx uygulanıyor.",
+  "log_window_scale_applied": "Pencere ölçeği %s uygulanıyor.",
   "log_window_scale_not_applied": "Hesaplanan pencere ölçeği %sx uygulanmadı.",
   "log_error_apply_scale_process": "Ölçek uygulama yanıtı işlenirken hata: %s",
   "log_rec_area_set": "Tanıma alanı ayarlandı: %s",
@@ -329,7 +329,6 @@
   "log_dxcam_cleanup_error": "[UYARI] DXCam kaynakları serbest bırakılırken hata: %s",
   "log_scale_search_enabled": "Ölçek araması etkin: %s adımda aranıyor (Merkez: %s).",
   "log_capture_scale_applied": "Global yakalama ölçeği (Hafif mod) %s uygulanıyor.",
-  "log_window_scale_applied": "Pencere ölçeği %s uygulanıyor.",
   "log_final_scales": "Nihai şablon arama ölçekleri: [%s]",
   "log_cache_build_complete": "Şablon önbelleği oluşturma tamamlandı. Normal: %s öğe, Yedek: %s öğe",
   "log_priority_timers": "Zamanlayıcı Öncelikli Klasörler: %s",
@@ -347,7 +346,6 @@
   "log_countdown_cancelled": "Normal görüntü algılandı, yedek geri sayım iptal ediliyor.",
   "log_countdown_executing": "%s saniye geçti. Yedek tıklama yürütülüyor.",
   "log_image_saved_success": "Görüntü kaydedildi: %s",
-  "log_rec_area_cleared": "Tanıma alanı temizlendi.",
   "warn_capture_disabled_scale": "Otomatik ölçekleme sırasında yakalanan görüntüler eşleşmeyecektir.\nLütfen görüntüleri 1.0x ölçekte yakalayın.",
   "rename_button": "Yeniden Adlandır",
   "warn_rename_title": "Yeniden Adlandırma Hatası",
@@ -360,5 +358,8 @@
   "log_rename_error_general": "Yeniden adlandırma sırasında bir hata oluştu: %s",
   "log_rename_warn_not_in_order": "Uyarı: Yeniden adlandırılan öğe '%s' sıra listesinde bulunamadı (dosya yeniden adlandırma başarılı oldu).",
   "log_rename_success": "Öğe '%s' '%s' olarak yeniden adlandırıldı.",
-  "log_rename_error_order_list": "Dosya yeniden adlandırma başarılı oldu, ancak sıra listesi güncellenirken bir hata oluştu: %s"
+  "log_rename_error_order_list": "Dosya yeniden adlandırma başarılı oldu, ancak sıra listesi güncellenirken bir hata oluştu: %s",
+  "context_menu_env_header": "--- [Toplanan Ortamlar (Son %s)]",
+  "context_menu_env_entry": "- Uyg: %s, Çöz: %s, DPI: %s, Ölçek: %.2f",
+  "context_menu_env_entry_no_app": "- Uyg: (Yok), Çöz: %s, DPI: %s, Ölçek: %.2f"
 }

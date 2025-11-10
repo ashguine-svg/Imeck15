@@ -200,7 +200,7 @@
   "log_window_base_size_saved": "Gemt basisstørrelse for vindue '%s'.",
   "log_window_scale_calc": "Vindue '%s' skala: %sx (korrigeret til 1.0)",
   "log_error_base_size_process": "Fejl under behandling af basisstørrelsesrespons: %s",
-  "log_window_scale_applied": "Anvender vinduesskala %sx.",
+  "log_window_scale_applied": "Anvender vinduesskala %s.",
   "log_window_scale_not_applied": "Beregnet vinduesskala %sx blev ikke anvendt.",
   "log_error_apply_scale_process": "Fejl under behandling af anvendelsesskala-respons: %s",
   "log_rec_area_set": "Indstillet genkendelsesområde: %s",
@@ -329,7 +329,6 @@
   "log_dxcam_cleanup_error": "[ADVARSEL] Fejl ved frigivelse af DXCam-ressourcer: %s",
   "log_scale_search_enabled": "Skalasøgning aktiveret: Søger i %s trin (Center: %s).",
   "log_capture_scale_applied": "Anvender global optagelsesskala (Letvægtstilstand) %s.",
-  "log_window_scale_applied": "Anvender vinduesskala %s.",
   "log_final_scales": "Endelige skabelonsøgeskalaer: [%s]",
   "log_cache_build_complete": "Skabelon-cache-opbygning fuldført. Normal: %s elementer, Backup: %s elementer",
   "log_priority_timers": "Timerprioritetsmapper: %s",
@@ -347,7 +346,6 @@
   "log_countdown_cancelled": "Normalt billede registreret, annullerer backup-nedtælling.",
   "log_countdown_executing": "%s sekunder forløbet. Udfører backup klik.",
   "log_image_saved_success": "Gemt billede: %s",
-  "log_rec_area_cleared": "Rydede genkendelsesområde.",
   "warn_capture_disabled_scale": "Billeder optaget under auto-skala vil ikke matche.\nOptag venligst billeder ved 1.0x skala.",
   "rename_button": "Omdøb",
   "warn_rename_title": "Omdøbningsfejl",
@@ -360,5 +358,8 @@
   "log_rename_error_general": "Der opstod en fejl under omdøbning: %s",
   "log_rename_warn_not_in_order": "Advarsel: Omdøbt element '%s' ikke fundet i rækkefølgelisten (filomdøbning var vellykket).",
   "log_rename_success": "Omdøbte element '%s' til '%s'.",
-  "log_rename_error_order_list": "Filomdøbning lykkedes, men der opstod en fejl under opdatering af rækkefølgelisten: %s"
+  "log_rename_error_order_list": "Filomdøbning lykkedes, men der opstod en fejl under opdatering af rækkefølgelisten: %s",
+  "context_menu_env_header": "--- [Indsamlede miljøer (Sidste %s)]",
+  "context_menu_env_entry": "- App: %s, Res: %s, DPI: %s, Skala: %.2f",
+  "context_menu_env_entry_no_app": "- App: (Ingen), Res: %s, DPI: %s, Skala: %.2f"
 }

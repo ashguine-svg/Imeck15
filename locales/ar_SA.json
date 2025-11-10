@@ -200,7 +200,7 @@
   "log_window_base_size_saved": "تم حفظ الحجم الأساسي للنافذة '%s'.",
   "log_window_scale_calc": "مقياس النافذة '%s': %sx (تم تصحيحه إلى 1.0)",
   "log_error_base_size_process": "خطأ في معالجة استجابة الحجم الأساسي: %s",
-  "log_window_scale_applied": "تطبيق مقياس النافذة %sx.",
+  "log_window_scale_applied": "تطبيق مقياس النافذة %s.",
   "log_window_scale_not_applied": "لم يتم تطبيق مقياس النافذة المحسوب %sx.",
   "log_error_apply_scale_process": "خطأ في معالجة استجابة تطبيق المقياس: %s",
   "log_rec_area_set": "تم تعيين منطقة التعرف: %s",
@@ -329,7 +329,6 @@
   "log_dxcam_cleanup_error": "[تحذير] خطأ في تحرير موارد DXCam: %s",
   "log_scale_search_enabled": "تم تمكين البحث عن المقياس: جاري البحث في %s خطوة (المركز: %s).",
   "log_capture_scale_applied": "تطبيق مقياس الالتقاط العام (الوضع الخفيف) %s.",
-  "log_window_scale_applied": "تطبيق مقياس النافذة %s.",
   "log_final_scales": "مقاييس البحث عن القالب النهائية: [%s]",
   "log_cache_build_complete": "اكتمل إنشاء ذاكرة التخزين المؤقت للقالب. عادي: %s عناصر، احتياطي: %s عناصر",
   "log_priority_timers": "مجلدات أولوية المؤقت: %s",
@@ -359,5 +358,8 @@
   "log_rename_warn_not_in_order": "تحذير: لم يتم العثور على العنصر المعاد تسميته '%s' في قائمة الترتيب (نجحت إعادة تسمية الملف).",
   "log_rename_success": "تمت إعادة تسمية العنصر '%s' إلى '%s'.",
   "log_rename_error_order_list": "نجحت إعادة تسمية الملف، ولكن حدث خطأ أثناء تحديث قائمة الترتيب: %s",
-  "error_rename_title": "خطأ في إعادة التسمية"
+  "error_rename_title": "خطأ في إعادة التسمية",
+  "context_menu_env_header": "--- [البيئات التي تم جمعها (آخر %s)]",
+  "context_menu_env_entry": "- التطبيق: %s, الدقة: %s, DPI: %s, المقياس: %.2f",
+  "context_menu_env_entry_no_app": "- التطبيق: (لا يوجد), الدقة: %s, DPI: %s, المقياس: %.2f"
 }

@@ -200,7 +200,7 @@
   "log_window_base_size_saved": "विंडो '%s' के लिए आधार आकार सहेजा गया।",
   "log_window_scale_calc": "विंडो '%s' स्केल: %sx (1.0 पर ठीक किया गया)",
   "log_error_base_size_process": "आधार आकार प्रतिक्रिया संसाधित करते समय त्रुटि: %s",
-  "log_window_scale_applied": "विंडो स्केल %sx लागू कर रहा है।",
+  "log_window_scale_applied": "विंडो स्केल %s लागू कर रहा है।",
   "log_window_scale_not_applied": "गणना किया गया विंडो स्केल %sx लागू नहीं किया गया।",
   "log_error_apply_scale_process": "स्केल आवेदन प्रतिक्रिया संसाधित करते समय त्रुटि: %s",
   "log_rec_area_set": "पहचान क्षेत्र सेट करें: %s",
@@ -328,7 +328,6 @@
   "log_dxcam_cleanup_error": "[चेतावनी] DXCam संसाधन जारी करने में त्रुटि: %s",
   "log_scale_search_enabled": "स्केल खोज सक्षम: %s चरणों में खोज रहा है (केंद्र: %s)।",
   "log_capture_scale_applied": "वैश्विक कैप्चर स्केल (लाइटवेट मोड) %s लागू कर रहा है।",
-  "log_window_scale_applied": "विंडो स्केल %s लागू कर रहा है।",
   "log_final_scales": "अंतिम टेम्पलेट खोज स्केल: [%s]",
   "log_cache_build_complete": "टेम्पलेट कैश निर्माण पूर्ण। सामान्य: %s आइटम, बैकअप: %s आइटम",
   "log_priority_timers": "टाइमर प्राथमिकता फ़ोल्डर: %s",
@@ -358,5 +357,8 @@
   "log_rename_warn_not_in_order": "चेतावनी: नाम बदला गया आइटम '%s' ऑर्डर सूची में नहीं मिला (फ़ाइल का नाम बदलना सफल रहा)।",
   "log_rename_success": "आइटम '%s' का नाम बदलकर '%s' कर दिया गया।",
   "log_rename_error_order_list": "फ़ाइल का नाम बदलना सफल रहा, लेकिन ऑर्डर सूची को अपडेट करते समय एक त्रुटि हुई: %s",
-  "error_rename_title": "नाम बदलने में त्रुटि"
+  "error_rename_title": "नाम बदलने में त्रुटि",
+  "context_menu_env_header": "--- [एकत्रित वातावरण (अंतिम %s)]",
+  "context_menu_env_entry": "- ऐप: %s, रिज़ॉल्यूशन: %s, DPI: %s, स्केल: %.2f",
+  "context_menu_env_entry_no_app": "- ऐप: (कोई नहीं), रिज़ॉल्यूशन: %s, DPI: %s, स्केल: %.2f"
 }

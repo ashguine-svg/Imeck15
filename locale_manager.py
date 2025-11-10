@@ -97,14 +97,31 @@ class LocaleManager(QObject):
         # 辞書からキーに対応する値を取得。見つからなければキー自体をデフォルト値とする
         value = self.translations.get(key, key)
 
-        try:
-            # 引数 args が提供されていれば、文字列フォーマットを試みる
-            if args:
-                return value % args
-            # 引数がなければ、取得した文字列をそのまま返す
+        # 引数 args がない場合は、そのまま value を返す
+        if not args:
             return value
+
+        try:
+            # --- ▼▼▼ 修正箇所 ▼▼▼ ---
+            # 1. value (JSONから取得した文字列 or key自体) に
+            #    '%' が含まれている場合のみフォーマットを試みる
+            if '%' in value:
+                return value % args
+            else:
+                # 2. keyが見つからなかった (value=key) か、
+                #    keyは見つかったが翻訳文に % がない場合
+                
+                if key == value:
+                    # keyが見つからなかった場合のみ警告
+                     print(f"[WARN] 翻訳キー '{key}' がJSONに見つかりません。 Args: {args}")
+
+                # keyが見つからなかった場合、key自体を返す (引数は無視)
+                # keyが見つかったが % がない場合、翻訳文を返す (引数は無視)
+                return value 
+            # --- ▲▲▲ 修正完了 ▲▲▲ ---
+                
         except TypeError:
-            # 文字列フォーマットに失敗した場合 (例: % の数が合わない)
+            # '%' はあったが、引数の型や数が一致しなかった場合
             print(f"[WARN] 翻訳キー '{key}' のフォーマットに失敗しました。 Args: {args}")
             # エラーは出さずに、とりあえずフォーマット前の文字列を返す
             return value

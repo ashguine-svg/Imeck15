@@ -200,7 +200,7 @@
   "log_window_base_size_saved": "Dimensione base salvata per la finestra '%s'.",
   "log_window_scale_calc": "Scala finestra '%s': %sx (corretta a 1.0)",
   "log_error_base_size_process": "Errore nell'elaborazione della risposta della dimensione base: %s",
-  "log_window_scale_applied": "Applicazione della scala finestra %sx.",
+  "log_window_scale_applied": "Applicazione scala finestra %s.",
   "log_window_scale_not_applied": "La scala finestra calcolata %sx non è stata applicata.",
   "log_error_apply_scale_process": "Errore nell'elaborazione della risposta di applicazione scala: %s",
   "log_rec_area_set": "Area di riconoscimento impostata: %s",
@@ -329,7 +329,6 @@
   "log_dxcam_cleanup_error": "[WARN] Errore nel rilascio delle risorse DXCam: %s",
   "log_scale_search_enabled": "Ricerca scala abilitata: Ricerca in %s passi (Centro: %s).",
   "log_capture_scale_applied": "Applicazione scala di cattura globale (Modalità Leggera) %s.",
-  "log_window_scale_applied": "Applicazione scala finestra %s.",
   "log_final_scales": "Scale finali di ricerca modello: [%s]",
   "log_cache_build_complete": "Costruzione cache modello completata. Normale: %s elementi, Backup: %s elementi",
   "log_priority_timers": "Cartelle Priorità Timer: %s",
@@ -359,5 +358,8 @@
   "log_rename_error_general": "Si è verificato un errore durante la ridenominazione: %s",
   "log_rename_warn_not_in_order": "Avviso: L'elemento rinominato '%s' non è stato trovato nell'elenco degli ordini (la ridenominazione del file è riuscita).",
   "log_rename_success": "Elemento rinominato da '%s' a '%s'.",
-  "log_rename_error_order_list": "La ridenominazione del file è riuscita, ma si è verificato un errore durante l'aggiornamento dell'elenco degli ordini: %s"
+  "log_rename_error_order_list": "La ridenominazione del file è riuscita, ma si è verificato un errore durante l'aggiornamento dell'elenco degli ordini: %s",
+  "context_menu_env_header": "--- [Ambienti raccolti (Ultimi %s)]",
+  "context_menu_env_entry": "- App: %s, Res: %s, DPI: %s, Scala: %.2f",
+  "context_menu_env_entry_no_app": "- App: (Nessuna), Res: %s, DPI: %s, Scala: %.2f"
 }

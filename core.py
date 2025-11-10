@@ -33,6 +33,9 @@ from matcher import _match_template_task, calculate_phash
 from action import ActionManager
 from template_manager import TemplateManager
 from monitoring_states import IdleState, PriorityState, CountdownState
+# --- ▼▼▼ 修正箇所 1/5: EnvironmentTracker をインポート ▼▼▼ ---
+from environment_tracker import EnvironmentTracker
+# --- ▲▲▲ 修正完了 ▲▲▲ ---
 
 
 OPENCL_AVAILABLE = False
@@ -47,6 +50,7 @@ except Exception as e:
     OPENCL_STATUS_MESSAGE = f"[WARN] Could not configure OpenCL: {e}"
 
 class CoreEngine(QObject):
+    appContextChanged = Signal(str) # ★ 新規追加
     updateStatus = Signal(str, str)
     updatePreview = Signal(np.ndarray, object)
     updateLog = Signal(str)
@@ -78,6 +82,9 @@ class CoreEngine(QObject):
         self.action_manager = ActionManager(self.logger)
         self.template_manager = TemplateManager(self.config_manager, self.logger)
         self.performance_monitor = performance_monitor
+        # --- ▼▼▼ 修正箇所 2/5: EnvironmentTracker をインスタンス化 ▼▼▼ ---
+        self.environment_tracker = EnvironmentTracker(self, self.config_manager, self.logger)
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
         self.logger.log(OPENCL_STATUS_MESSAGE)
 
         self.is_monitoring = False
@@ -279,6 +286,26 @@ class CoreEngine(QObject):
 
     def _on_global_click(self, x, y, button, pressed):
         if button == mouse.Button.right and pressed:
+            
+            # ★★★ 修正案A: UI上でのクリックは無視する ★★★
+            click_pos = QPoint(x, y)
+            
+            # 1. メインUIが表示されていて、その上をクリックした場合
+            if self.ui_manager and self.ui_manager.isVisible():
+                if self.ui_manager.geometry().contains(click_pos):
+                    return # メインUI上なのでQtに任せる
+
+            # 2. 最小UIが表示されていて、その上をクリックした場合
+            if self.ui_manager and self.ui_manager.is_minimal_mode and self.ui_manager.floating_window and self.ui_manager.floating_window.isVisible():
+                if self.ui_manager.floating_window.geometry().contains(click_pos):
+                    return # フローティングUI上なのでQtに任せる
+            
+            # 3. パフォーマンスモニターが表示されていて、その上をクリックした場合
+            if self.performance_monitor and self.performance_monitor.isVisible():
+                 if self.performance_monitor.geometry().contains(click_pos):
+                    return # パフォーマンスモニター上なのでQtに任せる
+            # ★★★ 修正完了 ★★★
+
             current_time = time.time()
             if self.click_timer: self.click_timer.cancel(); self.click_timer = None
             if current_time - self.last_right_click_time > self.CLICK_INTERVAL: self.right_click_count = 1
@@ -287,7 +314,6 @@ class CoreEngine(QObject):
             if self.right_click_count == 3:
                 self.logger.log("log_right_click_triple"); self.startMonitoringRequested.emit(); self.right_click_count = 0
             else: self.click_timer = Timer(self.CLICK_INTERVAL, self._handle_click_timer); self.click_timer.start()
-
     def _handle_click_timer(self):
         if self.right_click_count == 2: self.logger.log("log_right_click_double"); self.stopMonitoringRequested.emit()
         self.right_click_count = 0; self.click_timer = None
@@ -549,9 +575,11 @@ class CoreEngine(QObject):
         
     def _build_template_cache(self):
         with self.cache_lock:
+        # ★ 修正: 現在のアプリ名を取得して渡す
+            current_app_name = self.environment_tracker.recognition_area_app_title
             (self.normal_template_cache, self.backup_template_cache, self.priority_timers, self.folder_children_map) = \
-                self.template_manager.build_cache(self.app_config, self.current_window_scale, self.effective_capture_scale, self.is_monitoring, self.priority_timers)
-
+                self.template_manager.build_cache(self.app_config, self.current_window_scale, self.effective_capture_scale, self.is_monitoring, self.priority_timers, current_app_name)
+    
     def start_monitoring(self):
         if not self.recognition_area: QMessageBox.warning(self.ui_manager, self.locale_manager.tr("warn_rec_area_not_set_title"), self.locale_manager.tr("warn_rec_area_not_set_text")); return
         if not self.is_monitoring:
@@ -856,13 +884,14 @@ class CoreEngine(QObject):
                         task_data = {'path': path, 'settings': data['settings'], 'template': template_image, 'scale': t['scale']}
                         t_shape = t['shape']
 
-                        # --- ▼▼▼ 修正箇所 (OpenCLでもスレッドプールを利用) ▼▼▼ ---
-                        if self.thread_pool:
-                            # OpenCLが有効でも、タスクの投入自体はスレッドプールで行う
+                        # --- ▼▼▼ 修正箇所 ▼▼▼ ---
+                        # OpenCL (use_cl) が有効な場合はスレッドプールを使わない
+                        if self.thread_pool and not use_cl:
+                            # OpenCLが無効な場合のみスレッドプールでタスクを投入
                             future = self.thread_pool.submit(_match_template_task, screen_image, task_data, s_shape, t_shape)
                             futures.append(future)
                         else:
-                            # フォールバック (スレッドプールが利用できない場合)
+                            # OpenCL有効時、またはフォールバック (スレッドプールが利用できない場合) は直列実行
                             match_result = _match_template_task(screen_image, task_data, s_shape, t_shape)
                             if match_result:
                                 results.append(match_result)
@@ -870,8 +899,7 @@ class CoreEngine(QObject):
                     except Exception as e:
                          self.logger.log("Error during template processing for %s (scale %s): %s", Path(path).name, t.get('scale', 'N/A'), str(e))
 
-        # --- ▼▼▼ 修正箇所 (futuresの処理をループの外に移動) ▼▼▼ ---
-        # with self.cache_lock: の外側（インデントを戻す）で結果を収集します
+        # (futuresの処理は with self.cache_lock: の外側にあるため、変更ありません)
         if futures:
             for f in futures:
                 try:
@@ -879,7 +907,6 @@ class CoreEngine(QObject):
                     if match_result: results.append(match_result)
                 except Exception as e:
                      self.logger.log("Error getting result from match thread: %s", str(e))
-        # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
         if not results: return []
         best_match_overall = max(results, key=lambda r: r['confidence']); best_match_path = best_match_overall['path']; best_match_scale = best_match_overall['scale']
@@ -893,6 +920,15 @@ class CoreEngine(QObject):
         return results
 
     def _execute_click(self, match_info):
+        # --- ▼▼▼ 修正箇所 4/5: 環境情報収集を EnvironmentTracker に委譲 ▼▼▼ ---
+        try:
+            item_path_str = match_info['path']
+            # クリック実行 *前* に、環境情報の収集と非同期書き込みタスクを投入
+            self.environment_tracker.track_environment_on_click(item_path_str)
+        except Exception as e:
+            self.logger.log(f"[ERROR] Failed during environment tracking pre-click: {e}")
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
+
         result = self.action_manager.execute_click(match_info, self.recognition_area, self.target_hwnd, self.effective_capture_scale)
         if result and result.get('success'): self._click_count += 1; self._last_clicked_path = result.get('path'); self.last_successful_click_time = time.time(); self.clickCountUpdated.emit(self._click_count)
 
@@ -907,6 +943,11 @@ class CoreEngine(QObject):
         if method == "rectangle":
             if not self._is_capturing_for_registration: 
                 self.target_hwnd = None; self.current_window_scale = None; self.windowScaleCalculated.emit(0.0); self.logger.log("log_rec_area_set_rect")
+                
+                # --- ▼▼▼ 修正箇所 5/5: EnvironmentTracker への通知 ▼▼▼ ---
+                self.environment_tracker.on_rec_area_set("rectangle")
+                # --- ▲▲▲ 修正完了 ▲▲▲ ---
+                
             else: 
                 self.logger.log("log_capture_area_set_rect")
                 # ★★★ 修正: 矩形キャプチャの場合もプリキャプチャを実行 ★★★
@@ -1091,6 +1132,13 @@ class CoreEngine(QObject):
         try:
             if not (info := self._pending_window_info): self.logger.log("Warning: process_base_size_prompt_response called with no pending info."); self._showUiSignal.emit(); self.selectionProcessFinished.emit(); return
             title, current_dims, rect = info['title'], info['dims'], info['rect']
+            
+            # --- ▼▼▼ 修正箇所 (EnvironmentTracker への通知) ▼▼▼ ---
+            # ここでアプリ名が確定する
+            self.environment_tracker.on_rec_area_set("window", title)
+            self.appContextChanged.emit(title) # ★ 新規追加: UIとキャッシュの更新をトリガー
+            # --- ▲▲▲ 修正完了 ▲▲▲ ---
+            
             if save_as_base:
                 scales_data = self.config_manager.load_window_scales(); scales_data[title] = current_dims; self.config_manager.save_window_scales(scales_data); self.current_window_scale = 1.0; self.logger.log("log_window_base_size_saved", title); self.windowScaleCalculated.emit(1.0); self._areaSelectedForProcessing.emit(rect)
             elif title and title in (scales_data := self.config_manager.load_window_scales()):
@@ -1195,18 +1243,32 @@ class CoreEngine(QObject):
                 if save_path.exists():
                     lm = self.locale_manager.tr; reply = QMessageBox.question(self.ui_manager, lm("confirm_overwrite_title"), lm("confirm_overwrite_message", save_path.name), QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
                     if reply == QMessageBox.StandardButton.No: self.ui_manager.set_tree_enabled(True); self.selectionProcessFinished.emit(); self._show_ui_safe(); return
-                if self.thread_pool: self.thread_pool.submit(self._save_image_task, captured_image, save_path).add_done_callback(self._on_save_image_done)
-                else: self._on_save_image_done(None, success=False, message=self.locale_manager.tr("Error: Thread pool unavailable for saving.")); self.ui_manager.set_tree_enabled(True); self.selectionProcessFinished.emit(); self._show_ui_safe()
+                
+                # ★ 新規追加: 現在の環境情報を取得
+                env_data = self.environment_tracker._collect_current_environment()
+                
+                if self.thread_pool: 
+                    # ★ 修正: env_data をタスクに渡す
+                    self.thread_pool.submit(self._save_image_task, captured_image, save_path, env_data).add_done_callback(self._on_save_image_done)
+                else: 
+                    self._on_save_image_done(None, success=False, message=self.locale_manager.tr("Error: Thread pool unavailable for saving.")); self.ui_manager.set_tree_enabled(True); self.selectionProcessFinished.emit(); self._show_ui_safe()
             else: self.selectionProcessFinished.emit(); self._show_ui_safe()
         except Exception as e: QMessageBox.critical(self.ui_manager, self.locale_manager.tr("error_title_capture_save_failed"), self.locale_manager.tr("error_message_capture_save_failed", str(e))); self._show_ui_safe(); self.selectionProcessFinished.emit()
-
-    def _save_image_task(self, image, save_path):
+    
+    def _save_image_task(self, image, save_path, env_data: dict):
         try:
             is_success, buffer = cv2.imencode('.png', image);
             if not is_success: raise IOError("cv2.imencode failed")
             buffer.tofile(str(save_path))
-            settings = self.config_manager.load_item_setting(Path()); settings['image_path'] = str(save_path); settings['point_click'] = True
-            self.config_manager.save_item_setting(save_path, settings); self.config_manager.add_item(save_path)
+
+            # ★ 修正: デフォルト設定に env_data を追加
+            settings = self.config_manager.load_item_setting(Path()); 
+            settings['image_path'] = str(save_path); 
+            settings['point_click'] = True
+            settings['environment_info'] = [env_data] # ★ 新規の画像として環境情報をリストで追加
+
+            self.config_manager.save_item_setting(save_path, settings); 
+            self.config_manager.add_item(save_path)
             return True, self.locale_manager.tr("log_image_saved", str(save_path.name))
         except Exception as e: return False, self.locale_manager.tr("log_image_save_failed", str(e))
 
@@ -1224,6 +1286,12 @@ class CoreEngine(QObject):
 
     def clear_recognition_area(self):
         self.recognition_area = None; self.current_window_scale = None; self.target_hwnd = None; self.windowScaleCalculated.emit(0.0)
+        
+        # --- ▼▼▼ 修正箇所 (EnvironmentTracker への通知) ▼▼▼ ---
+        self.environment_tracker.on_rec_area_clear()
+        self.appContextChanged.emit(None) # ★ 新規追加: UIとキャッシュの更新をトリガー
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
+        
         if 'dxcam' in sys.modules and hasattr(self.capture_manager, 'dxcam_sct') and self.capture_manager.dxcam_sct:
             try: self.capture_manager.dxcam_sct.target_hwnd = None
             except Exception as dxcam_err: self.logger.log(f"Error resetting DXCam target HWND: {dxcam_err}")

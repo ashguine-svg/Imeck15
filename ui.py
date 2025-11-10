@@ -1,5 +1,6 @@
 # ui.py (ImportError および QCursor NameError 修正版)
 # ★★★ 選択ダイアログの写り込み防止のためタイマー遅延を追加 ★★★
+# ★★★ 環境情報ツールチップ表示機能を追加 (改行コード修正版) ★★★
 
 import sys
 import json
@@ -969,7 +970,14 @@ class UIManager(QMainWindow):
                 if path and item.isExpanded():
                     expanded_folders.add(path)
         self.image_tree.clear()
-        hierarchical_list = self.config_manager.get_hierarchical_list()
+
+        # ★ 修正: CoreEngine から現在のアプリ名を取得して渡す
+        current_app_name = None
+        if self.core_engine and self.core_engine.environment_tracker:
+            current_app_name = self.core_engine.environment_tracker.recognition_area_app_title
+        
+        hierarchical_list = self.config_manager.get_hierarchical_list(current_app_name)
+        
         item_to_reselect = None
         for item_data in hierarchical_list:
             if item_data['type'] == 'folder':
@@ -1002,6 +1010,28 @@ class UIManager(QMainWindow):
         self.image_tree.blockSignals(False)
         if item_to_reselect: self.on_image_tree_selection_changed()
 
+    def on_app_context_changed(self, app_name: str):
+        """
+        (新規) CoreEngineからアプリコンテキストの変更を受け取るスロット。
+        ツリーのタイトルを変更し、ツリーを再描画します。
+        """
+        lm = self.locale_manager.tr
+        
+        # 1. ツリーのタイトルを変更 (要求 2)
+        if app_name:
+            self.list_title_label.setText(app_name)
+        else:
+            self.list_title_label.setText(lm("list_title")) # デフォルトに戻す
+            
+        # 2. ツリーを再描画 (フィルタリングを適用)
+        self.update_image_tree()
+        
+        # 3. キャッシュの再構築をトリガー
+        # (CoreEngine側でシグナル発行と同時に実行されるはずだが、念のため)
+        if self.core_engine and self.core_engine.thread_pool:
+             self.set_tree_enabled(False)
+             self.core_engine.thread_pool.submit(self.core_engine._build_template_cache).add_done_callback(self.core_engine._on_cache_build_done)
+    
     def on_tree_context_menu(self, pos):
         item = self.image_tree.itemAt(pos)
         lm = self.locale_manager.tr
@@ -1029,10 +1059,51 @@ class UIManager(QMainWindow):
                 mode_str = f"({click_mode_text})"
                 threshold_str = lm('context_menu_info_threshold', f'{threshold:.2f}')
                 interval_str = lm('context_menu_info_interval', f'{interval:.1f}')
+                
                 tooltip_text = f"{mode_str}\n{threshold_str}：{interval_str}\n{img_size_text}"
+
+                # --- ▼▼▼ 修正箇所 ▼▼▼ ---
+                try:
+                    env_list = settings.get("environment_info", [])
+                    env_tooltip_lines = []
+                    MAX_ENV_DISPLAY = 5 # 最大表示件数
+
+                    if env_list:
+                        # ヘッダーを追加
+                        env_tooltip_lines.append(
+                            # ★ 改行コードを削除
+                            lm("context_menu_env_header", min(len(env_list), MAX_ENV_DISPLAY))
+                        )
+                        
+                        # 最新5件のみ表示
+                        for env_data in env_list[-MAX_ENV_DISPLAY:]:
+                            app = env_data.get("app_name")
+                            res = env_data.get("resolution", "N/A")
+                            dpi = env_data.get("dpi", "N/A")
+                            scale = env_data.get("imeck_scale", 0.0)
+                            
+                            if app:
+                                # ★ 改行コードを削除
+                                env_tooltip_lines.append(
+                                    lm("context_menu_env_entry", app, res, dpi, scale)
+                                )
+                            else:
+                                # ★ 改行コードを削除
+                                env_tooltip_lines.append(
+                                    lm("context_menu_env_entry_no_app", res, dpi, scale)
+                                )
+                    
+                    # 組み立てた環境情報文字列を結合
+                    if env_tooltip_lines:
+                        # ★★★ 修正: ここで "\n" を使って結合する ★★★
+                        tooltip_text += "\n" + "\n".join(env_tooltip_lines)
+                        
+                except Exception as e:
+                    tooltip_text += f"\n[Env Info Error: {e}]" # エラー時
+                # --- ▲▲▲ 修正完了 ▲▲▲ ---
+
                 global_pos = self.image_tree.mapToGlobal(pos); QToolTip.showText(global_pos, tooltip_text, self.image_tree)
             except Exception as e: global_pos = self.image_tree.mapToGlobal(pos); QToolTip.showText(global_pos, lm("context_menu_info_error", str(e)), self.image_tree)
-
     def set_tree_enabled(self, enabled: bool):
         self.image_tree.setEnabled(enabled)
 

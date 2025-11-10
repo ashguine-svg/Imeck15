@@ -200,7 +200,7 @@
   "log_window_base_size_saved": "已保存窗口 '%s' 的基础尺寸。",
   "log_window_scale_calc": "窗口 '%s' 比例：%sx (修正为 1.0)",
   "log_error_base_size_process": "处理基础尺寸响应时出错：%s",
-  "log_window_scale_applied": "正在应用窗口比例 %sx。",
+  "log_window_scale_applied": "正在应用窗口比例 %s。",
   "log_window_scale_not_applied": "计算的窗口比例 %sx 未应用。",
   "log_error_apply_scale_process": "处理应用比例响应时出错：%s",
   "log_rec_area_set": "已设置识别区域：%s",
@@ -329,7 +329,6 @@
   "log_dxcam_cleanup_error": "[警告] 释放 DXCam 资源时出错：%s",
   "log_scale_search_enabled": "已启用比例搜索：在 %s 步内搜索（中心：%s）。",
   "log_capture_scale_applied": "正在应用全局捕获比例（轻量模式）%s。",
-  "log_window_scale_applied": "正在应用窗口比例 %s。",
   "log_final_scales": "最终模板搜索比例：[%s]",
   "log_cache_build_complete": "模板缓存构建完成。正常：%s 项，备用：%s 项",
   "log_priority_timers": "定时器优先文件夹：%s",
@@ -357,5 +356,8 @@
   "log_rename_error_general": "重命名过程中发生错误: %s",
   "log_rename_warn_not_in_order": "警告：在顺序列表中未找到重命名的项目 '%s'（文件重命名成功）。",
   "log_rename_success": "已将项目 '%s' 重命名为 '%s'。",
-  "log_rename_error_order_list": "文件重命名成功，但在更新顺序列表时发生错误: %s"
+  "log_rename_error_order_list": "文件重命名成功，但在更新顺序列表时发生错误: %s",
+  "context_menu_env_header": "--- [已收集的环境 (最后 %s 个)]",
+  "context_menu_env_entry": "- 应用: %s, 分辨率: %s, DPI: %s, 缩放: %.2f",
+  "context_menu_env_entry_no_app": "- 应用: (无), 分辨率: %s, DPI: %s, 缩放: %.2f"
 }

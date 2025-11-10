@@ -200,7 +200,7 @@
   "log_window_base_size_saved": "Basisgrootte opgeslagen voor venster '%s'.",
   "log_window_scale_calc": "Venster '%s' schaal: %sx (gecorrigeerd naar 1.0)",
   "log_error_base_size_process": "Fout bij verwerken basisgrootte respons: %s",
-  "log_window_scale_applied": "Schaal venster %sx toepassen.",
+  "log_window_scale_applied": "Vensterschaal %s toepassen.",
   "log_window_scale_not_applied": "Berekende vensterschaal %sx is niet toegepast.",
   "log_error_apply_scale_process": "Fout bij verwerken schaal toepassen respons: %s",
   "log_rec_area_set": "Herkenning gebied ingesteld: %s",
@@ -329,7 +329,6 @@
   "log_dxcam_cleanup_error": "[WAARSCHUWING] Fout bij vrijgeven DXCam-bronnen: %s",
   "log_scale_search_enabled": "Schaal zoeken ingeschakeld: Zoeken in %s stappen (Centrum: %s).",
   "log_capture_scale_applied": "Globale vastlegschaal (Lichtgewicht modus) %s toepassen.",
-  "log_window_scale_applied": "Vensterschaal %s toepassen.",
   "log_final_scales": "Definitieve sjabloonzoekschalen: [%s]",
   "log_cache_build_complete": "Sjablooncaching voltooid. Normaal: %s items, Back-up: %s items",
   "log_priority_timers": "Timer Prioriteit Mappen: %s",
@@ -347,7 +346,6 @@
   "log_countdown_cancelled": "Normale afbeelding gedetecteerd, back-up aftelling annuleren.",
   "log_countdown_executing": "%s seconden verstreken. Back-up klik uitvoeren.",
   "log_image_saved_success": "Afbeelding opgeslagen: %s",
-  "log_rec_area_cleared": "Herkenning gebied gewist.",
   "warn_capture_disabled_scale": "Afbeeldingen vastgelegd tijdens automatische schaling komen niet overeen.\nLeg afbeeldingen vast op 1.0x schaal.",
   "rename_button": "Hernoemen",
   "warn_rename_title": "Hernoem Fout",
@@ -360,5 +358,8 @@
   "log_rename_error_general": "Er is een fout opgetreden tijdens het hernoemen: %s",
   "log_rename_warn_not_in_order": "Waarschuwing: Hernoemd item '%s' niet gevonden in volgordelijst (bestandshernoeming was succesvol).",
   "log_rename_success": "Item '%s' hernoemd naar '%s'.",
-  "log_rename_error_order_list": "Bestandshernoeming is gelukt, maar er is een fout opgetreden bij het bijwerken van de volgordelijst: %s"
+  "log_rename_error_order_list": "Bestandshernoeming is gelukt, maar er is een fout opgetreden bij het bijwerken van de volgordelijst: %s",
+  "context_menu_env_header": "--- [Verzamelde omgevingen (Laatste %s)]",
+  "context_menu_env_entry": "- App: %s, Res: %s, DPI: %s, Schaal: %.2f",
+  "context_menu_env_entry_no_app": "- App: (Geen), Res: %s, DPI: %s, Schaal: %.2f"
 }
