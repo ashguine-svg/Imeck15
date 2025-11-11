@@ -1,6 +1,6 @@
 {
   "language_name": "한국어",
-  "window_title": "Imeck15 v1.5.5 Multilingual version",
+  "window_title": "Imeck15 v1.5.6.1 다국어 버전",
   "monitor_button_start": "모니터링 시작",
   "monitor_button_stop": "모니터링 중지",
   "monitor_button_tooltip": "모니터링을 시작합니다.\n마우스 오른쪽 더블클릭으로 중지, 오른쪽 트리플클릭으로 시작",
@@ -370,5 +370,7 @@
   "log_reinitializing_capture_backend": "[INFO] 해상도 변경으로 인해 캡처 백엔드(%s)를 다시 초기화합니다...",
   "log_error_reinitialize_capture": "[ERROR] 캡처 백엔드 재초기화 중 오류: %s",
   "log_warn_display_reinitializing": "[WARN] 현재 디스플레이 설정(해상도/DPI) 변경을 처리 중입니다. 완료될 때까지 기다려 주십시오.",
-  "log_warn_display_reinitializing_monitor_loop": "[WARN] 디스플레이 설정 변경 처리 중... 모니터링 루프를 일시 중지합니다."
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] 디스플레이 설정 변경 처리 중... 모니터링 루프를 일시 중지합니다.",
+  "log_mss_instance_closed": "[INFO] 기존 MSS 캡처 인스턴스를 닫았습니다.",
+  "log_mss_close_error": "[WARN] 기존 MSS 인스턴스를 닫는 중 오류 발생: %s"
 }

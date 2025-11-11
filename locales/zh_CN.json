@@ -1,6 +1,6 @@
 {
   "language_name": "简体中文",
-  "window_title": "Imeck15 v1.5.5 Multilingual version",
+  "window_title": "Imeck15 v1.5.6.1 多语言版本",
   "monitor_button_start": "开始监控",
   "monitor_button_stop": "停止监控",
   "monitor_button_tooltip": "开始监控。\n鼠标右键双击停止，鼠标右键三击开始",
@@ -369,5 +369,7 @@
   "log_reinitializing_capture_backend": "[INFO] 由于分辨率更改，正在重新初始化捕获后端 (%s)...",
   "log_error_reinitialize_capture": "[ERROR] 捕获后端重新初始化期间出错：%s",
   "log_warn_display_reinitializing": "[WARN] 当前正在处理显示设置（分辨率/DPI）更改。请等待完成。",
-  "log_warn_display_reinitializing_monitor_loop": "[WARN] 正在处理显示设置更改... 暂停监视循环。"
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] 正在处理显示设置更改... 暂停监视循环。",
+  "log_mss_instance_closed": "[INFO] 已关闭現有的 MSS 捕获实例。",
+  "log_mss_close_error": "[WARN] 关闭現有 MSS 实例时出错：%s"
 }

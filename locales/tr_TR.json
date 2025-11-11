@@ -1,6 +1,6 @@
 {
   "language_name": "Türkçe",
-  "window_title": "Imeck15 v1.5.5 Çok Dilli Sürüm",
+  "window_title": "Imeck15 v1.5.6.1 Çok Dilli Sürüm",
   "monitor_button_start": "İzlemeyi Başlat",
   "monitor_button_stop": "İzlemeyi Durdur",
   "monitor_button_tooltip": "İzlemeyi başlat.\nDurdurmak için sağ çift tıklama, başlatmak için sağ üçlü tıklama",
@@ -371,5 +371,7 @@
   "log_reinitializing_capture_backend": "[INFO] Çözünürlük değişikliği nedeniyle yakalama arka ucu (%s) yeniden başlatılıyor...",
   "log_error_reinitialize_capture": "[HATA] Yakalama arka ucunun yeniden başlatılması sırasında hata: %s",
   "log_warn_display_reinitializing": "[UYARI] Şu anda ekran ayarları (çözünürlük/DPI) değişikliği işleniyor. Lütfen tamamlanana kadar bekleyin.",
-  "log_warn_display_reinitializing_monitor_loop": "[UYARI] Ekran ayarı değişikliği işleniyor... İzleme döngüsü duraklatılıyor."
+  "log_warn_display_reinitializing_monitor_loop": "[UYARI] Ekran ayarı değişikliği işleniyor... İzleme döngüsü duraklatılıyor.",
+  "log_mss_instance_closed": "[INFO] Mevcut MSS yakalama örneği kapatıldı.",
+  "log_mss_close_error": "[UYARI] Mevcut MSS örneği kapatılırken hata oluştu: %s"
 }

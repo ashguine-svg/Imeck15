@@ -1,6 +1,6 @@
 {
   "language_name": "हिन्दी (भारत)",
-  "window_title": "Imeck15 v1.5.5 बहुभाषी संस्करण",
+  "window_title": "Imeck15 v1.5.6.1 बहुभाषी संस्करण",
   "monitor_button_start": "निगरानी शुरू करें",
   "monitor_button_stop": "निगरानी बंद करें",
   "monitor_button_tooltip": "निगरानी शुरू करें।\nबंद करने के लिए दायाँ डबल-क्लिक, शुरू करने के लिए दायाँ ट्रिपल-क्लिक",
@@ -370,5 +370,7 @@
   "log_reinitializing_capture_backend": "[INFO] रिज़ॉल्यूशन परिवर्तन के कारण कैप्चर बैकएंड (%s) को पुनः प्रारंभ किया जा रहा है...",
   "log_error_reinitialize_capture": "[ERROR] कैप्चर बैकएंड को पुनः प्रारंभ करने में त्रुटि: %s",
   "log_warn_display_reinitializing": "[WARN] वर्तमान में डिस्प्ले सेटिंग्स (रिज़ॉल्यूशन/डीपीआई) परिवर्तन संसाधित हो रहा है। कृपया पूरा होने तक प्रतीक्षा करें।",
-  "log_warn_display_reinitializing_monitor_loop": "[WARN] डिस्प्ले सेटिंग परिवर्तन संसाधित हो रहा है... मॉनिटरिंग लूप रोका जा रहा है।"
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] डिस्प्ले सेटिंग परिवर्तन संसाधित हो रहा है... मॉनिटरिंग लूप रोका जा रहा है।",
+  "log_mss_instance_closed": "[INFO] मौजूदा एमएसएस कैप्चर इंस्टेंस बंद कर दिया गया।",
+  "log_mss_close_error": "[WARN] मौजूदा एमएसएस इंस्टेंस को बंद करते समय त्रुटि हुई: %s"
 }

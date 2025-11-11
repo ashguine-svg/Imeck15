@@ -1,6 +1,6 @@
 {
   "language_name": "Norsk",
-  "window_title": "Imeck15 v1.5.5 Flerspråklig versjon",
+  "window_title": "Imeck15 v1.5.6.1 Flerspråklig versjon",
   "monitor_button_start": "Start Overvåking",
   "monitor_button_stop": "Stopp Overvåking",
   "monitor_button_tooltip": "Start overvåking.\nHøyre dobbeltklikk for å stoppe, høyre trippelklikk for å starte",
@@ -371,5 +371,7 @@
   "log_reinitializing_capture_backend": "[INFO] Reinitialiserer fangst-backend (%s) på grunn av oppløsningsendring...",
   "log_error_reinitialize_capture": "[FEIL] Feil under reinitialisering av fangst-backend: %s",
   "log_warn_display_reinitializing": "[ADVARSEL] Behandler for øyeblikket endring i skjerminnstillinger (oppløsning/DPI). Vent til det er fullført.",
-  "log_warn_display_reinitializing_monitor_loop": "[ADVARSEL] Behandler endring i skjerminnstilling... Pauser overvåkingssløyfen."
+  "log_warn_display_reinitializing_monitor_loop": "[ADVARSEL] Behandler endring i skjerminnstilling... Pauser overvåkingssløyfen.",
+  "log_mss_instance_closed": "[INFO] Lukket eksisterende MSS-fangstforekomst.",
+  "log_mss_close_error": "[ADVARSEL] Feil under lukking av eksisterende MSS-instans: %s"
 }

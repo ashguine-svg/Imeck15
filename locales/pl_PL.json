@@ -1,6 +1,6 @@
 {
   "language_name": "Polski",
-  "window_title": "Imeck15 v1.5.5 Wersja wielojęzyczna",
+  "window_title": "Imeck15 v1.5.6.1 Wersja wielojęzyczna",
   "monitor_button_start": "Rozpocznij Monitorowanie",
   "monitor_button_stop": "Zatrzymaj Monitorowanie",
   "monitor_button_tooltip": "Rozpocznij monitorowanie.\nPrawy podwójny klik, aby zatrzymać, prawy potrójny klik, aby rozpocząć",
@@ -371,5 +371,7 @@
   "log_reinitializing_capture_backend": "[INFO] Ponowne inicjowanie backendu przechwytywania (%s) z powodu zmiany rozdzielczości...",
   "log_error_reinitialize_capture": "[BŁĄD] Błąd podczas ponownej inicjalizacji backendu przechwytywania: %s",
   "log_warn_display_reinitializing": "[WARN] Obecnie przetwarzana jest zmiana ustawień wyświetlania (rozdzielczość/DPI). Proszę czekać na zakończenie.",
-  "log_warn_display_reinitializing_monitor_loop": "[WARN] Przetwarzanie zmiany ustawień wyświetlania... Wstrzymywanie pętli monitorowania."
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] Przetwarzanie zmiany ustawień wyświetlania... Wstrzymywanie pętli monitorowania.",
+  "log_mss_instance_closed": "[INFO] Zamknięto istniejącą instancję przechwytywania MSS.",
+  "log_mss_close_error": "[WARN] Wystąpił błąd podczas zamykania istniejącej instancji MSS: %s"
 }

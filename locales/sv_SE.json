@@ -1,6 +1,6 @@
 {
   "language_name": "Svenska",
-  "window_title": "Imeck15 v1.5.5 Flerspråkig version",
+  "window_title": "Imeck15 v1.5.6.1 Flerspråkig version",
   "monitor_button_start": "Starta Övervakning",
   "monitor_button_stop": "Stoppa Övervakning",
   "monitor_button_tooltip": "Starta övervakning.\nHöger dubbelklick för att stoppa, höger trippelklick för att starta",
@@ -371,5 +371,7 @@
   "log_reinitializing_capture_backend": "[INFO] Ominitialiserar infångningsbackend (%s) på grund av upplösningsändring...",
   "log_error_reinitialize_capture": "[FEL] Fel vid ominitialisering av infångningsbackend: %s",
   "log_warn_display_reinitializing": "[VARN] Bearbetar för närvarande ändring av skärminställningar (upplösning/DPI). Vänta tills det är klart.",
-  "log_warn_display_reinitializing_monitor_loop": "[VARN] Bearbetar ändring av skärminställning... Pausar övervakningsslingan."
+  "log_warn_display_reinitializing_monitor_loop": "[VARN] Bearbetar ändring av skärminställning... Pausar övervakningsslingan.",
+  "log_mss_instance_closed": "[INFO] Stängde befintlig MSS-infångningsinstans.",
+  "log_mss_close_error": "[VARN] Fel vid stängning av befintlig MSS-instans: %s"
 }

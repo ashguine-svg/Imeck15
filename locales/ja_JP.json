@@ -1,5 +1,5 @@
 {
-  "window_title": "Imeck15 v1.5.5 Multilingual version",
+  "window_title": "Imeck15 v1.5.6.1 多言語版",
   "monitor_button_start": "監視開始",
   "monitor_button_stop": "監視停止",
   "monitor_button_tooltip": "監視を開始します。\n右ダブルクリックで停止・右トリプルクリックで開始",
@@ -393,5 +393,7 @@
   "log_reinitializing_capture_backend": "[INFO] 解像度変更のため、キャプチャバックエンド (%s) を再初期化します...",
   "log_error_reinitialize_capture": "[ERROR] キャプチャバックエンドの再初期化中にエラー: %s",
   "log_warn_display_reinitializing": "[WARN] 現在ディスプレイ設定（解像度/DPI）の変更を処理中です。完了するまで操作をお待ちください。",
-  "log_warn_display_reinitializing_monitor_loop": "[WARN] ディスプレイ設定の変更を処理中... 監視ループを一時停止します。"
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] ディスプレイ設定の変更を処理中... 監視ループを一時停止します。",
+  "log_mss_instance_closed": "[INFO] 既存のMSSキャプチャインスタンスをクローズしました。",
+  "log_mss_close_error": "[WARN] 既存のMSSインスタンスのクローズ中にエラーが発生しました: %s"
 }

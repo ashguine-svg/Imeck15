@@ -1,6 +1,6 @@
 {
   "language_name": "Русский (РФ)",
-  "window_title": "Imeck15 v1.5.5 Многоязычная версия",
+  "window_title": "Imeck15 v1.5.6.1 Многоязычная версия",
   "monitor_button_start": "Начать мониторинг",
   "monitor_button_stop": "Остановить мониторинг",
   "monitor_button_tooltip": "Начать мониторинг.\nДвойной правый клик для остановки, тройной правый клик для запуска",
@@ -370,5 +370,7 @@
   "log_reinitializing_capture_backend": "[INFO] Повторная инициализация бэкэнда захвата (%s) в связи с изменением разрешения...",
   "log_error_reinitialize_capture": "[ОШИБКА] Ошибка при повторной инициализации бэкэнда захвата: %s",
   "log_warn_display_reinitializing": "[WARN] В настоящее время обрабатывается изменение настроек дисплея (разрешение/DPI). Пожалуйста, подождите завершения.",
-  "log_warn_display_reinitializing_monitor_loop": "[WARN] Обработка изменения настроек дисплея... Приостановка цикла мониторинга."
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] Обработка изменения настроек дисплея... Приостановка цикла мониторинга.",
+  "log_mss_instance_closed": "[INFO] Существующий экземпляр захвата MSS закрыт.",
+  "log_mss_close_error": "[WARN] Произошла ошибка при закрытии существующего экземпляра MSS: %s"
 }

@@ -1,6 +1,6 @@
 {
   "language_name": "العربية (السعودية)",
-  "window_title": "Imeck15 v1.5.5 نسخة متعددة اللغات",
+  "window_title": "Imeck15 v1.5.6.1 نسخة متعددة اللغات",
   "monitor_button_start": "بدء المراقبة",
   "monitor_button_stop": "إيقاف المراقبة",
   "monitor_button_tooltip": "بدء المراقبة.\nانقر بزر الماوس الأيمن مرتين للإيقاف، وثلاث مرات للبدء",
@@ -371,5 +371,7 @@
   "log_reinitializing_capture_backend": "[INFO] إعادة تهيئة خلفية الالتقاط (%s) بسبب تغيير الدقة...",
   "log_error_reinitialize_capture": "[ERROR] خطأ أثناء إعادة تهيئة خلفية الالتقاط: %s",
   "log_warn_display_reinitializing": "[WARN] قيد المعالجة حاليًا تغيير إعدادات العرض (الدقة/DPI). يرجى الانتظار حتى يكتمل.",
-  "log_warn_display_reinitializing_monitor_loop": "[WARN] معالجة تغيير إعداد العرض... إيقاف حلقة المراقبة مؤقتًا."
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] معالجة تغيير إعداد العرض... إيقاف حلقة المراقبة مؤقتًا.",
+  "log_mss_instance_closed": "[INFO] تم إغلاق مثيل التقاط MSS الحالي.",
+  "log_mss_close_error": "[WARN] حدث خطأ أثناء إغلاق مثيل MSS الحالي: %s"
 }

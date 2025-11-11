@@ -1,6 +1,6 @@
 {
   "language_name": "Français",
-  "window_title": "Imeck15 v1.5.5 Version multilingue",
+  "window_title": "Imeck15 v1.5.6.1 Version multilingue",
   "monitor_button_start": "Démarrer la surveillance",
   "monitor_button_stop": "Arrêter la surveillance",
   "monitor_button_tooltip": "Démarrer la surveillance.\nDouble-clic droit pour arrêter, triple-clic droit pour démarrer",
@@ -371,5 +371,7 @@
   "log_reinitializing_capture_backend": "[INFO] Réinitialisation du backend de capture (%s) en raison d'un changement de résolution...",
   "log_error_reinitialize_capture": "[ERROR] Erreur lors de la réinitialisation du backend de capture : %s",
   "log_warn_display_reinitializing": "[WARN] Traitement en cours du changement des paramètres d'affichage (résolution/DPI). Veuillez patienter jusqu'à la fin.",
-  "log_warn_display_reinitializing_monitor_loop": "[WARN] Traitement du changement des paramètres d'affichage... Mise en pause de la boucle de surveillance."
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] Traitement du changement des paramètres d'affichage... Mise en pause de la boucle de surveillance.",
+  "log_mss_instance_closed": "[INFO] Instance de capture MSS existante fermée.",
+  "log_mss_close_error": "[WARN] Erreur lors de la fermeture de l'instance MSS existante : %s"
 }

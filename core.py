@@ -1,5 +1,5 @@
 # core.py (Linuxキャプチャロジック 最終修正版)
-# ★★★ 解像度変更検知時のDXCam再初期化を「遅延初期化」に変更 ★★★
+# ★★★ (根本修正) 解像度変更検知時に、アプリを再起動する ★★★
 
 import sys
 import threading
@@ -71,6 +71,10 @@ class CoreEngine(QObject):
     clickCountUpdated = Signal(int)
     
     statsUpdated = Signal(int, str, dict, float, float)
+    
+    # --- ▼▼▼ 修正: 再起動シグナルを追加 ▼▼▼ ---
+    restartApplicationRequested = Signal()
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
     def __init__(self, ui_manager, capture_manager, config_manager, logger, performance_monitor, locale_manager):
         super().__init__()
@@ -173,7 +177,7 @@ class CoreEngine(QObject):
         self.match_detected_at = {}
         
         # --- ▼▼▼ 解像度変更検知用のフラグ ▼▼▼ ---
-        self._is_reinitializing_display = False
+        self._is_reinitializing_display = False # ★★★ このフラグは再起動ロジックでは不要になりました ★★★
         # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
     def transition_to(self, new_state):
@@ -349,18 +353,6 @@ class CoreEngine(QObject):
             self.ui_manager._update_capture_button_state()
             return
         
-        # --- ▼▼▼ 解像度変更対応 ▼▼▼ ---
-        if self._is_reinitializing_display:
-            try:
-                # ユーザーが操作しようとした = OSは安定しているはず
-                self.logger.log("log_lazy_reinitialize_capture_backend")
-                self._reinitialize_capture_backend()
-            except Exception as e:
-                self.logger.log("log_error_reinitialize_capture", str(e))
-            finally:
-                self._is_reinitializing_display = False
-        # --- ▲▲▲ 修正完了 ▲▲▲ ---
-
         self._is_capturing_for_registration = True
         self.ui_manager.setRecAreaDialog()
 
@@ -604,10 +596,9 @@ class CoreEngine(QObject):
     def start_monitoring(self):
         if not self.recognition_area: QMessageBox.warning(self.ui_manager, self.locale_manager.tr("warn_rec_area_not_set_title"), self.locale_manager.tr("warn_rec_area_not_set_text")); return
         
-        # --- ▼▼▼ 解像度変更対応 ▼▼▼ ---
+        # --- ▼▼▼ 解像度変更対応 (修正) ▼▼▼ ---
         if self._is_reinitializing_display:
             try:
-                # ユーザーが操作しようとした = OSは安定しているはず
                 self.logger.log("log_lazy_reinitialize_capture_backend")
                 self._reinitialize_capture_backend()
             except Exception as e:
@@ -647,12 +638,10 @@ class CoreEngine(QObject):
                 current_time = time.time()
                 if self._cooldown_until > current_time: time.sleep(min(self._cooldown_until - current_time, 0.1)); continue
                 
-                # --- ▼▼▼ 解像度変更対応 ▼▼▼ ---
                 if self._is_reinitializing_display:
                     self.logger.log("log_warn_display_reinitializing_monitor_loop")
-                    time.sleep(0.5) # 処理が完了するまで待機
+                    time.sleep(0.5) 
                     continue
-                # --- ▲▲▲ 修正完了 ▲▲▲ ---
                 
                 frame_counter += 1; delta_time = current_time - fps_last_time
                 if delta_time >= 1.0: 
@@ -989,7 +978,6 @@ class CoreEngine(QObject):
         # --- ▼▼▼ 解像度変更対応 (遅延初期化) ▼▼▼ ---
         if self._is_reinitializing_display:
             try:
-                # ユーザーが操作しようとした = OSは安定しているはず
                 self.logger.log("log_lazy_reinitialize_capture_backend")
                 self._reinitialize_capture_backend()
             except Exception as e:
@@ -1015,7 +1003,6 @@ class CoreEngine(QObject):
                 
             else: 
                 self.logger.log("log_capture_area_set_rect")
-                # ★★★ 修正: 矩形キャプチャの場合もプリキャプチャを実行 ★★★
                 try:
                     self.pre_captured_image_for_registration = self.capture_manager.capture_frame()
                     if self.pre_captured_image_for_registration is None:
@@ -1030,7 +1017,6 @@ class CoreEngine(QObject):
         
         elif method == "window":
             
-            # ★★★ 修正: プリキャプチャを先に実行 ★★★
             if self._is_capturing_for_registration:
                 try:
                     self.pre_captured_image_for_registration = self.capture_manager.capture_frame()
@@ -1042,7 +1028,6 @@ class CoreEngine(QObject):
                     self._on_selection_cancelled()
                     return
 
-            # 1. Windows の場合 (従来通り)
             if sys.platform == 'win32' and win32gui:
                 if self._is_capturing_for_registration and self.recognition_area:
                     self.logger.log("log_capture_from_existing_rec_area")
@@ -1050,10 +1035,8 @@ class CoreEngine(QObject):
                     center_x = (x1 + x2) // 2
                     center_y = (y1 + y2) // 2
                     self._handle_window_click_for_selection_windows(center_x, center_y)
-                    return # ★ Windowsの場合はリスナーを起動しない
+                    return 
             
-            # 2. Linux (X11/Wayland) または Windowsの手動フォールバック
-            # 常に手動リスナーを起動
             if not self._is_capturing_for_registration:
                 self.logger.log("log_rec_area_set_window")
             else:
@@ -1063,7 +1046,6 @@ class CoreEngine(QObject):
             self.window_selection_listener.start()
             self.keyboard_selection_listener = keyboard.Listener(on_press=self._on_key_press_for_selection)
             self.keyboard_selection_listener.start()
-            # ★★★ 修正ここまで ★★★
 
     def _on_selection_cancelled(self):
         self.logger.log("log_selection_cancelled"); self._is_capturing_for_registration = False
@@ -1382,39 +1364,25 @@ class CoreEngine(QObject):
         プライマリスクリーンのジオメトリ (解像度, DPI) 変更を検知するスロット。
         認識範囲をクリアし、キャプチャバックエンドの再初期化をスケジュールします。
         """
-        # (追加) すでに処理中の場合は多重実行を防ぐ
         if self._is_reinitializing_display:
             return
             
-        # 認識範囲が設定されている時、または監視中の時のみ動作
         if self.recognition_area or self.is_monitoring:
-            self._is_reinitializing_display = True # ★処理中フラグを立てる
+            self._is_reinitializing_display = True 
             self.logger.log("log_screen_resolution_changed")
             
             if self.is_monitoring:
                 self.stop_monitoring()
-                # UIに停止したことを即時反映
                 self.updateStatus.emit("idle", "green")
 
             if self.recognition_area:
                 self.clear_recognition_area()
             
-            # ★★★ 修正: QTimer.singleShot(0, ...) を削除 ★★★
-            # (次のユーザーアクション (set_recognition_area) まで待機するため)
             self.logger.log("log_lazy_reinitialize_scheduled")
-
+            # ★★★ (再起動案) 再起動シグナルを発行 ★★★
+            self.restartApplicationRequested.emit()
     
-    def _reinitialize_capture_backend(self):
-        """
-        (スロット) QTimer または set_recognition_area から呼び出され、
-        キャプチャを再初期化します。
-        """
-        try:
-            if self.capture_manager:
-                self.capture_manager.reinitialize_backend()
-        except Exception as e:
-            self.logger.log("log_error_reinitialize_capture", str(e))
-        # ★★★ 修正: フラグ解除は呼び出し元 (set_recognition_area) で行う ★★★
-        # finally:
-        #     self._is_reinitializing_display = False 
+    # ★★★ (再起動案) このメソッドは不要になりました ★★★
+    # def _reinitialize_capture_backend(self):
+    #     ...
     # --- ▲▲▲ 修正完了 ▲▲▲ ---

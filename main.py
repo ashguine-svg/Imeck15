@@ -1,4 +1,5 @@
 # main.py (D&D対応版・多言語対応版)
+# ★★★ (再起動ロジック) 解像度変更時にアプリを再起動する ★★★
 
 import sys
 import os
@@ -19,7 +20,9 @@ except NameError:
     sys.path.insert(0, os.getcwd())
 
 from PySide6.QtWidgets import QApplication, QMessageBox
-from PySide6.QtCore import QObject, Signal, QTimer
+# --- ▼▼▼ 修正: QProcess をインポート ▼▼▼ ---
+from PySide6.QtCore import QObject, Signal, QTimer, QProcess
+# --- ▲▲▲ 修正完了 ▲▲▲ ---
 
 from ui import UIManager
 from core import CoreEngine
@@ -43,6 +46,10 @@ def check_and_lock():
     except OSError:
         _lock_socket = None
         return False
+
+# --- ▼▼▼ 修正: グローバルに app インスタンスを保持 ▼▼▼ ---
+app = None
+# --- ▲▲▲ 修正完了 ▲▲▲ ---
 
 class Logger(QObject):
     logReady = Signal(str)
@@ -85,8 +92,45 @@ class Logger(QObject):
         print(f"[LOG] {translated_message}")
         self.logReady.emit(translated_message)
 
+# --- ▼▼▼ 修正: 再起動関数を追加 ▼▼▼ ---
+def restart_application():
+    """
+    アプリケーションを再起動します。
+    QProcess.startDetached を使用して、現在のプロセスが終了した後に
+    新しいプロセスを開始します。
+    """
+    global app
+    if not app:
+        print("[ERROR] Application instance not found for restart.")
+        return
+
+    # 実行中のPythonスクリプトまたは実行可能ファイルへのパス
+    executable = sys.executable
+    # 現在のスクリプトのメインファイル
+    script_path = os.path.abspath(sys.argv[0])
+    
+    # Pythonインタープリタ経由か、実行ファイルか
+    if executable.lower().endswith("python.exe") or executable.lower().endswith("python"):
+        args = [script_path] + sys.argv[1:]
+        process_path = executable
+    else:
+        # .exe の場合
+        args = sys.argv[1:]
+        process_path = executable
+
+    print(f"[INFO] Attempting to restart application...")
+    print(f"[INFO] Process: {process_path}")
+    print(f"[INFO] Args: {args}")
+
+    # 新しいプロセスをデタッチモードで開始
+    QProcess.startDetached(process_path, args)
+    
+    # 現在のアプリケーションを終了
+    app.quit()
+# --- ▲▲▲ 修正完了 ▲▲▲ ---
 
 def main():
+    global app # --- 修正: グローバル変数を参照 ---
     
     # ★★★ 修正箇所 2/4: QApplicationインスタンス化の前に DPI-Awareness を設定 ★★★
     if sys.platform == 'win32':
@@ -99,7 +143,7 @@ def main():
             pass # 失敗しても続行
     # ★★★ 修正完了 ★★★
 
-    temp_app_for_check = QApplication.instance() or QApplication(sys.argv)
+    app = QApplication.instance() or QApplication(sys.argv) # --- 修正: グローバル変数に代入 ---
     
     # ★★★ 5. LocaleManagerを早期にインスタンス化 ★★★
     # (QMessageBoxの前にLoggerとLocaleManagerが必要になる可能性があるため)
@@ -117,7 +161,7 @@ def main():
         error_box.exec()
         sys.exit(1)
     
-    app = temp_app_for_check
+    # app = temp_app_for_check # ← 削除
     
     # LoggerとLocaleManagerは作成済み
     config_manager = ConfigManager(logger) # ConfigManagerにもLoggerを渡す
@@ -171,6 +215,11 @@ def main():
     core_engine.askToSaveWindowBaseSizeSignal.connect(ui_manager.show_prompt_to_save_base_size)
     core_engine.askToApplyWindowScaleSignal.connect(ui_manager.show_prompt_to_apply_scale)
     core_engine.appContextChanged.connect(ui_manager.on_app_context_changed)
+    
+    # --- ▼▼▼ 修正: 再起動シグナルを接続 ▼▼▼ ---
+    core_engine.restartApplicationRequested.connect(restart_application)
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
+    
     ui_manager.startMonitoringRequested.connect(core_engine.start_monitoring)
     ui_manager.stopMonitoringRequested.connect(core_engine.stop_monitoring)
     ui_manager.loadImagesRequested.connect(core_engine.load_images_into_manager)

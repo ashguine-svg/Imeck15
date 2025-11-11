@@ -1,6 +1,6 @@
 {
   "language_name": "Suomi",
-  "window_title": "Imeck15 v1.5.5 Monikielinen versio",
+  "window_title": "Imeck15 v1.5.6.1 Monikielinen versio",
   "monitor_button_start": "Aloita Valvonta",
   "monitor_button_stop": "Lopeta Valvonta",
   "monitor_button_tooltip": "Aloita valvonta.\nOikea tuplaklikkaus lopettaa, oikea triplaklikkaus aloittaa",
@@ -371,5 +371,7 @@
   "log_reinitializing_capture_backend": "[INFO] Kaappaus-taustaohjelman (%s) alustaminen uudelleen resoluution muutoksen vuoksi...",
   "log_error_reinitialize_capture": "[ERROR] Virhe kaappaus-taustaohjelman uudelleenalustuksessa: %s",
   "log_warn_display_reinitializing": "[WARN] Käsitellään parhaillaan näytön asetusten (resoluutio/DPI) muutosta. Odota, kunnes se on valmis.",
-  "log_warn_display_reinitializing_monitor_loop": "[WARN] Käsitellään näytön asetusten muutosta... Keskeytetään valvontasilmukka."
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] Käsitellään näytön asetusten muutosta... Keskeytetään valvontasilmukka.",
+  "log_mss_instance_closed": "[INFO] Suljettiin olemassa oleva MSS-kaappausinstanssi.",
+  "log_mss_close_error": "[WARN] Virhe suljettaessa olemassa olevaa MSS-instanssia: %s"
 }
