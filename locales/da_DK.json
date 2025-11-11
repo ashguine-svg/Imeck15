@@ -361,5 +361,15 @@
   "log_rename_error_order_list": "Filomdøbning lykkedes, men der opstod en fejl under opdatering af rækkefølgelisten: %s",
   "context_menu_env_header": "--- [Indsamlede miljøer (Sidste %s)]",
   "context_menu_env_entry": "- App: %s, Res: %s, DPI: %s, Skala: %.2f",
-  "context_menu_env_entry_no_app": "- App: (Ingen), Res: %s, DPI: %s, Skala: %.2f"
+  "context_menu_env_entry_no_app": "- App: (Ingen), Res: %s, DPI: %s, Skala: %.2f",
+  "app_setting_strict_color": "Aktivér streng farvematchningstilstand (Øger CPU-belastningen)",
+  "app_setting_strict_color_desc": "Forhindrer forkert genkendelse af forskellige farver. Det deaktiveres automatisk, hvis gråtonetilstand eller OpenCL (GPU) er aktiveret.",
+  "log_screen_resolution_changed": "Ændring i skærmopløsning eller DPI registreret. Rydder genkendelsesområde.",
+  "log_screen_geometry_listener_attached": "[INFO] Tilsluttet lytter til opløsningsændring til primær skærm.",
+  "log_screen_geometry_listener_failed": "[WARN] Kunne ikke hente primær skærm. Lytter til opløsningsændring er ikke tilsluttet.",
+  "log_screen_geometry_listener_error": "[ERROR] Fejl ved tilslutning af lytter til opløsningsændring: %s",
+  "log_reinitializing_capture_backend": "[INFO] Geninitialiserer capture backend (%s) på grund af opløsningsændring...",
+  "log_error_reinitialize_capture": "[ERROR] Fejl under geninitialisering af capture backend: %s",
+  "log_warn_display_reinitializing": "[WARN] Behandler i øjeblikket ændring af skærmindstillinger (opløsning/DPI). Vent venligst til færdig.",
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] Behandler ændring af skærmindstilling... Pauser overvågningsløkke."
 }

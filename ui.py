@@ -1,6 +1,7 @@
 # ui.py (ImportError および QCursor NameError 修正版)
 # ★★★ 選択ダイアログの写り込み防止のためタイマー遅延を追加 ★★★
 # ★★★ 環境情報ツールチップ表示機能を追加 (改行コード修正版) ★★★
+# ★★★ 色調厳格モードのUI要素を追加  ★★★
 
 import sys
 import json
@@ -314,6 +315,16 @@ class UIManager(QMainWindow):
         self.gs_desc_label = QLabel()
         self.gs_desc_label.setWordWrap(True); self.gs_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
         app_settings_layout.addWidget(self.gs_desc_label)
+        
+        # --- ▼▼▼ 修正箇所 (setup_ui)  ▼▼▼ ---
+        self.app_settings_widgets['strict_color_matching'] = QCheckBox()
+        app_settings_layout.addWidget(self.app_settings_widgets['strict_color_matching'])
+        self.strict_color_desc_label = QLabel()
+        self.strict_color_desc_label.setWordWrap(True)
+        self.strict_color_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
+        app_settings_layout.addWidget(self.strict_color_desc_label)
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
+        
         self.app_settings_widgets['capture_method'] = QCheckBox()
         self.app_settings_widgets['capture_method'].setEnabled(DXCAM_AVAILABLE)
         app_settings_layout.addWidget(self.app_settings_widgets['capture_method'])
@@ -758,6 +769,12 @@ class UIManager(QMainWindow):
             self.preview_tabs.setTabText(app_settings_tab_index, lm("tab_app_settings"))
         self.app_settings_widgets['grayscale_matching'].setText(lm("app_setting_grayscale"))
         self.gs_desc_label.setText(lm("app_setting_grayscale_desc"))
+        
+        # --- ▼▼▼ 修正箇所 (retranslate_ui)  ▼▼▼ ---
+        self.app_settings_widgets['strict_color_matching'].setText(lm("app_setting_strict_color"))
+        self.strict_color_desc_label.setText(lm("app_setting_strict_color_desc"))
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
+        
         self.app_settings_widgets['capture_method'].setText(lm("app_setting_dxcam"))
         self.dxcam_desc_label.setText(lm("app_setting_dxcam_desc"))
         self.app_settings_widgets['eco_mode_enabled'].setText(lm("app_setting_eco_mode"))
@@ -877,6 +894,11 @@ class UIManager(QMainWindow):
         self.app_settings_widgets['capture_method'].setChecked(self.app_config.get('capture_method', 'dxcam') == 'dxcam')
         self.app_settings_widgets['frame_skip_rate'].setValue(self.app_config.get('frame_skip_rate', 2))
         self.app_settings_widgets['grayscale_matching'].setChecked(self.app_config.get('grayscale_matching', False))
+        
+        # --- ▼▼▼ 修正箇所 (load_app_settings_to_ui)  ▼▼▼ ---
+        self.app_settings_widgets['strict_color_matching'].setChecked(self.app_config.get('strict_color_matching', False))
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
+        
         self.app_settings_widgets['use_opencl'].setChecked(self.app_config.get('use_opencl', True))
 
         eco_conf = self.app_config.get('eco_mode', {})
@@ -938,6 +960,11 @@ class UIManager(QMainWindow):
         self.app_config['capture_method'] = 'dxcam' if self.app_settings_widgets['capture_method'].isChecked() else 'mss'
         self.app_config['frame_skip_rate'] = self.app_settings_widgets['frame_skip_rate'].value()
         self.app_config['grayscale_matching'] = self.app_settings_widgets['grayscale_matching'].isChecked()
+        
+        # --- ▼▼▼ 修正箇所 (on_app_settings_changed)  ▼▼▼ ---
+        self.app_config['strict_color_matching'] = self.app_settings_widgets['strict_color_matching'].isChecked()
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
+        
         self.app_config['use_opencl'] = self.app_settings_widgets['use_opencl'].isChecked()
         self.app_config['eco_mode'] = {"enabled": self.app_settings_widgets['eco_mode_enabled'].isChecked()}
         self.app_config['screen_stability_check'] = {

@@ -361,5 +361,15 @@
   "log_rename_error_order_list": "La ridenominazione del file è riuscita, ma si è verificato un errore durante l'aggiornamento dell'elenco degli ordini: %s",
   "context_menu_env_header": "--- [Ambienti raccolti (Ultimi %s)]",
   "context_menu_env_entry": "- App: %s, Res: %s, DPI: %s, Scala: %.2f",
-  "context_menu_env_entry_no_app": "- App: (Nessuna), Res: %s, DPI: %s, Scala: %.2f"
+  "context_menu_env_entry_no_app": "- App: (Nessuna), Res: %s, DPI: %s, Scala: %.2f",
+  "app_setting_strict_color": "Abilita la modalità di corrispondenza rigorosa dei colori (Aumenta il carico della CPU)",
+  "app_setting_strict_color_desc": "Impedisce il riconoscimento errato di colori diversi. Verrà disabilitato automaticamente se è abilitata la modalità Scala di grigi o OpenCL (GPU).",
+  "log_screen_resolution_changed": "Rilevata modifica della risoluzione dello schermo o dei DPI. Cancellazione dell'area di riconoscimento.",
+  "log_screen_geometry_listener_attached": "[INFO] Listener di modifica della risoluzione collegato allo schermo primario.",
+  "log_screen_geometry_listener_failed": "[WARN] Impossibile ottenere lo schermo primario. Listener di modifica della risoluzione non collegato.",
+  "log_screen_geometry_listener_error": "[ERROR] Errore durante il collegamento del listener di modifica della risoluzione: %s",
+  "log_reinitializing_capture_backend": "[INFO] Reinizializzazione del backend di acquisizione (%s) a causa della modifica della risoluzione...",
+  "log_error_reinitialize_capture": "[ERROR] Errore durante la reinizializzazione del backend di acquisizione: %s",
+  "log_warn_display_reinitializing": "[WARN] Elaborazione della modifica delle impostazioni dello schermo (risoluzione/DPI) in corso. Attendere il completamento.",
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] Elaborazione modifica impostazioni schermo... Messa in pausa del ciclo di monitoraggio."
 }

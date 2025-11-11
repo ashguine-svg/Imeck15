@@ -1,4 +1,5 @@
 # capture.py (DXCam スケール対応版)
+# ★★★ DXCamの初期化を (output_idx=None) に変更し、仮想デスクトップ全体を対象にする ★★★
 
 import sys
 import mss
@@ -48,12 +49,11 @@ class CaptureManager(QObject):
         if DXCAM_AVAILABLE:
             self.logger.log("log_dxcam_available")
             try:
-                # --- ▼▼▼ 修正箇所 1 ▼▼▼ ---
-                # output_idx=0 を削除し、特定のモニタに限定せず、
-                # 仮想デスクトップ全体（マルチモニタ/スケーリング対応）を
+                # --- ▼▼▼ 修正箇所 1 (output_idx=None) ▼▼▼ ---
+                # output_idx=None を指定し、仮想デスクトップ全体を
                 # 扱えるように初期化する
                 self.logger.log("log_dxcam_init") # ログキーは "Initializing DXCam..."
-                self.dxcam_sct = dxcam.create()
+                self.dxcam_sct = dxcam.create(output_idx=None)
                 # --- ▲▲▲ 修正完了 ▲▲▲ ---
                 
                 if self.dxcam_sct is None:
@@ -124,9 +124,20 @@ class CaptureManager(QObject):
             if self.current_method == 'dxcam':
                 self.logger.log("log_dxcam_init_attempt")
                 try:
-                    # --- ▼▼▼ 修正箇所 2 ▼▼▼ ---
-                    # ここも同様に output_idx=0 を削除
-                    self.dxcam_sct = dxcam.create()
+                    # --- ▼▼▼ 修正箇所 (dxcam.createの前にAPIコールを追加) ▼▼▼ ---
+                    if sys.platform == 'win32':
+                        try:
+                            # DXCamが参照する可能性のあるWindows APIの値を
+                            # 強制的に更新させる (SM_CXSCREEN = 0)
+                            w = win32api.GetSystemMetrics(0)
+                            h = win32api.GetSystemMetrics(1)
+                            self.logger.log(f"[DEBUG] Refreshing system metrics before dxcam.create(): {w}x{h}")
+                        except Exception as e_api:
+                            self.logger.log(f"[WARN] Failed to refresh system metrics: {e_api}")
+                    # --- ▲▲▲ 修正完了 ▲▲▲ ---
+
+                    # --- ▼▼▼ 修正箇所 2 (output_idx=None) ▼▼▼ ---
+                    self.dxcam_sct = dxcam.create(output_idx=None)
                     # --- ▲▲▲ 修正完了 ▲▲▲ ---
                     
                     if self.dxcam_sct:
@@ -148,6 +159,24 @@ class CaptureManager(QObject):
                     self.dxcam_sct = None
             
             self.logger.log("log_capture_method_set", self.current_method)
+
+    # --- ▼▼▼ 新規追加メソッド ▼▼▼ ---
+    def reinitialize_backend(self):
+        """
+        解像度変更などを理由に、現在のキャプチャバックエンドを再初期化します。
+        """
+        with self.lock:
+            current_method_name = self.current_method
+            self.logger.log("log_reinitializing_capture_backend", current_method_name)
+            
+            # 1. 既存のインスタンスをクリーンアップ
+            self.cleanup() 
+            
+            # 2. set_capture_method を呼び出して、(dxcam.create() などを) 再実行させる
+            # (set_capture_methodは内部で current_method と比較するため、一時的に None にする)
+            self.current_method = None 
+            self.set_capture_method(current_method_name)
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
     def capture_frame(self, region: tuple = None) -> np.ndarray:
         with self.lock:

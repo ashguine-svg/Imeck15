@@ -361,5 +361,15 @@
   "log_rename_error_order_list": "Le renommage du fichier a réussi, mais une erreur est survenue lors de la mise à jour de la liste d'ordre: %s",
   "context_menu_env_header": "--- [Environnements collectés (%s derniers)]",
   "context_menu_env_entry": "- App: %s, Rés: %s, DPI: %s, Scale: %.2f",
-  "context_menu_env_entry_no_app": "- App: (Aucune), Rés: %s, DPI: %s, Scale: %.2f"
+  "context_menu_env_entry_no_app": "- App: (Aucune), Rés: %s, DPI: %s, Scale: %.2f",
+  "app_setting_strict_color": "Activer le mode de correspondance stricte des couleurs (Augmente la charge du processeur)",
+  "app_setting_strict_color_desc": "Empêche la reconnaissance incorrecte de différentes couleurs. Il sera automatiquement désactivé si le mode Niveaux de gris ou OpenCL (GPU) est activé.",
+  "log_screen_resolution_changed": "Changement de résolution d'écran ou de DPI détecté. Effacement de la zone de reconnaissance.",
+  "log_screen_geometry_listener_attached": "[INFO] Écouteur de changement de résolution attaché à l'écran principal.",
+  "log_screen_geometry_listener_failed": "[WARN] Échec de l'obtention de l'écran principal. Écouteur de changement de résolution non attaché.",
+  "log_screen_geometry_listener_error": "[ERROR] Erreur lors de l'attachement de l'écouteur de changement de résolution : %s",
+  "log_reinitializing_capture_backend": "[INFO] Réinitialisation du backend de capture (%s) en raison d'un changement de résolution...",
+  "log_error_reinitialize_capture": "[ERROR] Erreur lors de la réinitialisation du backend de capture : %s",
+  "log_warn_display_reinitializing": "[WARN] Traitement en cours du changement des paramètres d'affichage (résolution/DPI). Veuillez patienter jusqu'à la fin.",
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] Traitement du changement des paramètres d'affichage... Mise en pause de la boucle de surveillance."
 }

@@ -361,5 +361,15 @@
   "log_rename_error_order_list": "Bestandshernoeming is gelukt, maar er is een fout opgetreden bij het bijwerken van de volgordelijst: %s",
   "context_menu_env_header": "--- [Verzamelde omgevingen (Laatste %s)]",
   "context_menu_env_entry": "- App: %s, Res: %s, DPI: %s, Schaal: %.2f",
-  "context_menu_env_entry_no_app": "- App: (Geen), Res: %s, DPI: %s, Schaal: %.2f"
+  "context_menu_env_entry_no_app": "- App: (Geen), Res: %s, DPI: %s, Schaal: %.2f",
+  "app_setting_strict_color": "Strikte kleurafstemmingsmodus inschakelen (Verhoogt CPU-belasting)",
+  "app_setting_strict_color_desc": "Voorkomt onjuiste herkenning van verschillende kleuren. Het wordt automatisch uitgeschakeld als de grijswaardenmodus of OpenCL (GPU) is ingeschakeld.",
+  "log_screen_resolution_changed": "Verandering in schermresolutie of DPI gedetecteerd. Herkenningsgebied wordt gewist.",
+  "log_screen_geometry_listener_attached": "[INFO] Listener voor resolutiewijziging gekoppeld aan primair scherm.",
+  "log_screen_geometry_listener_failed": "[WARN] Kon primair scherm niet ophalen. Listener voor resolutiewijziging niet gekoppeld.",
+  "log_screen_geometry_listener_error": "[FOUT] Fout bij koppelen van listener voor resolutiewijziging: %s",
+  "log_reinitializing_capture_backend": "[INFO] Capture-backend (%s) opnieuw initialiseren vanwege gewijzigde resolutie...",
+  "log_error_reinitialize_capture": "[FOUT] Fout bij opnieuw initialiseren van capture-backend: %s",
+  "log_warn_display_reinitializing": "[WARN] Bezig met verwerken van wijziging in beeldscherminstellingen (resolutie/DPI). Wacht tot dit is voltooid.",
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] Bezig met verwerken van wijziging in beeldscherminstelling... Monitorloop pauzeren."
 }

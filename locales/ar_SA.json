@@ -361,5 +361,15 @@
   "error_rename_title": "خطأ في إعادة التسمية",
   "context_menu_env_header": "--- [البيئات التي تم جمعها (آخر %s)]",
   "context_menu_env_entry": "- التطبيق: %s, الدقة: %s, DPI: %s, المقياس: %.2f",
-  "context_menu_env_entry_no_app": "- التطبيق: (لا يوجد), الدقة: %s, DPI: %s, المقياس: %.2f"
+  "context_menu_env_entry_no_app": "- التطبيق: (لا يوجد), الدقة: %s, DPI: %s, المقياس: %.2f",
+  "app_setting_strict_color": "تمكين وضع مطابقة الألوان الصارم (يزيد من تحميل وحدة المعالجة المركزية)",
+  "app_setting_strict_color_desc": "يمنع التعرف غير الصحيح على الألوان المختلفة. سيتم تعطيله تلقائيًا إذا تم تمكين وضع التدرج الرمادي أو OpenCL (GPU).",
+  "log_screen_resolution_changed": "تم اكتشاف تغيير في دقة الشاشة أو DPI. جاري مسح منطقة التعرف.",
+  "log_screen_geometry_listener_attached": "[INFO] تم إرفاق مستمع تغيير الدقة بالشاشة الأساسية.",
+  "log_screen_geometry_listener_failed": "[WARN] فشل في الحصول على الشاشة الأساسية. لم يتم إرفاق مستمع تغيير الدقة.",
+  "log_screen_geometry_listener_error": "[ERROR] خطأ أثناء إرفاق مستمع تغيير الدقة: %s",
+  "log_reinitializing_capture_backend": "[INFO] إعادة تهيئة خلفية الالتقاط (%s) بسبب تغيير الدقة...",
+  "log_error_reinitialize_capture": "[ERROR] خطأ أثناء إعادة تهيئة خلفية الالتقاط: %s",
+  "log_warn_display_reinitializing": "[WARN] قيد المعالجة حاليًا تغيير إعدادات العرض (الدقة/DPI). يرجى الانتظار حتى يكتمل.",
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] معالجة تغيير إعداد العرض... إيقاف حلقة المراقبة مؤقتًا."
 }

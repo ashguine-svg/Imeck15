@@ -361,5 +361,15 @@
   "log_rename_error_order_list": "File rename succeeded, but an error occurred while updating the order list: %s",
   "context_menu_env_header": "--- [Collected Environments (Last %s)]",
   "context_menu_env_entry": "- App: %s, Res: %s, DPI: %s, Scale: %.2f",
-  "context_menu_env_entry_no_app": "- App: (None), Res: %s, DPI: %s, Scale: %.2f"
+  "context_menu_env_entry_no_app": "- App: (None), Res: %s, DPI: %s, Scale: %.2f",
+  "app_setting_strict_color": "Enable Strict Color Matching Mode (Increases CPU load)",
+  "app_setting_strict_color_desc": "Prevents incorrect recognition of different colors. It will be automatically disabled if Grayscale Mode or OpenCL (GPU) is enabled.",
+  "log_screen_resolution_changed": "Screen resolution or DPI change detected. Clearing recognition area.",
+  "log_screen_geometry_listener_attached": "[INFO] Attached resolution change listener to primary screen.",
+  "log_screen_geometry_listener_failed": "[WARN] Failed to get primary screen. Resolution change listener not attached.",
+  "log_screen_geometry_listener_error": "[ERROR] Error attaching resolution change listener: %s",
+  "log_reinitializing_capture_backend": "[INFO] Reinitializing capture backend (%s) due to resolution change...",
+  "log_error_reinitialize_capture": "[ERROR] Error during capture backend reinitialization: %s",
+  "log_warn_display_reinitializing": "[WARN] Currently processing display settings (resolution/DPI) change. Please wait until complete.",
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] Processing display setting change... Pausing monitoring loop."
 }

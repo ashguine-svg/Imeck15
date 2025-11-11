@@ -383,5 +383,15 @@
   "log_profile_copy_failed": "[ERROR] デフォルトプロファイルのコピーに失敗しました: %s",
   "context_menu_env_header": "--- [収集された環境 (最新%s件)]",
   "context_menu_env_entry": "- App: %s, Res: %s, DPI: %s, Scale: %.2f",
-  "context_menu_env_entry_no_app": "- App: (なし), Res: %s, DPI: %s, Scale: %.2f"
+  "context_menu_env_entry_no_app": "- App: (なし), Res: %s, DPI: %s, Scale: %.2f",
+  "app_setting_strict_color": "色調厳格モードを有効にする (CPU負荷が増加)",
+  "app_setting_strict_color_desc": "色違いの誤認識を防ぎます。グレースケールモードまたはOpenCL(GPU)が有効な場合は自動的に無効になります。",
+  "log_screen_resolution_changed": "画面解像度またはDPIの変更を検出しました。認識範囲をクリアします。",
+  "log_screen_geometry_listener_attached": "[INFO] 解像度変更リスナーをプライマリスクリーンにアタッチしました。",
+  "log_screen_geometry_listener_failed": "[WARN] プライマリスクリーンの取得に失敗し、解像度変更リスナーをアタッチできませんでした。",
+  "log_screen_geometry_listener_error": "[ERROR] 解像度変更リスナーのアタッチ中にエラーが発生しました: %s",
+  "log_reinitializing_capture_backend": "[INFO] 解像度変更のため、キャプチャバックエンド (%s) を再初期化します...",
+  "log_error_reinitialize_capture": "[ERROR] キャプチャバックエンドの再初期化中にエラー: %s",
+  "log_warn_display_reinitializing": "[WARN] 現在ディスプレイ設定（解像度/DPI）の変更を処理中です。完了するまで操作をお待ちください。",
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] ディスプレイ設定の変更を処理中... 監視ループを一時停止します。"
 }

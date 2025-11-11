@@ -361,5 +361,15 @@
   "log_rename_error_order_list": "Tiedoston nimeäminen onnistui, mutta virhe järjestysluettelon päivityksen aikana: %s",
   "context_menu_env_header": "--- [Kerätyt ympäristöt (Viimeiset %s)]",
   "context_menu_env_entry": "- App: %s, Res: %s, DPI: %s, Skaala: %.2f",
-  "context_menu_env_entry_no_app": "- App: (Ei ole), Res: %s, DPI: %s, Skaala: %.2f"
+  "context_menu_env_entry_no_app": "- App: (Ei ole), Res: %s, DPI: %s, Skaala: %.2f",
+  "app_setting_strict_color": "Ota käyttöön tiukka värivastaavuustila (Lisää suorittimen kuormitusta)",
+  "app_setting_strict_color_desc": "Estää eri värien virheellisen tunnistamisen. Se poistetaan käytöstä automaattisesti, jos harmaasävytila tai OpenCL (GPU) on käytössä.",
+  "log_screen_resolution_changed": "Näytön tarkkuuden tai DPI:n muutos havaittu. Tunnistusalue tyhjennetään.",
+  "log_screen_geometry_listener_attached": "[INFO] Resoluutionmuutoksen kuuntelija liitetty päänäyttöön.",
+  "log_screen_geometry_listener_failed": "[WARN] Päänäytön hakeminen epäonnistui. Resoluutionmuutoksen kuuntelijaa ei liitetty.",
+  "log_screen_geometry_listener_error": "[ERROR] Virhe liitettäessä resoluutionmuutoksen kuuntelijaa: %s",
+  "log_reinitializing_capture_backend": "[INFO] Kaappaus-taustaohjelman (%s) alustaminen uudelleen resoluution muutoksen vuoksi...",
+  "log_error_reinitialize_capture": "[ERROR] Virhe kaappaus-taustaohjelman uudelleenalustuksessa: %s",
+  "log_warn_display_reinitializing": "[WARN] Käsitellään parhaillaan näytön asetusten (resoluutio/DPI) muutosta. Odota, kunnes se on valmis.",
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] Käsitellään näytön asetusten muutosta... Keskeytetään valvontasilmukka."
 }

@@ -360,5 +360,15 @@
   "error_rename_title": "नाम बदलने में त्रुटि",
   "context_menu_env_header": "--- [एकत्रित वातावरण (अंतिम %s)]",
   "context_menu_env_entry": "- ऐप: %s, रिज़ॉल्यूशन: %s, DPI: %s, स्केल: %.2f",
-  "context_menu_env_entry_no_app": "- ऐप: (कोई नहीं), रिज़ॉल्यूशन: %s, DPI: %s, स्केल: %.2f"
+  "context_menu_env_entry_no_app": "- ऐप: (कोई नहीं), रिज़ॉल्यूशन: %s, DPI: %s, स्केल: %.2f",
+  "app_setting_strict_color": "सख्त रंग मिलान मोड सक्षम करें (सीपीयू लोड बढ़ाता है)",
+  "app_setting_strict_color_desc": "विभिन्न रंगों की गलत पहचान को रोकता है। यदि ग्रेस्केल मोड या OpenCL (GPU) सक्षम है तो यह स्वचालित रूप से अक्षम हो जाएगा।",
+  "log_screen_resolution_changed": "स्क्रीन रिज़ॉल्यूशन या डीपीआई परिवर्तन का पता चला। मान्यता क्षेत्र साफ़ किया जा रहा है।",
+  "log_screen_geometry_listener_attached": "[INFO] रिज़ॉल्यूशन परिवर्तन श्रोता को प्राथमिक स्क्रीन से जोड़ा गया।",
+  "log_screen_geometry_listener_failed": "[WARN] प्राथमिक स्क्रीन प्राप्त करने में विफल। रिज़ॉल्यूशन परिवर्तन श्रोता नहीं जोड़ा गया।",
+  "log_screen_geometry_listener_error": "[ERROR] रिज़ॉल्यूशन परिवर्तन श्रोता को जोड़ने में त्रुटि: %s",
+  "log_reinitializing_capture_backend": "[INFO] रिज़ॉल्यूशन परिवर्तन के कारण कैप्चर बैकएंड (%s) को पुनः प्रारंभ किया जा रहा है...",
+  "log_error_reinitialize_capture": "[ERROR] कैप्चर बैकएंड को पुनः प्रारंभ करने में त्रुटि: %s",
+  "log_warn_display_reinitializing": "[WARN] वर्तमान में डिस्प्ले सेटिंग्स (रिज़ॉल्यूशन/डीपीआई) परिवर्तन संसाधित हो रहा है। कृपया पूरा होने तक प्रतीक्षा करें।",
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] डिस्प्ले सेटिंग परिवर्तन संसाधित हो रहा है... मॉनिटरिंग लूप रोका जा रहा है।"
 }

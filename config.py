@@ -86,6 +86,9 @@ class ConfigManager:
             "capture_method": "mss",
             "frame_skip_rate": 2,
             "grayscale_matching": False,
+            # --- ▼▼▼ 修正箇所 ▼▼▼ ---
+            "strict_color_matching": False, # 「色調厳格モード」のデフォルト値を追加
+            # --- ▲▲▲ 修正完了 ▲▲▲ ---
             "use_opencl": True,
             "lightweight_mode": {
                 "enabled": True,

@@ -359,5 +359,15 @@
   "log_rename_error_order_list": "文件重命名成功，但在更新顺序列表时发生错误: %s",
   "context_menu_env_header": "--- [已收集的环境 (最后 %s 个)]",
   "context_menu_env_entry": "- 应用: %s, 分辨率: %s, DPI: %s, 缩放: %.2f",
-  "context_menu_env_entry_no_app": "- 应用: (无), 分辨率: %s, DPI: %s, 缩放: %.2f"
+  "context_menu_env_entry_no_app": "- 应用: (无), 分辨率: %s, DPI: %s, 缩放: %.2f",
+  "app_setting_strict_color": "启用严格颜色匹配模式 (增加 CPU 负载)",
+  "app_setting_strict_color_desc": "防止对不同颜色的错误识别。如果启用了灰度模式或 OpenCL (GPU)，该功能将自动禁用。",
+  "log_screen_resolution_changed": "检测到屏幕分辨率或 DPI 更改。正在清除识别区域。",
+  "log_screen_geometry_listener_attached": "[INFO] 已将分辨率更改侦听器附加到主屏幕。",
+  "log_screen_geometry_listener_failed": "[WARN] 获取主屏幕失败。未附加分辨率更改侦听器。",
+  "log_screen_geometry_listener_error": "[ERROR] 附加分辨率更改侦听器时出错：%s",
+  "log_reinitializing_capture_backend": "[INFO] 由于分辨率更改，正在重新初始化捕获后端 (%s)...",
+  "log_error_reinitialize_capture": "[ERROR] 捕获后端重新初始化期间出错：%s",
+  "log_warn_display_reinitializing": "[WARN] 当前正在处理显示设置（分辨率/DPI）更改。请等待完成。",
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] 正在处理显示设置更改... 暂停监视循环。"
 }

@@ -205,6 +205,19 @@ def main():
     
     # --- ▲▲▲ 修正完了 ▲▲▲ ---
     
+    # --- ▼▼▼ 修正箇所 (解像度変更シグナルの接続) ▼▼▼ ---
+    try:
+        primary_screen = app.primaryScreen()
+        if primary_screen:
+            # 画面のジオメトリ (解像度, DPI) 変更を CoreEngine に接続
+            primary_screen.geometryChanged.connect(core_engine.on_screen_geometry_changed)
+            logger.log("log_screen_geometry_listener_attached")
+        else:
+            logger.log("log_screen_geometry_listener_failed")
+    except Exception as e:
+        logger.log("log_screen_geometry_listener_error", str(e))
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
+
     # --- 起動シーケンス (変更なし) ---
     ui_manager.set_tree_enabled(False)
     capture_manager.prime_mss()

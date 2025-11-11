@@ -1,4 +1,5 @@
 # core.py (Linuxキャプチャロジック 最終修正版)
+# ★★★ 解像度変更検知時のDXCam再初期化を「遅延初期化」に変更 ★★★
 
 import sys
 import threading
@@ -170,6 +171,10 @@ class CoreEngine(QObject):
         self._log_spam_filter = {"log_stability_hold_click", "log_eco_mode_standby", "log_stability_check_debug"}
 
         self.match_detected_at = {}
+        
+        # --- ▼▼▼ 解像度変更検知用のフラグ ▼▼▼ ---
+        self._is_reinitializing_display = False
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
     def transition_to(self, new_state):
         with self.state_lock:
@@ -291,7 +296,9 @@ class CoreEngine(QObject):
             click_pos = QPoint(x, y)
             
             # 1. メインUIが表示されていて、その上をクリックした場合
-            if self.ui_manager and self.ui_manager.isVisible():
+            ### ▼▼▼ 修正点 1/2: 「and not self.ui_manager.isMinimized()」 を追加 ▼▼▼
+            if self.ui_manager and self.ui_manager.isVisible() and not self.ui_manager.isMinimized():
+            ### ▲▲▲ 修正完了 ▲▲▲
                 if self.ui_manager.geometry().contains(click_pos):
                     return # メインUI上なのでQtに任せる
 
@@ -301,7 +308,9 @@ class CoreEngine(QObject):
                     return # フローティングUI上なのでQtに任せる
             
             # 3. パフォーマンスモニターが表示されていて、その上をクリックした場合
-            if self.performance_monitor and self.performance_monitor.isVisible():
+            ### ▼▼▼ 修正点 2/2: 「and not self.performance_monitor.isMinimized()」 を追加 ▼▼▼
+            if self.performance_monitor and self.performance_monitor.isVisible() and not self.performance_monitor.isMinimized():
+            ### ▲▲▲ 修正完了 ▲▲▲
                  if self.performance_monitor.geometry().contains(click_pos):
                     return # パフォーマンスモニター上なのでQtに任せる
             # ★★★ 修正完了 ★★★
@@ -339,6 +348,18 @@ class CoreEngine(QObject):
             )
             self.ui_manager._update_capture_button_state()
             return
+        
+        # --- ▼▼▼ 解像度変更対応 ▼▼▼ ---
+        if self._is_reinitializing_display:
+            try:
+                # ユーザーが操作しようとした = OSは安定しているはず
+                self.logger.log("log_lazy_reinitialize_capture_backend")
+                self._reinitialize_capture_backend()
+            except Exception as e:
+                self.logger.log("log_error_reinitialize_capture", str(e))
+            finally:
+                self._is_reinitializing_display = False
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
         self._is_capturing_for_registration = True
         self.ui_manager.setRecAreaDialog()
@@ -582,6 +603,19 @@ class CoreEngine(QObject):
     
     def start_monitoring(self):
         if not self.recognition_area: QMessageBox.warning(self.ui_manager, self.locale_manager.tr("warn_rec_area_not_set_title"), self.locale_manager.tr("warn_rec_area_not_set_text")); return
+        
+        # --- ▼▼▼ 解像度変更対応 ▼▼▼ ---
+        if self._is_reinitializing_display:
+            try:
+                # ユーザーが操作しようとした = OSは安定しているはず
+                self.logger.log("log_lazy_reinitialize_capture_backend")
+                self._reinitialize_capture_backend()
+            except Exception as e:
+                self.logger.log("log_error_reinitialize_capture", str(e))
+            finally:
+                self._is_reinitializing_display = False
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
+
         if not self.is_monitoring:
             self.is_monitoring = True; self.transition_to(IdleState(self)); self._click_count = 0; self._cooldown_until = 0; self._last_clicked_path = None; self.screen_stability_hashes.clear(); self.last_successful_click_time = 0; self.is_eco_cooldown_active = False; self._last_eco_check_time = time.time(); self.match_detected_at.clear()
             self.ui_manager.set_tree_enabled(False)
@@ -612,6 +646,13 @@ class CoreEngine(QObject):
             try:
                 current_time = time.time()
                 if self._cooldown_until > current_time: time.sleep(min(self._cooldown_until - current_time, 0.1)); continue
+                
+                # --- ▼▼▼ 解像度変更対応 ▼▼▼ ---
+                if self._is_reinitializing_display:
+                    self.logger.log("log_warn_display_reinitializing_monitor_loop")
+                    time.sleep(0.5) # 処理が完了するまで待機
+                    continue
+                # --- ▲▲▲ 修正完了 ▲▲▲ ---
                 
                 frame_counter += 1; delta_time = current_time - fps_last_time
                 if delta_time >= 1.0: 
@@ -856,8 +897,18 @@ class CoreEngine(QObject):
             if not cache:
                 return []
 
+            # [cite_start]--- ▼▼▼ 修正箇所 (5.3) [cite: 47-49] ▼▼▼ ---
             use_cl = OPENCL_AVAILABLE and cv2.ocl.useOpenCL()
             use_gs = self.app_config.get('grayscale_matching', False)
+            strict_color = self.app_config.get('strict_color_matching', False)
+
+            # 厳格モードは「グレースケール無効」の時のみ有効
+            effective_strict_color = strict_color and not use_gs
+            
+            if effective_strict_color:
+                # 厳格モード(CPU)実行時は OpenCL を無効化
+                use_cl = False
+            # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
             screen_image = s_gray if use_gs else s_bgr
             if use_cl:
@@ -884,15 +935,17 @@ class CoreEngine(QObject):
                         task_data = {'path': path, 'settings': data['settings'], 'template': template_image, 'scale': t['scale']}
                         t_shape = t['shape']
 
-                        # --- ▼▼▼ 修正箇所 ▼▼▼ ---
+                        # [cite_start]--- ▼▼▼ 修正箇所 (5.3) [cite: 52-55] ▼▼▼ ---
                         # OpenCL (use_cl) が有効な場合はスレッドプールを使わない
                         if self.thread_pool and not use_cl:
                             # OpenCLが無効な場合のみスレッドプールでタスクを投入
-                            future = self.thread_pool.submit(_match_template_task, screen_image, task_data, s_shape, t_shape)
+                            # _match_template_task に template_image と effective_strict_color を渡す
+                            future = self.thread_pool.submit(_match_template_task, screen_image, template_image, task_data, s_shape, t_shape, effective_strict_color)
                             futures.append(future)
                         else:
                             # OpenCL有効時、またはフォールバック (スレッドプールが利用できない場合) は直列実行
-                            match_result = _match_template_task(screen_image, task_data, s_shape, t_shape)
+                            # 直列実行時も template_image と effective_strict_color を渡す
+                            match_result = _match_template_task(screen_image, template_image, task_data, s_shape, t_shape, effective_strict_color)
                             if match_result:
                                 results.append(match_result)
                         # --- ▲▲▲ 修正完了 ▲▲▲ ---
@@ -933,6 +986,18 @@ class CoreEngine(QObject):
         if result and result.get('success'): self._click_count += 1; self._last_clicked_path = result.get('path'); self.last_successful_click_time = time.time(); self.clickCountUpdated.emit(self._click_count)
 
     def set_recognition_area(self, method: str):
+        # --- ▼▼▼ 解像度変更対応 (遅延初期化) ▼▼▼ ---
+        if self._is_reinitializing_display:
+            try:
+                # ユーザーが操作しようとした = OSは安定しているはず
+                self.logger.log("log_lazy_reinitialize_capture_backend")
+                self._reinitialize_capture_backend()
+            except Exception as e:
+                self.logger.log("log_error_reinitialize_capture", str(e))
+            finally:
+                self._is_reinitializing_display = False
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
+
         self.selectionProcessStarted.emit(); self.ui_manager.hide();
         if self.performance_monitor: self.performance_monitor.hide()
         self._stop_global_mouse_listener()
@@ -1310,3 +1375,46 @@ class CoreEngine(QObject):
             if isinstance(self.state, CountdownState): 
                 return self.state.get_remaining_time()
         return -1.0
+
+    # --- ▼▼▼ 修正箇所 (解像度変更スロットの修正) ▼▼▼ ---
+    def on_screen_geometry_changed(self, rect):
+        """
+        プライマリスクリーンのジオメトリ (解像度, DPI) 変更を検知するスロット。
+        認識範囲をクリアし、キャプチャバックエンドの再初期化をスケジュールします。
+        """
+        # (追加) すでに処理中の場合は多重実行を防ぐ
+        if self._is_reinitializing_display:
+            return
+            
+        # 認識範囲が設定されている時、または監視中の時のみ動作
+        if self.recognition_area or self.is_monitoring:
+            self._is_reinitializing_display = True # ★処理中フラグを立てる
+            self.logger.log("log_screen_resolution_changed")
+            
+            if self.is_monitoring:
+                self.stop_monitoring()
+                # UIに停止したことを即時反映
+                self.updateStatus.emit("idle", "green")
+
+            if self.recognition_area:
+                self.clear_recognition_area()
+            
+            # ★★★ 修正: QTimer.singleShot(0, ...) を削除 ★★★
+            # (次のユーザーアクション (set_recognition_area) まで待機するため)
+            self.logger.log("log_lazy_reinitialize_scheduled")
+
+    
+    def _reinitialize_capture_backend(self):
+        """
+        (スロット) QTimer または set_recognition_area から呼び出され、
+        キャプチャを再初期化します。
+        """
+        try:
+            if self.capture_manager:
+                self.capture_manager.reinitialize_backend()
+        except Exception as e:
+            self.logger.log("log_error_reinitialize_capture", str(e))
+        # ★★★ 修正: フラグ解除は呼び出し元 (set_recognition_area) で行う ★★★
+        # finally:
+        #     self._is_reinitializing_display = False 
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---

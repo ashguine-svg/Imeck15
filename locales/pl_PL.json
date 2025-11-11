@@ -361,5 +361,15 @@
   "log_rename_error_order_list": "Zmiana nazwy pliku powiodła się, ale wystąpił błąd podczas aktualizacji listy kolejności: %s",
   "context_menu_env_header": "--- [Zebrane środowiska (Ostatnie %s)]",
   "context_menu_env_entry": "- Aplik: %s, Rozdz: %s, DPI: %s, Skala: %.2f",
-  "context_menu_env_entry_no_app": "- Aplik: (Brak), Rozdz: %s, DPI: %s, Skala: %.2f"
+  "context_menu_env_entry_no_app": "- Aplik: (Brak), Rozdz: %s, DPI: %s, Skala: %.2f",
+  "app_setting_strict_color": "Włącz tryb ścisłego dopasowania kolorów (Zwiększa obciążenie procesora)",
+  "app_setting_strict_color_desc": "Zapobiega nieprawidłowemu rozpoznawaniu różnych kolorów. Zostanie automatycznie wyłączone, jeśli włączony jest tryb skali szarości lub OpenCL (GPU).",
+  "log_screen_resolution_changed": "Wykryto zmianę rozdzielczości ekranu lub DPI. Czyszczenie obszaru rozpoznawania.",
+  "log_screen_geometry_listener_attached": "[INFO] Dołączono nasłuchiwacz zmiany rozdzielczości do ekranu głównego.",
+  "log_screen_geometry_listener_failed": "[WARN] Nie udało się pobrać ekranu głównego. Nasłuchiwacz zmiany rozdzielczości nie został dołączony.",
+  "log_screen_geometry_listener_error": "[BŁĄD] Błąd podczas dołączania nasłuchiwacza zmiany rozdzielczości: %s",
+  "log_reinitializing_capture_backend": "[INFO] Ponowne inicjowanie backendu przechwytywania (%s) z powodu zmiany rozdzielczości...",
+  "log_error_reinitialize_capture": "[BŁĄD] Błąd podczas ponownej inicjalizacji backendu przechwytywania: %s",
+  "log_warn_display_reinitializing": "[WARN] Obecnie przetwarzana jest zmiana ustawień wyświetlania (rozdzielczość/DPI). Proszę czekać na zakończenie.",
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] Przetwarzanie zmiany ustawień wyświetlania... Wstrzymywanie pętli monitorowania."
 }

@@ -361,5 +361,15 @@
   "log_rename_error_order_list": "Filnavnebytte lyktes, men det oppstod en feil under oppdatering av rekkefølgelisten: %s",
   "context_menu_env_header": "--- [Innsamlede miljøer (Siste %s)]",
   "context_menu_env_entry": "- App: %s, Res: %s, DPI: %s, Skala: %.2f",
-  "context_menu_env_entry_no_app": "- App: (Ingen), Res: %s, DPI: %s, Skala: %.2f"
+  "context_menu_env_entry_no_app": "- App: (Ingen), Res: %s, DPI: %s, Skala: %.2f",
+  "app_setting_strict_color": "Aktiver streng fargematchingsmodus (Øker CPU-belastningen)",
+  "app_setting_strict_color_desc": "Forhindrer feil gjenkjenning av forskjellige farger. Den deaktiveres automatisk hvis gråtonemodus eller OpenCL (GPU) er aktivert.",
+  "log_screen_resolution_changed": "Endring i skjermoppløsning eller DPI oppdaget. Tømmer gjenkjenningsområdet.",
+  "log_screen_geometry_listener_attached": "[INFO] Koblet lytter for oppløsningsendring til primærskjermen.",
+  "log_screen_geometry_listener_failed": "[ADVARSEL] Kunne ikke hente primærskjerm. Lytter for oppløsningsendring er ikke tilkoblet.",
+  "log_screen_geometry_listener_error": "[FEIL] Feil ved tilkobling av lytter for oppløsningsendring: %s",
+  "log_reinitializing_capture_backend": "[INFO] Reinitialiserer fangst-backend (%s) på grunn av oppløsningsendring...",
+  "log_error_reinitialize_capture": "[FEIL] Feil under reinitialisering av fangst-backend: %s",
+  "log_warn_display_reinitializing": "[ADVARSEL] Behandler for øyeblikket endring i skjerminnstillinger (oppløsning/DPI). Vent til det er fullført.",
+  "log_warn_display_reinitializing_monitor_loop": "[ADVARSEL] Behandler endring i skjerminnstilling... Pauser overvåkingssløyfen."
 }

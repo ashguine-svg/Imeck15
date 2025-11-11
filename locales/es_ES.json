@@ -359,5 +359,15 @@
   "log_rename_error_order_list": "El renombrado del archivo fue exitoso, pero ocurrió un error al actualizar la lista de orden: %s",
   "context_menu_env_header": "--- [Entornos recopilados (Últimos %s)]",
   "context_menu_env_entry": "- App: %s, Res: %s, DPI: %s, Escala: %.2f",
-  "context_menu_env_entry_no_app": "- App: (Ninguna), Res: %s, DPI: %s, Escala: %.2f"
+  "context_menu_env_entry_no_app": "- App: (Ninguna), Res: %s, DPI: %s, Escala: %.2f",
+  "app_setting_strict_color": "Activar el modo de coincidencia de color estricta (Aumenta la carga de la CPU)",
+  "app_setting_strict_color_desc": "Evita el reconocimiento incorrecto de diferentes colores. Se desactivará automáticamente si el modo de escala de grises o OpenCL (GPU) están habilitados.",
+  "log_screen_resolution_changed": "Se detectó un cambio en la resolución de la pantalla o los DPI. Borrando el área de reconocimiento.",
+  "log_screen_geometry_listener_attached": "[INFO] Se adjuntó el detector de cambios de resolución a la pantalla principal.",
+  "log_screen_geometry_listener_failed": "[WARN] No se pudo obtener la pantalla principal. No se adjuntó el detector de cambios de resolución.",
+  "log_screen_geometry_listener_error": "[ERROR] Error al adjuntar el detector de cambios de resolución: %s",
+  "log_reinitializing_capture_backend": "[INFO] Reinicializando el backend de captura (%s) debido a un cambio de resolución...",
+  "log_error_reinitialize_capture": "[ERROR] Error durante la reinicialización del backend de captura: %s",
+  "log_warn_display_reinitializing": "[WARN] Procesando actualmente el cambio de configuración de la pantalla (resolución/DPI). Espere a que se complete.",
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] Procesando cambio de configuración de pantalla... Pausando el bucle de monitoreo."
 }

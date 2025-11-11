@@ -361,5 +361,15 @@
   "log_rename_error_order_list": "Dosya yeniden adlandırma başarılı oldu, ancak sıra listesi güncellenirken bir hata oluştu: %s",
   "context_menu_env_header": "--- [Toplanan Ortamlar (Son %s)]",
   "context_menu_env_entry": "- Uyg: %s, Çöz: %s, DPI: %s, Ölçek: %.2f",
-  "context_menu_env_entry_no_app": "- Uyg: (Yok), Çöz: %s, DPI: %s, Ölçek: %.2f"
+  "context_menu_env_entry_no_app": "- Uyg: (Yok), Çöz: %s, DPI: %s, Ölçek: %.2f",
+  "app_setting_strict_color": "Katı Renk Eşleştirme Modunu Etkinleştir (CPU yükünü artırır)",
+  "app_setting_strict_color_desc": "Farklı renklerin yanlış tanınmasını önler. Gri Tonlama Modu veya OpenCL (GPU) etkinse otomatik olarak devre dışı bırakılır.",
+  "log_screen_resolution_changed": "Ekran çözünürlüğü veya DPI değişikliği algılandı. Tanıma alanı temizleniyor.",
+  "log_screen_geometry_listener_attached": "[INFO] Çözünürlük değişikliği dinleyicisi birincil ekrana eklendi.",
+  "log_screen_geometry_listener_failed": "[UYARI] Birincil ekran alınamadı. Çözünürlük değişikliği dinleyicisi eklenmedi.",
+  "log_screen_geometry_listener_error": "[HATA] Çözünürlük değişikliği dinleyicisi eklenirken hata oluştu: %s",
+  "log_reinitializing_capture_backend": "[INFO] Çözünürlük değişikliği nedeniyle yakalama arka ucu (%s) yeniden başlatılıyor...",
+  "log_error_reinitialize_capture": "[HATA] Yakalama arka ucunun yeniden başlatılması sırasında hata: %s",
+  "log_warn_display_reinitializing": "[UYARI] Şu anda ekran ayarları (çözünürlük/DPI) değişikliği işleniyor. Lütfen tamamlanana kadar bekleyin.",
+  "log_warn_display_reinitializing_monitor_loop": "[UYARI] Ekran ayarı değişikliği işleniyor... İzleme döngüsü duraklatılıyor."
 }

@@ -359,5 +359,15 @@
   "log_rename_error_order_list": "Datei-Umbenennung erfolgreich, aber Fehler beim Aktualisieren der Reihenfolgeliste: %s",
   "context_menu_env_header": "--- [Gesammelte Umgebungen (Letzte %s)]",
   "context_menu_env_entry": "- App: %s, Res: %s, DPI: %s, Scale: %.2f",
-  "context_menu_env_entry_no_app": "- App: (Keine), Res: %s, DPI: %s, Scale: %.2f"
+  "context_menu_env_entry_no_app": "- App: (Keine), Res: %s, DPI: %s, Scale: %.2f",
+  "app_setting_strict_color": "Strengen Farbabgleich aktivieren (Erhöht die CPU-Last)",
+  "app_setting_strict_color_desc": "Verhindert die fehlerhafte Erkennung unterschiedlicher Farben. Wird automatisch deaktiviert, wenn der Graustufenmodus oder OpenCL (GPU) aktiviert ist.",
+  "log_screen_resolution_changed": "Änderung der Bildschirmauflösung oder DPI erkannt. Erkennungsbereich wird gelöscht.",
+  "log_screen_geometry_listener_attached": "[INFO] Listener für Auflösungsänderung an primären Bildschirm angehängt.",
+  "log_screen_geometry_listener_failed": "[WARN] Primärer Bildschirm konnte nicht abgerufen werden. Listener für Auflösungsänderung nicht angehängt.",
+  "log_screen_geometry_listener_error": "[ERROR] Fehler beim Anhängen des Listeners für Auflösungsänderung: %s",
+  "log_reinitializing_capture_backend": "[INFO] Initialisiere Capture-Backend (%s) aufgrund einer Auflösungsänderung neu...",
+  "log_error_reinitialize_capture": "[ERROR] Fehler bei der Reinitialisierung des Capture-Backends: %s",
+  "log_warn_display_reinitializing": "[WARN] Verarbeite gerade Änderungen der Anzeigeeinstellungen (Auflösung/DPI). Bitte warten Sie bis zum Abschluss.",
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] Verarbeite Änderung der Anzeigeeinstellungen... Pausiere Überwachungsschleife."
 }

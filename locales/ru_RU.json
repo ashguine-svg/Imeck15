@@ -360,5 +360,15 @@
   "error_rename_title": "Ошибка переименования",
   "context_menu_env_header": "--- [Собранные среды (Последние %s)]",
   "context_menu_env_entry": "- Прил: %s, Разр: %s, DPI: %s, Масшт: %.2f",
-  "context_menu_env_entry_no_app": "- Прил: (Нет), Разр: %s, DPI: %s, Масшт: %.2f"
+  "context_menu_env_entry_no_app": "- Прил: (Нет), Разр: %s, DPI: %s, Масшт: %.2f",
+  "app_setting_strict_color": "Включить режим строгого соответствия цветов (Увеличивает нагрузку на ЦП)",
+  "app_setting_strict_color_desc": "Предотвращает неправильное распознавание разных цветов. Будет автоматически отключено, если включен режим оттенков серого или OpenCL (GPU).",
+  "log_screen_resolution_changed": "Обнаружено изменение разрешения экрана или DPI. Очистка области распознавания.",
+  "log_screen_geometry_listener_attached": "[INFO] Прослушиватель изменения разрешения подключен к основному экрану.",
+  "log_screen_geometry_listener_failed": "[WARN] Не удалось получить основной экран. Прослушиватель изменения разрешения не подключен.",
+  "log_screen_geometry_listener_error": "[ОШИБКА] Ошибка при подключении прослушивателя изменения разрешения: %s",
+  "log_reinitializing_capture_backend": "[INFO] Повторная инициализация бэкэнда захвата (%s) в связи с изменением разрешения...",
+  "log_error_reinitialize_capture": "[ОШИБКА] Ошибка при повторной инициализации бэкэнда захвата: %s",
+  "log_warn_display_reinitializing": "[WARN] В настоящее время обрабатывается изменение настроек дисплея (разрешение/DPI). Пожалуйста, подождите завершения.",
+  "log_warn_display_reinitializing_monitor_loop": "[WARN] Обработка изменения настроек дисплея... Приостановка цикла мониторинга."
 }

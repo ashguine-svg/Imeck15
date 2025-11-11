@@ -361,5 +361,15 @@
   "log_rename_error_order_list": "Filnamnsbyte lyckades, men ett fel uppstod vid uppdatering av ordningslistan: %s",
   "context_menu_env_header": "--- [Insamlade miljöer (Senaste %s)]",
   "context_menu_env_entry": "- App: %s, Res: %s, DPI: %s, Skala: %.2f",
-  "context_menu_env_entry_no_app": "- App: (Ingen), Res: %s, DPI: %s, Skala: %.2f"
+  "context_menu_env_entry_no_app": "- App: (Ingen), Res: %s, DPI: %s, Skala: %.2f",
+  "app_setting_strict_color": "Aktivera strikt färgmatchningsläge (Ökar CPU-belastningen)",
+  "app_setting_strict_color_desc": "Förhindrar felaktig igenkänning av olika färger. Det inaktiveras automatiskt om gråskaleläge eller OpenCL (GPU) är aktiverat.",
+  "log_screen_resolution_changed": "Ändring av skärmupplösning eller DPI har upptäckts. Rensar igenkänningsområdet.",
+  "log_screen_geometry_listener_attached": "[INFO] Bifogad lyssnare för upplösningsändring till primär skärm.",
+  "log_screen_geometry_listener_failed": "[VARN] Misslyckades med att hämta primär skärm. Lyssnare för upplösningsändring ej bifogad.",
+  "log_screen_geometry_listener_error": "[FEL] Fel vid bifogande av lyssnare för upplösningsändring: %s",
+  "log_reinitializing_capture_backend": "[INFO] Ominitialiserar infångningsbackend (%s) på grund av upplösningsändring...",
+  "log_error_reinitialize_capture": "[FEL] Fel vid ominitialisering av infångningsbackend: %s",
+  "log_warn_display_reinitializing": "[VARN] Bearbetar för närvarande ändring av skärminställningar (upplösning/DPI). Vänta tills det är klart.",
+  "log_warn_display_reinitializing_monitor_loop": "[VARN] Bearbetar ändring av skärminställning... Pausar övervakningsslingan."
 }
