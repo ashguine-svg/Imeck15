@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+    body { font-family: sans-serif; font-size: 13px; }
+    h3 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px;}
+    h4 { color: #34495e; margin-top: 15px; margin-bottom: 5px; }
+    p, li { line-height: 1.6; }
+    b { color: #e74c3c; }
+    code { padding: 2px 4px; border-radius: 3px; font-family: monospace; }
+    .important { border-left: 3px solid #f39c12; padding-left: 10px; margin: 10px 0;}
+</style>
+</head>
+<body>
+    <p>
+        感谢您使用 Imeck15。<br>
+        本程序由 Ashguine 和 Google Gemini 通过结对编程创建。<br>
+        这第一次编程体验非常棒；如果您有兴趣，请随时尝试。<br>
+        GitHub: <a href="https://github.com/ashguine-svg/Imeck15">https://github.com/ashguine-svg/Imeck15</a><br>
+        Instagram: <a href="https://www.instagram.com/ashguine">https://www.instagram.com/ashguine</a>
+    </p>
+    <h3>Imeck15 单个图像点击设置指南</h3>
+    <p>
+        本指南解释了当找到已注册图像时，如何配置点击操作。它主要用于自动化窗口应用程序中的操作。
+    </p>
+
+    <h4>1. 如何注册要点击的图像</h4>
+    <p>
+        首先，注册将作为点击目标的图像。“捕获图像”功能是基本方法。<br>
+        <b>提示:</b> 建议捕获按钮或图标等<b>小部分</b>作为目标。
+    </p>
+    <ul>
+        <li><b>原因 1: 处理速度更快</b><br>搜索小图像比搜索整个屏幕对 PC 的要求更低。</li>
+        <li><b>原因 2: 精确点击</b><br>即使屏幕上存在多个相同的按钮，只捕获特定部分也可以实现对预期目标的精确点击。</li>
+    </ul>
+
+    <h4>2. 如何控制点击顺序 (间隔设置)</h4>
+    <p>
+        “间隔”是在点击图像后，<b>同一图像</b>可以再次被点击之前的最小等待时间（以秒为单位）。
+    </p>
+    <div class="important">
+        <b>[重要] 点击优先级机制</b><br>
+        如果在监控期间屏幕上找到多个可点击图像，Imeck15 会优先点击<b>“间隔”设置最短</b>的那个，并且不会点击其他图像。使用此机制来控制点击顺序。
+    </div>
+
+    <h4>3. 在一个屏幕上点击多个位置的技巧</h4>
+    <p>
+        通过应用“间隔设置”机制，您可以使其在一个屏幕上按顺序点击多个位置。<br>
+        <b>先决条件:</b> 被点击位置的图像或文本在点击后必须发生变化（消失、变灰等）。
+    </p>
+    <p><b>示例设置步骤:</b></p>
+    <ol>
+        <li>将您想在屏幕上点击的 A、B 和 C 部分注册为单独的图像。</li>
+        <li>为您想更早点击的图像设置更短的间隔时间。 (例如, A: <code>1.5</code> 秒, B: <code>2.0</code> 秒, C: <code>2.5</code> 秒)</li>
+        <li>开始监控。首先，将点击间隔最短的<b>部分 A</b>。</li>
+        <li>点击后，如果部分 A 从屏幕上消失，<b>部分 B</b> 将成为后续监控周期中的下一个点击目标。</li>
+        <li>同理，<b>部分 C</b> 将最后被点击。</li>
+    </ol>
+
+    <h4>4. 如何调整识别精度和范围</h4>
+    <ul>
+        <li><b>识别阈值:</b><br>此设置决定了图像需要有多相似才能被视为“匹配”。通常 <code>0.8</code> 左右的值就足够了，但将其设置为 <code>0.9</code> 或更高对于严格区分文本变化等微小差异可能有效。</li>
+        <li><b>搜索范围 (ROI 设置):</b><br>启用“启用 ROI”会将搜索目标限制为以点击坐标为中心的 <b>200x200 像素区域</b>。这能显著加快处理速度并大大降低 PC 的负载。（可变 ROI 模式允许自由设置范围）。</li>
+        <li><b>ROI 范围指定:</b><br>此功能允许您指定一个特定区域进行关注并指定一个单独的点击位置，而不是以点击位置为中心的 200x200 范围。</li>
+    </ul>
+
+    <h4>5. 针对特殊情况的“防抖 (Debounce)” 设置</h4>
+    <p>
+        “防抖”用于复杂的操​​作，例如“以短间隔点击图像 A，然后点击另一个图像 B，短暂暂停后，再次点击图像 A 以进入下一个屏幕”。
+    </p>
+    <p>
+        <b>机制:</b> 当同一图像被连续目标时，设置防抖时间会将第二次点击的等待时间延长到<b>“间隔 + 防抖时间”</b>。这为其他图像创造了被优先点击的机会。
+    </p>
+</body>
+</html>

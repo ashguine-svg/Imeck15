@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+    body { font-family: sans-serif; font-size: 13px; }
+    h3 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px;}
+    h4 { color: #34495e; margin-top: 15px; margin-bottom: 5px; }
+    p, li { line-height: 1.6; }
+    b { color: #e74c3c; }
+    code { padding: 2px 4px; border-radius: 3px; font-family: monospace; }
+    .important { border-left: 3px solid #f39c12; padding-left: 10px; margin: 10px 0;}
+</style>
+</head>
+<body>
+    <p>
+        Thank you for using Imeck15.<br>
+        This program was created through pair programming by Ashguine and Google Gemini.<br>
+        This first programming experience was a wonderful one; please feel free to try it out if you are interested.<br>
+        GitHub: <a href="https://github.com/ashguine-svg/Imeck15">https://github.com/ashguine-svg/Imeck15</a><br>
+        Instagram: <a href="https://www.instagram.com/ashguine">https://www.instagram.com/ashguine</a>
+    </p>
+    <h3>Imeck15 Per-Image Click Settings Guide</h3>
+    <p>
+        This guide explains how to configure click actions when a registered image is found. It is primarily intended for automating operations in windowed applications.
+    </p>
+
+    <h4>1. How to Register Images for Clicking</h4>
+    <p>
+        First, register the image that will serve as the click target. Using the "Capture Image" function is the basic method.<br>
+        <b>Tip:</b> It is recommended to capture <b>small parts</b> like buttons or icons as the target.
+    </p>
+    <ul>
+        <li><b>Reason 1: Faster Processing</b><br>Searching for a small image is less demanding on the PC than searching the entire screen.</li>
+        <li><b>Reason 2: Accurate Clicking</b><br>Even if multiple identical buttons exist on the screen, capturing only a specific part allows for precise clicking on the intended target.</li>
+    </ul>
+
+    <h4>2. How to Control Click Order (Interval Setting)</h4>
+    <p>
+        The "Interval" is the minimum waiting time (in seconds) after clicking an image before the <b>same image</b> can be clicked again.
+    </p>
+    <div class="important">
+        <b>[Important] Click Priority Mechanism</b><br>
+        If multiple clickable images are found on the screen during monitoring, Imeck15 prioritizes clicking the one with the <b>shortest "Interval" setting</b> and does not click other images. Use this mechanism to control the click sequence.
+    </div>
+
+    <h4>3. Technique for Clicking Multiple Locations on One Screen</h4>
+    <p>
+        By applying the "Interval Setting" mechanism, you can make it click multiple locations sequentially on a single screen.<br>
+        <b>Prerequisite:</b> The image or text at the clicked location must change (disappear, gray out, etc.) after being clicked.
+    </p>
+    <p><b>Example Setup Steps:</b></p>
+    <ol>
+        <li>Register parts A, B, and C that you want to click on the screen as separate images.</li>
+        <li>Set shorter interval times for images you want to click earlier. (e.g., A: <code>1.5</code> sec, B: <code>2.0</code> sec, C: <code>2.5</code> sec)</li>
+        <li>Start monitoring. First, <b>part A</b> with the shortest interval will be clicked.</li>
+        <li>After clicking, if part A disappears from the screen, <b>part B</b> will become the next click target in the subsequent monitoring cycle.</li>
+        <li>Similarly, <b>part C</b> will be clicked last.</li>
+    </ol>
+
+    <h4>4. How to Adjust Recognition Accuracy and Range</h4>
+    <ul>
+        <li><b>Recognition Threshold:</b><br>This setting determines how similar images need to be to be considered a "match". A value around <code>0.8</code> is usually sufficient, but setting it to <code>0.9</code> or higher can be effective for strictly distinguishing minor differences like text variations.</li>
+        <li><b>Search Range (ROI Setting):</b><br>Enabling "ROI Enabled" limits the search target to a <b>200x200 pixel area</b> centered around the click coordinate. This significantly speeds up processing and greatly reduces the load on the PC. (Variable ROI mode allows setting the range freely).</li>
+        <li><b>ROI Range Specification:</b><br>Instead of a 200x200 range centered on the click position, this feature allows you to specify a specific area to focus on and designate a separate click position.</li>
+    </ul>
+
+    <h4>5. "Debounce" Setting for Special Situations</h4>
+    <p>
+        "Debounce" is used for complex operations like "click image A with a short interval, then click another image B, and after a short pause, click image A again to proceed to the next screen."
+    </p>
+    <p>
+        <b>Mechanism:</b> Setting a debounce time extends the waiting period for the second click to <b>"Interval + Debounce Time"</b> when the same image is targeted consecutively. This creates an opportunity for other images to be clicked first.
+    </p>
+</body>
+</html>

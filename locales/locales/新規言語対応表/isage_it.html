@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+    body { font-family: sans-serif; font-size: 13px; }
+    h3 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px;}
+    h4 { color: #34495e; margin-top: 15px; margin-bottom: 5px; }
+    p, li { line-height: 1.6; }
+    b { color: #e74c3c; }
+    code { padding: 2px 4px; border-radius: 3px; font-family: monospace; }
+    .important { border-left: 3px solid #f39c12; padding-left: 10px; margin: 10px 0;}
+</style>
+</head>
+<body>
+    <p>
+        Grazie per aver utilizzato Imeck15.<br>
+        Questo programma è stato creato attraverso la programmazione a coppie da Ashguine e Google Gemini.<br>
+        Questa prima esperienza di programmazione è stata meravigliosa; sentitevi liberi di provarla se siete interessati.<br>
+        GitHub: <a href="https://github.com/ashguine-svg/Imeck15">https://github.com/ashguine-svg/Imeck15</a><br>
+        Instagram: <a href="https://www.instagram.com/ashguine">https://www.instagram.com/ashguine</a>
+    </p>
+    <h3>Imeck15 Guida alle Impostazioni di Clic per Immagine</h3>
+    <p>
+        Questa guida spiega come configurare le azioni di clic quando viene trovata un'immagine registrata. È principalmente destinata all'automazione delle operazioni nelle applicazioni a finestra.
+    </p>
+
+    <h4>1. Come Registrare Immagini per il Clic</h4>
+    <p>
+        Per prima cosa, registra l'immagine che fungerà da bersaglio del clic. L'uso della funzione "Cattura Immagine" è il metodo di base.<br>
+        <b>Suggerimento:</b> Si consiglia di catturare <b>piccole parti</b> come pulsanti o icone come bersaglio.
+    </p>
+    <ul>
+        <li><b>Motivo 1: Elaborazione Più Veloce</b><br>La ricerca di una piccola immagine è meno impegnativa per il PC rispetto alla ricerca dell'intero schermo.</li>
+        <li><b>Motivo 2: Clic Preciso</b><br>Anche se sullo schermo esistono più pulsanti identici, la cattura di una sola parte specifica consente di fare clic con precisione sul bersaglio desiderato.</li>
+    </ul>
+
+    <h4>2. Come Controllare l'Ordine dei Clic (Impostazione Intervallo)</h4>
+    <p>
+        L' "Intervallo" è il tempo di attesa minimo (in secondi) dopo aver fatto clic su un'immagine prima che la <b>stessa immagine</b> possa essere cliccata di nuovo.
+    </p>
+    <div class="important">
+        <b>[Importante] Meccanismo di Priorità del Clic</b><br>
+        Se durante il monitoraggio vengono trovate più immagini cliccabili sullo schermo, Imeck15 dà la priorità al clic su quella con l'impostazione di "Intervallo" <b>più breve</b> e non clicca su altre immagini. Utilizza questo meccanismo per controllare la sequenza dei clic.
+    </div>
+
+    <h4>3. Tecnica per Cliccare su Più Posizioni su un Singolo Schermo</h4>
+    <p>
+        Applicando il meccanismo di "Impostazione Intervallo", è possibile far sì che il clic avvenga sequenzialmente su più posizioni su un singolo schermo.<br>
+        <b>Prerequisito:</b> L'immagine o il testo nella posizione cliccata deve cambiare (scomparire, diventare grigio, ecc.) dopo essere stato cliccato.
+    </p>
+    <p><b>Esempio di Passaggi di Configurazione:</b></p>
+    <ol>
+        <li>Registra le parti A, B e C che desideri cliccare sullo schermo come immagini separate.</li>
+        <li>Imposta tempi di intervallo più brevi per le immagini che desideri cliccare prima. (ad esempio, A: <code>1.5</code> sec, B: <code>2.0</code> sec, C: <code>2.5</code> sec)</li>
+        <li>Avvia il monitoraggio. Per prima cosa, verrà cliccata la <b>parte A</b> con l'intervallo più breve.</li>
+        <li>Dopo aver cliccato, se la parte A scompare dallo schermo, la <b>parte B</b> diventerà il prossimo bersaglio del clic nel ciclo di monitoraggio successivo.</li>
+        <li>Analogamente, la <b>parte C</b> verrà cliccata per ultima.</li>
+    </ol>
+
+    <h4>4. Come Regolare l'Accuratezza e l'Intervallo di Riconoscimento</h4>
+    <ul>
+        <li><b>Soglia di Riconoscimento:</b><br>Questa impostazione determina quanto devono essere simili le immagini per essere considerate una "corrispondenza". Un valore intorno a <code>0.8</code> è solitamente sufficiente, ma impostarlo a <code>0.9</code> o superiore può essere efficace per distinguere rigorosamente le differenze minori come le variazioni di testo.</li>
+        <li><b>Intervallo di Ricerca (Impostazione ROI):</b><br>L'abilitazione di "ROI Abilitato" limita il bersaglio della ricerca a un'<b>area di 200x200 pixel</b> centrata attorno alla coordinata del clic. Ciò velocizza notevolmente l'elaborazione e riduce notevolmente il carico sul PC. (La modalità ROI Variabile consente di impostare l'intervallo liberamente).</li>
+        <li><b>Specificazione dell'Intervallo ROI:</b><br>Invece di un intervallo di 200x200 centrato sulla posizione del clic, questa funzione ti consente di specificare un'area specifica su cui concentrarti e designare una posizione di clic separata.</li>
+    </ul>
+
+    <h4>5. Impostazione "Debounce" per Situazioni Speciali</h4>
+    <p>
+        "Debounce" viene utilizzato per operazioni complesse come "clicca l'immagine A con un intervallo breve, quindi clicca un'altra immagine B e, dopo una breve pausa, clicca di nuovo l'immagine A per procedere alla schermata successiva."
+    </p>
+    <p>
+        <b>Meccanismo:</b> L'impostazione di un tempo di Debounce estende il tempo di attesa per il secondo clic a <b>"Intervallo + Tempo di Debounce"</b> quando la stessa immagine è mirata consecutivamente. Questo crea un'opportunità affinché altre immagini vengano cliccate per prime.
+    </p>
+</body>
+</html>

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+    body { font-family: sans-serif; font-size: 13px; }
+    h3 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px;}
+    h4 { color: #34495e; margin-top: 15px; margin-bottom: 5px; }
+    p, li { line-height: 1.6; }
+    b { color: #e74c3c; }
+    code { padding: 2px 4px; border-radius: 3px; font-family: monospace; }
+    .important { border-left: 3px solid #f39c12; padding-left: 10px; margin: 10px 0;}
+</style>
+</head>
+<body>
+    <p>
+        Gracias por usar Imeck15.<br>
+        Este programa fue creado mediante programación en pareja por Ashguine y Google Gemini.<br>
+        Esta primera experiencia de programación fue maravillosa; no dude en probarlo si está interesado.<br>
+        GitHub: <a href="https://github.com/ashguine-svg/Imeck15">https://github.com/ashguine-svg/Imeck15</a><br>
+        Instagram: <a href="https://www.instagram.com/ashguine">https://www.instagram.com/ashguine</a>
+    </p>
+    <h3>Guía de Configuración de Clic por Imagen de Imeck15</h3>
+    <p>
+        Esta guía explica cómo configurar las acciones de clic cuando se encuentra una imagen registrada. Está destinado principalmente a la automatización de operaciones en aplicaciones en ventana.
+    </p>
+
+    <h4>1. Cómo Registrar Imágenes para Hacer Clic</h4>
+    <p>
+        Primero, registre la imagen que servirá como objetivo del clic. Usar la función "Capturar Imagen" es el método básico.<br>
+        <b>Consejo:</b> Se recomienda capturar <b>partes pequeñas</b> como botones o iconos como objetivo.
+    </p>
+    <ul>
+        <li><b>Razón 1: Procesamiento Más Rápido</b><br>Buscar una imagen pequeña exige menos al PC que buscar en toda la pantalla.</li>
+        <li><b>Razón 2: Clic Preciso</b><br>Incluso si existen múltiples botones idénticos en la pantalla, capturar solo una parte específica permite hacer clic con precisión en el objetivo previsto.</li>
+    </ul>
+
+    <h4>2. Cómo Controlar el Orden de Clic (Configuración de Intervalo)</h4>
+    <p>
+        El "Intervalo" es el tiempo mínimo de espera (en segundos) después de hacer clic en una imagen antes de que la <b>misma imagen</b> pueda ser clicada de nuevo.
+    </p>
+    <div class="important">
+        <b>[Importante] Mecanismo de Prioridad de Clic</b><br>
+        Si se encuentran múltiples imágenes en las que se puede hacer clic en la pantalla durante el monitoreo, Imeck15 prioriza hacer clic en la que tiene la configuración de "Intervalo" <b>más corta</b> y no hace clic en otras imágenes. Use este mecanismo para controlar la secuencia de clics.
+    </div>
+
+    <h4>3. Técnica para Hacer Clic en Múltiples Ubicaciones en una Sola Pantalla</h4>
+    <p>
+        Al aplicar el mecanismo de "Configuración de Intervalo", puede hacer que se haga clic en múltiples ubicaciones secuencialmente en una sola pantalla.<br>
+        <b>Requisito Previo:</b> La imagen o el texto en la ubicación clicada debe cambiar (desaparecer, ponerse gris, etc.) después de hacer clic.
+    </p>
+    <p><b>Pasos de Configuración de Ejemplo:</b></p>
+    <ol>
+        <li>Registre las partes A, B y C en las que desea hacer clic en la pantalla como imágenes separadas.</li>
+        <li>Establezca tiempos de intervalo más cortos para las imágenes en las que desea hacer clic antes. (por ejemplo, A: <code>1.5</code> seg, B: <code>2.0</code> seg, C: <code>2.5</code> seg)</li>
+        <li>Inicie el monitoreo. Primero, se hará clic en la <b>parte A</b> con el intervalo más corto.</li>
+        <li>Después de hacer clic, si la parte A desaparece de la pantalla, la <b>parte B</b> se convertirá en el próximo objetivo de clic en el ciclo de monitoreo subsiguiente.</li>
+        <li>De manera similar, se hará clic en la <b>parte C</b> al final.</li>
+    </ol>
+
+    <h4>4. Cómo Ajustar la Precisión y el Rango de Reconocimiento</h4>
+    <ul>
+        <li><b>Umbral de Reconocimiento:</b><br>Esta configuración determina cuán similares deben ser las imágenes para ser consideradas una "coincidencia". Un valor alrededor de <code>0.8</code> suele ser suficiente, pero configurarlo en <code>0.9</code> o superior puede ser efectivo para distinguir estrictamente diferencias menores como variaciones de texto.</li>
+        <li><b>Rango de Búsqueda (Configuración ROI):</b><br>Habilitar "ROI Habilitado" limita el objetivo de búsqueda a un <b>área de 200x200 píxeles</b> centrada alrededor de la coordenada de clic. Esto acelera significativamente el procesamiento y reduce en gran medida la carga en el PC. (El modo ROI Variable permite establecer el rango libremente).</li>
+        <li><b>Especificación de Rango ROI:</b><br>En lugar de un rango de 200x200 centrado en la posición del clic, esta función le permite especificar un área específica en la que concentrarse y designar una posición de clic separada.</li>
+    </ul>
+
+    <h4>5. Configuración "Debounce" para Situaciones Especiales</h4>
+    <p>
+        "Debounce" se utiliza para operaciones complejas como "hacer clic en la imagen A con un intervalo corto, luego hacer clic en otra imagen B, y después de una breve pausa, hacer clic en la imagen A nuevamente para pasar a la siguiente pantalla".
+    </p>
+    <p>
+        <b>Mecanismo:</b> Establecer un tiempo de Debounce extiende el tiempo de espera para el segundo clic a <b>"Intervalo + Tiempo de Debounce"</b> cuando la misma imagen es el objetivo consecutivamente. Esto crea una oportunidad para que otras imágenes sean clicadas primero.
+    </p>
+</body>
+</html>

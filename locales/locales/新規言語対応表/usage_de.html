@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+    body { font-family: sans-serif; font-size: 13px; }
+    h3 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px;}
+    h4 { color: #34495e; margin-top: 15px; margin-bottom: 5px; }
+    p, li { line-height: 1.6; }
+    b { color: #e74c3c; }
+    code { padding: 2px 4px; border-radius: 3px; font-family: monospace; }
+    .important { border-left: 3px solid #f39c12; padding-left: 10px; margin: 10px 0;}
+</style>
+</head>
+<body>
+    <p>
+        Vielen Dank, dass Sie Imeck15 verwenden.<br>
+        Dieses Programm wurde durch Paarprogrammierung von Ashguine und Google Gemini erstellt.<br>
+        Diese erste Programmiererfahrung war wunderbar; probieren Sie es gerne aus, wenn Sie interessiert sind.<br>
+        GitHub: <a href="https://github.com/ashguine-svg/Imeck15">https://github.com/ashguine-svg/Imeck15</a><br>
+        Instagram: <a href="https://www.instagram.com/ashguine">https://www.instagram.com/ashguine</a>
+    </p>
+    <h3>Imeck15 Leitfaden für Klick-Einstellungen pro Bild</h3>
+    <p>
+        Dieser Leitfaden erklärt, wie Klick-Aktionen konfiguriert werden, wenn ein registriertes Bild gefunden wird. Er ist hauptsächlich für die Automatisierung von Vorgängen in Fensteranwendungen gedacht.
+    </p>
+
+    <h4>1. So registrieren Sie Bilder zum Klicken</h4>
+    <p>
+        Registrieren Sie zuerst das Bild, das als Klick-Ziel dienen soll. Die Verwendung der Funktion "Bild aufnehmen" ist die grundlegende Methode.<br>
+        <b>Tipp:</b> Es wird empfohlen, <b>kleine Teile</b> wie Schaltflächen oder Symbole als Ziel zu erfassen.
+    </p>
+    <ul>
+        <li><b>Grund 1: Schnellere Verarbeitung</b><br>Die Suche nach einem kleinen Bild ist weniger anspruchsvoll für den PC als die Suche auf dem gesamten Bildschirm.</li>
+        <li><b>Grund 2: Genaues Klicken</b><br>Selbst wenn mehrere identische Schaltflächen auf dem Bildschirm existieren, ermöglicht das Erfassen nur eines bestimmten Teils ein präzises Klicken auf das beabsichtigte Ziel.</li>
+    </ul>
+
+    <h4>2. So steuern Sie die Klick-Reihenfolge (Intervall-Einstellung)</h4>
+    <p>
+        Das "Intervall" ist die minimale Wartezeit (in Sekunden) nach dem Klicken eines Bildes, bevor dasselbe Bild erneut geklickt werden kann.
+    </p>
+    <div class="important">
+        <b>[Wichtig] Klick-Prioritätsmechanismus</b><br>
+        Wenn während der Überwachung mehrere klickbare Bilder auf dem Bildschirm gefunden werden, priorisiert Imeck15 das Klicken auf das Bild mit der <b>kürzesten "Intervall"-Einstellung</b> und klickt nicht auf andere Bilder. Verwenden Sie diesen Mechanismus, um die Klick-Sequenz zu steuern.
+    </div>
+
+    <h4>3. Technik zum Klicken auf mehrere Stellen auf einem Bildschirm</h4>
+    <p>
+        Durch Anwendung des "Intervall-Einstellungs"-Mechanismus können Sie festlegen, dass nacheinander auf mehrere Stellen auf einem einzigen Bildschirm geklickt wird.<br>
+        <b>Voraussetzung:</b> Das Bild oder der Text an der geklickten Stelle muss sich nach dem Klicken ändern (verschwinden, ausgegraut werden usw.).
+    </p>
+    <p><b>Beispiel-Einrichtungsschritte:</b></p>
+    <ol>
+        <li>Registrieren Sie die Teile A, B und C, die Sie auf dem Bildschirm anklicken möchten, als separate Bilder.</li>
+        <li>Stellen Sie kürzere Intervallzeiten für Bilder ein, die Sie früher anklicken möchten. (z. B. A: <code>1.5</code> Sek., B: <code>2.0</code> Sek., C: <code>2.5</code> Sek.)</li>
+        <li>Starten Sie die Überwachung. Zuerst wird <b>Teil A</b> mit dem kürzesten Intervall angeklickt.</li>
+        <li>Nach dem Klicken wird <b>Teil B</b> zum nächsten Klick-Ziel im folgenden Überwachungszyklus, falls Teil A vom Bildschirm verschwindet.</li>
+        <li>Ebenso wird <b>Teil C</b> zuletzt angeklickt.</li>
+    </ol>
+
+    <h4>4. So passen Sie die Erkennungsgenauigkeit und den Bereich an</h4>
+    <ul>
+        <li><b>Erkennungsschwelle:</b><br>Diese Einstellung bestimmt, wie ähnlich Bilder sein müssen, um als "Übereinstimmung" zu gelten. Ein Wert um <code>0.8</code> ist normalerweise ausreichend, aber das Einstellen auf <code>0.9</code> oder höher kann effektiv sein, um geringfügige Unterschiede wie Textvariationen streng zu unterscheiden.</li>
+        <li><b>Suchbereich (ROI-Einstellung):</b><br>Das Aktivieren von "ROI aktiviert" beschränkt das Suchziel auf einen <b>200x200 Pixel großen Bereich</b>, der um die Klick-Koordinate zentriert ist. Dies beschleunigt die Verarbeitung erheblich und reduziert die Last auf den PC stark. (Der Variable ROI-Modus ermöglicht das freie Einstellen des Bereichs).</li>
+        <li><b>ROI-Bereichsspezifikation:</b><br>Anstelle eines 200x200 Bereichs, der um die Klick-Position zentriert ist, ermöglicht diese Funktion das Festlegen eines spezifischen Bereichs, auf den man sich konzentrieren möchte, und das Bestimmen einer separaten Klick-Position.</li>
+    </ul>
+
+    <h4>5. "Debounce"-Einstellung für spezielle Situationen</h4>
+    <p>
+        "Debounce" wird für komplexe Vorgänge wie "Bild A mit einem kurzen Intervall klicken, dann ein anderes Bild B klicken und nach einer kurzen Pause Bild A erneut klicken, um zum nächsten Bildschirm zu gelangen" verwendet.
+    </p>
+    <p>
+        <b>Mechanismus:</b> Das Festlegen einer Debounce-Zeit verlängert die Wartezeit für den zweiten Klick auf <b>"Intervall + Debounce-Zeit"</b>, wenn dasselbe Bild nacheinander als Ziel ausgewählt wird. Dies schafft eine Gelegenheit, dass andere Bilder zuerst angeklickt werden.
+    </p>
+</body>
+</html>
