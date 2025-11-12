@@ -86,22 +86,24 @@ class ConfigManager:
             "capture_method": "mss",
             "frame_skip_rate": 2,
             "grayscale_matching": False,
-            # --- ▼▼▼ 修正箇所 ▼▼▼ ---
-            "strict_color_matching": False, # 「色調厳格モード」のデフォルト値を追加
+            "strict_color_matching": False, 
+            # --- ▼▼▼ 修正箇所 1/2 ▼▼▼ ---
+            "use_opencl": False, # ★ ご要望に基づき False に変更
             # --- ▲▲▲ 修正完了 ▲▲▲ ---
-            "use_opencl": True,
             "lightweight_mode": {
                 "enabled": True,
                 "preset": "標準"
             },
+            # --- ▼▼▼ 修正箇所 2/2 ▼▼▼ ---
             "screen_stability_check": {
-                "enabled": True,
+                "enabled": False, # ★ ご要望に基づき False に変更
                 "threshold": 8
             },
+            # --- ▲▲▲ 修正完了 ▲▲▲ ---
             "eco_mode": {
                 "enabled": True
             },
-            "language": "en_US" # ★★★ 3. 言語設定のデフォルトを追加 ★★★
+            "language": "en_US" 
         }
         if not self.app_config_path.exists():
             return default_config
@@ -305,7 +307,7 @@ class ConfigManager:
             # 2. 各フォルダの順序を保存
             folder_data_map = data_to_save.get('folders', {})
             for folder_path_str, child_order_filenames in folder_data_map.items():
-                self.save_image_order(child_order_filenames, folder_path=folder_path_str)
+                self.save_image_order(child_order_filenames, folder_path_str)
         
         except Exception as e:
             # このログは core.py の _save_order_and_rebuild_async の
