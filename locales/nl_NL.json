@@ -373,5 +373,9 @@
   "log_warn_display_reinitializing": "[WARN] Bezig met verwerken van wijziging in beeldscherminstellingen (resolutie/DPI). Wacht tot dit is voltooid.",
   "log_warn_display_reinitializing_monitor_loop": "[WARN] Bezig met verwerken van wijziging in beeldscherminstelling... Monitorloop pauzeren.",
   "log_mss_instance_closed": "[INFO] Bestaande MSS-opname-instantie gesloten.",
-  "log_mss_close_error": "[WARN] Fout bij sluiten van bestaande MSS-instantie: %s"
+  "log_mss_close_error": "[WARN] Fout bij sluiten van bestaande MSS-instantie: %s",
+  "log_capture_failed_limit_reached": "Overvåking stoppet automatisk etter 10 påfølgende mislykkede fangstforsøk.",
+  "status_label_idle_error": "Fout (Gestopt)",
+  "error_title_cache_build_failed": "Fout bij bouwen cache",
+  "error_message_cache_build_failed": "Kunne ikke gjenoppbygge bildebufferen. Grensesnittet forblir låst for sikkerhets skyld. Se etter ødelagte bildefiler og start programmet på nytt."
 }

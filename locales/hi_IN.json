@@ -372,5 +372,9 @@
   "log_warn_display_reinitializing": "[WARN] वर्तमान में डिस्प्ले सेटिंग्स (रिज़ॉल्यूशन/डीपीआई) परिवर्तन संसाधित हो रहा है। कृपया पूरा होने तक प्रतीक्षा करें।",
   "log_warn_display_reinitializing_monitor_loop": "[WARN] डिस्प्ले सेटिंग परिवर्तन संसाधित हो रहा है... मॉनिटरिंग लूप रोका जा रहा है।",
   "log_mss_instance_closed": "[INFO] मौजूदा एमएसएस कैप्चर इंस्टेंस बंद कर दिया गया।",
-  "log_mss_close_error": "[WARN] मौजूदा एमएसएस इंस्टेंस को बंद करते समय त्रुटि हुई: %s"
+  "log_mss_close_error": "[WARN] मौजूदा एमएसएस इंस्टेंस को बंद करते समय त्रुटि हुई: %s",
+  "log_capture_failed_limit_reached": "Valvonta pysäytetty automaattisesti 10 peräkkäisen epäonnistuneen kaappauksen jälkeen.",
+  "status_label_idle_error": "त्रुटि (बंद)",
+  "error_title_cache_build_failed": "कैश निर्माण त्रुटि",
+  "error_message_cache_build_failed": "छवि कैश के पुनर्निर्माण में विफल। सुरक्षा के लिए यूआई लॉक रहेगा। कृपया दूषित छवि फ़ाइलों की जांच करें और एप्लिकेशन को पुनरारंभ करें।"
 }

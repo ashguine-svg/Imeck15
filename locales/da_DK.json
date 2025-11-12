@@ -373,5 +373,9 @@
   "log_warn_display_reinitializing": "[WARN] Behandler i øjeblikket ændring af skærmindstillinger (opløsning/DPI). Vent venligst til færdig.",
   "log_warn_display_reinitializing_monitor_loop": "[WARN] Behandler ændring af skærmindstilling... Pauser overvågningsløkke.",
   "log_mss_instance_closed": "[INFO] Lukket eksisterende MSS-capture-instans.",
-  "log_mss_close_error": "[WARN] Fejl under lukning af eksisterende MSS-instans: %s"
+  "log_mss_close_error": "[WARN] Fejl under lukning af eksisterende MSS-instans: %s",
+  "log_capture_failed_limit_reached": "La monitorización se detuvo automáticamente después de 10 fallos consecutivos de captura.",
+  "status_label_idle_error": "Fejl (Stoppet)",
+  "error_title_cache_build_failed": "Fejl ved opbygning af cache",
+  "error_message_cache_build_failed": "Kunne ikke genopbygge billedcache. Brugergrænsefladen forbliver låst for en sikkerheds skyld. Kontrollér venligst for korrupte billedfiler og genstart applikationen."
 }

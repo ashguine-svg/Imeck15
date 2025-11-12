@@ -373,5 +373,9 @@
   "log_warn_display_reinitializing": "[WARN] Currently processing display settings (resolution/DPI) change. Please wait until complete.",
   "log_warn_display_reinitializing_monitor_loop": "[WARN] Processing display setting change... Pausing monitoring loop.",
   "log_mss_instance_closed": "[INFO] Closed existing MSS capture instance.",
-  "log_mss_close_error": "[WARN] Error occurred while closing existing MSS instance: %s"
+  "log_mss_close_error": "[WARN] Error occurred while closing existing MSS instance: %s",
+  "log_capture_failed_limit_reached": "Monitoring stopped automatically after 10 consecutive capture failures.",
+  "status_label_idle_error": "Error (Stopped)",
+  "error_title_cache_build_failed": "Cache Build Error",
+  "error_message_cache_build_failed": "Failed to rebuild image cache. The UI will remain locked for safety. Please check for corrupted image files and restart the application."
 }

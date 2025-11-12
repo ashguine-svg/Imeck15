@@ -2,6 +2,8 @@
 # ★★★ 選択ダイアログの写り込み防止のためタイマー遅延を追加 ★★★
 # ★★★ 環境情報ツールチップ表示機能を追加 (改行コード修正版) ★★★
 # ★★★ 色調厳格モードのUI要素を追加  ★★★
+# ★★★ (改良 1.1) エラーステータス (idle_error) の処理を追加 ★★★
+# ★★★ (改良 1.2) on_cache_build_finished で成功フラグを処理するよう修正 ★★★
 
 import sys
 import json
@@ -683,6 +685,9 @@ class UIManager(QMainWindow):
             current_status_text = self.status_label.text(); current_status_color = "green"
             if current_status_text == lm("status_label_monitoring"): current_status_color = "blue"
             elif current_status_text == lm("status_label_unstable"): current_status_color = "orange"
+            # --- ▼▼▼ (改良 1.1) エラー色を追加 ▼▼▼ ---
+            elif current_status_text == lm("status_label_idle_error"): current_status_color = "red"
+            # --- ▲▲▲ 修正完了 ▲▲▲ ---
             self.floating_window.update_status(current_status_text, current_status_color); 
             self.floating_window.show(); 
             self.toggle_minimal_ui_button.setText(lm("minimal_ui_button_stop")); 
@@ -868,9 +873,16 @@ class UIManager(QMainWindow):
 
         self.update_auto_scale_info()
         if self.core_engine:
-            status_key = "monitoring" if self.core_engine.is_monitoring else "idle"
-            self.set_status(status_key, "blue" if status_key == "monitoring" else "green")
-        else: self.set_status("idle", "green")
+            # (改良 1.1) 起動時のステータスチェックを簡素化
+            current_status = self.status_label.text()
+            if current_status == lm("status_label_idle") or current_status == lm("status_label_idle_error"):
+                self.set_status("idle", "green")
+            elif current_status == lm("status_label_monitoring"):
+                self.set_status("monitoring", "blue")
+            # 他のステータス (unstableなど) はそのまま維持
+        else: 
+            self.set_status("idle", "green")
+            
         current_scale = 0.0
         if self.core_engine and self.core_engine.current_window_scale is not None:
             current_scale = self.core_engine.current_window_scale
@@ -1134,10 +1146,24 @@ class UIManager(QMainWindow):
     def set_tree_enabled(self, enabled: bool):
         self.image_tree.setEnabled(enabled)
 
-    def on_cache_build_finished(self):
-        self.update_image_tree()
-        self.set_tree_enabled(True)
+    # --- ▼▼▼ (改良 1.2) on_cache_build_finished を修正 ▼▼▼ ---
+    def on_cache_build_finished(self, success: bool):
+        lm = self.locale_manager.tr
+        
+        if success:
+            # 成功した場合: 従来通りUIを更新・有効化
+            self.update_image_tree()
+            self.set_tree_enabled(True)
+        else:
+            # 失敗した場合: UIは無効のままエラーを表示
+            self.set_tree_enabled(False)
+            QMessageBox.critical(self, 
+                                 lm("error_title_cache_build_failed"), 
+                                 lm("error_message_cache_build_failed"))
+        
+        # 処理中フラグはどちらの場合でもリセット
         self.is_processing_tree_change = False
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
     def get_selected_item_path(self):
         selected_items = self.image_tree.selectedItems()
@@ -1371,17 +1397,47 @@ class UIManager(QMainWindow):
         if self.monitor_button.text() == self.locale_manager.tr("monitor_button_start"): self.startMonitoringRequested.emit()
         else: self.stopMonitoringRequested.emit()
 
+    # --- ▼▼▼ 修正箇所 ▼▼▼ ---
     def set_status(self, text_key, color="green"):
-        lm = self.locale_manager.tr; display_text = ""; style_color = color
-        if text_key == "monitoring": self.monitor_button.setText(lm("monitor_button_stop")); display_text = lm("status_label_monitoring"); style_color = "blue"
-        elif text_key == "idle": self.monitor_button.setText(lm("monitor_button_start")); display_text = lm("status_label_idle"); style_color = "green"; self.current_best_scale_label.setText(lm("auto_scale_best_scale_default")); self.current_best_scale_label.setStyleSheet("color: gray;")
-        elif text_key == "unstable": display_text = lm("status_label_unstable"); style_color = "orange"
-        else: display_text = text_key
-        self.status_label.setText(display_text); self.status_label.setStyleSheet(f"font-weight: bold; color: {style_color};")
-        if self.floating_window: self.floating_window.update_status(display_text, style_color)
+        lm = self.locale_manager.tr
+        display_text = ""
+        style_color = color
+        is_idle = False # ★ アイドル状態かどうかのフラグ
+
+        if text_key == "monitoring":
+            self.monitor_button.setText(lm("monitor_button_stop"))
+            display_text = lm("status_label_monitoring")
+            style_color = "blue"
+        elif text_key == "idle":
+            self.monitor_button.setText(lm("monitor_button_start"))
+            display_text = lm("status_label_idle")
+            style_color = "green"
+            self.current_best_scale_label.setText(lm("auto_scale_best_scale_default"))
+            self.current_best_scale_label.setStyleSheet("color: gray;")
+            is_idle = True # ★ アイドル状態
+        elif text_key == "unstable":
+            display_text = lm("status_label_unstable")
+            style_color = "orange"
+        elif text_key == "idle_error":
+            self.monitor_button.setText(lm("monitor_button_start"))
+            display_text = lm("status_label_idle_error")
+            style_color = "red"
+            is_idle = True # ★ アイドル状態 (エラー)
+        else:
+            display_text = text_key
+            
+        self.status_label.setText(display_text)
+        self.status_label.setStyleSheet(f"font-weight: bold; color: {style_color};")
         
-        # ★★★ 修正: キャプチャボタンの状態更新を追加 ★★★
+        if self.floating_window:
+            self.floating_window.update_status(display_text, style_color)
+            
+            # ★ 監視停止時 (idle または idle_error) にリセットメソッドを呼び出す
+            if is_idle and hasattr(self.floating_window, 'reset_performance_stats'):
+                self.floating_window.reset_performance_stats()
+
         self._update_capture_button_state()
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
     def on_best_scale_found(self, image_path: str, scale: float):
         lm = self.locale_manager.tr; current_selected_path, _ = self.get_selected_item_path();

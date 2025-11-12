@@ -371,5 +371,9 @@
   "log_warn_display_reinitializing": "[WARN] 当前正在处理显示设置（分辨率/DPI）更改。请等待完成。",
   "log_warn_display_reinitializing_monitor_loop": "[WARN] 正在处理显示设置更改... 暂停监视循环。",
   "log_mss_instance_closed": "[INFO] 已关闭現有的 MSS 捕获实例。",
-  "log_mss_close_error": "[WARN] 关闭現有 MSS 实例时出错：%s"
+  "log_mss_close_error": "[WARN] 关闭現有 MSS 实例时出错：%s",
+  "log_capture_failed_limit_reached": "10회 연속 캡처에 실패하여 모니터링이 자동으로 중지되었습니다.",
+  "status_label_idle_error": "错误 (已停止)",
+  "error_title_cache_build_failed": "缓存构建错误",
+  "error_message_cache_build_failed": "重建图像缓存失败。为安全起见，用户界面将保持锁定状态。请检查损坏的图像文件并重新启动应用程序。"
 }

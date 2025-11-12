@@ -373,5 +373,9 @@
   "log_warn_display_reinitializing": "[WARN] Processando alteração nas configurações de exibição (resolução/DPI). Aguarde a conclusão.",
   "log_warn_display_reinitializing_monitor_loop": "[WARN] Processando alteração na configuração de exibição... Pausando o loop de monitoramento.",
   "log_mss_instance_closed": "[INFO] Instância de captura MSS existente fechada.",
-  "log_mss_close_error": "[WARN] Ocorreu um erro ao fechar a instância MSS existente: %s"
+  "log_mss_close_error": "[WARN] Ocorreu um erro ao fechar a instância MSS existente: %s",
+  "log_capture_failed_limit_reached": "连续10次捕获失败，监控已自动停止。",
+  "status_label_idle_error": "Erro (Parado)",
+  "error_title_cache_build_failed": "Erro na Compilação do Cache",
+  "error_message_cache_build_failed": "Falha ao reconstruir o cache de imagens. A interface do usuário permanecerá bloqueada por segurança. Verifique se há arquivos de imagem corrompidos e reinicie o aplicativo."
 }

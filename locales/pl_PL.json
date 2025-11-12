@@ -373,5 +373,9 @@
   "log_warn_display_reinitializing": "[WARN] Obecnie przetwarzana jest zmiana ustawień wyświetlania (rozdzielczość/DPI). Proszę czekać na zakończenie.",
   "log_warn_display_reinitializing_monitor_loop": "[WARN] Przetwarzanie zmiany ustawień wyświetlania... Wstrzymywanie pętli monitorowania.",
   "log_mss_instance_closed": "[INFO] Zamknięto istniejącą instancję przechwytywania MSS.",
-  "log_mss_close_error": "[WARN] Wystąpił błąd podczas zamykania istniejącej instancji MSS: %s"
+  "log_mss_close_error": "[WARN] Wystąpił błąd podczas zamykania istniejącej instancji MSS: %s",
+  "log_capture_failed_limit_reached": "Мониторинг автоматически остановлен после 10 последовательных сбоев захвата.",
+  "status_label_idle_error": "Błąd (Zatrzymano)",
+  "error_title_cache_build_failed": "Błąd budowania pamięci podręcznej",
+  "error_message_cache_build_failed": "Nie udało się odbudować pamięci podręcznej obrazów. Interfejs użytkownika pozostanie zablokowany ze względów bezpieczeństwa. Sprawdź"
 }

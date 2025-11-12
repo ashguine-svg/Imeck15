@@ -395,5 +395,9 @@
   "log_warn_display_reinitializing": "[WARN] 現在ディスプレイ設定（解像度/DPI）の変更を処理中です。完了するまで操作をお待ちください。",
   "log_warn_display_reinitializing_monitor_loop": "[WARN] ディスプレイ設定の変更を処理中... 監視ループを一時停止します。",
   "log_mss_instance_closed": "[INFO] 既存のMSSキャプチャインスタンスをクローズしました。",
-  "log_mss_close_error": "[WARN] 既存のMSSインスタンスのクローズ中にエラーが発生しました: %s"
+  "log_mss_close_error": "[WARN] 既存のMSSインスタンスのクローズ中にエラーが発生しました: %s",
+  "log_capture_failed_limit_reached": "連続10回のキャプチャに失敗したため、監視を自動停止します。",
+  "status_label_idle_error": "エラー停止",
+  "error_title_cache_build_failed": "キャッシュ構築エラー",
+  "error_message_cache_build_failed": "画像キャッシュの再構築に失敗しました。UIは安全のためロックされます。画像ファイルが破損していないか確認し、アプリを再起動してください。"
 }

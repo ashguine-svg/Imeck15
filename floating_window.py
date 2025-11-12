@@ -225,6 +225,13 @@ class FloatingWindow(QDialog):
         else:
             self.priority_timer_label.setVisible(False)
 
+    # --- ▼▼▼ 新規メソッド追加 ▼▼▼ ---
+    def reset_performance_stats(self):
+        """CPUとFPSの表示をデフォルト値にリセットします。"""
+        self.cpu_label.setText("CPU: ---%")
+        self.fps_label.setText("FPS: --")
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
+
     def update_status(self, text, color="green"):
         self.status_label.setText(text)
         self.status_label.setStyleSheet(f"color: {color}; background-color: transparent;")

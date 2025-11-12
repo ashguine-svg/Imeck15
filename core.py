@@ -1,5 +1,7 @@
 # core.py (Linuxキャプチャロジック 最終修正版)
 # ★★★ (根本修正) 解像度変更検知時に、アプリを再起動する ★★★
+# ★★★ (改良 1.1) 連続キャプチャ失敗時に自動停止するロジックを追加 ★★★
+# ★★★ (改良 1.2) cacheBuildFinished シグナルに成功フラグ(bool)を追加 ★★★
 
 import sys
 import threading
@@ -61,7 +63,9 @@ class CoreEngine(QObject):
     selectionProcessFinished = Signal()
     _areaSelectedForProcessing = Signal(tuple)
     fpsUpdated = Signal(float)
-    cacheBuildFinished = Signal()
+    # --- ▼▼▼ (改良 1.2) シグナルに bool を追加 ▼▼▼ ---
+    cacheBuildFinished = Signal(bool) 
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
     startMonitoringRequested = Signal()
     stopMonitoringRequested = Signal()
     bestScaleFound = Signal(str, float)
@@ -175,6 +179,10 @@ class CoreEngine(QObject):
         self._log_spam_filter = {"log_stability_hold_click", "log_eco_mode_standby", "log_stability_check_debug"}
 
         self.match_detected_at = {}
+        
+        # --- ▼▼▼ (改良 1.1) 連続キャプチャ失敗カウンタ ▼▼▼ ---
+        self.consecutive_capture_failures = 0
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
         
         # --- ▼▼▼ 解像度変更検知用のフラグ ▼▼▼ ---
         self._is_reinitializing_display = False # ★★★ このフラグは再起動ロジックでは不要になりました ★★★
@@ -337,10 +345,18 @@ class CoreEngine(QObject):
         if self.capture_manager: self.capture_manager.cleanup()
         if hasattr(self, 'thread_pool') and self.thread_pool: self.thread_pool.shutdown(wait=False)
 
+    # --- ▼▼▼ (改良 1.2) _on_cache_build_done を修正 ▼▼▼ ---
     def _on_cache_build_done(self, future):
-        try: future.result()
-        except Exception as e: self.logger.log("log_cache_build_error", str(e))
-        finally: self.cacheBuildFinished.emit()
+        try:
+            # future.result() は、タスクが例外を発生させた場合、ここでその例外を再送出します
+            future.result()
+            # 例外がなければ成功
+            self.cacheBuildFinished.emit(True)
+        except Exception as e:
+            self.logger.log("log_cache_build_error", str(e))
+            # 例外が発生したら失敗
+            self.cacheBuildFinished.emit(False)
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
     def capture_image_for_registration(self):
         if not self.recognition_area:
@@ -405,7 +421,8 @@ class CoreEngine(QObject):
             try:
                 self._move_items_and_rebuild_async(source_paths, dest_folder_path_str)
             finally:
-                self._on_cache_build_done(None)
+                # (改良 1.2) 失敗フラグを渡してコールバックを直接呼ぶ
+                self._on_cache_build_done(None) 
     
     def _move_items_and_rebuild_async(self, source_paths: list, dest_folder_path_str: str):
         moved_count = 0; failed_count = 0; final_message = ""
@@ -422,6 +439,7 @@ class CoreEngine(QObject):
 
         except Exception as e:
             self.logger.log("[ERROR] _move_items_and_rebuild_async: %s", str(e))
+            raise # (改良 1.2) エラーを _on_cache_build_done に伝播させる
         
         self._build_template_cache()
 
@@ -455,7 +473,7 @@ class CoreEngine(QObject):
                 else:
                     self.logger.log("[ERROR] Thread pool not available for rename rebuild.")
                     self._build_template_cache()
-                    self._on_cache_build_done(None)
+                    self._on_cache_build_done(None) # (改良 1.2) 失敗フラグ
             else:
                 self.logger.log("log_rename_error_general", f"Rename failed for {Path(old_path_str).name}: {self.locale_manager.tr(message_or_key)}")
                 QMessageBox.warning(self.ui_manager, 
@@ -571,7 +589,7 @@ class CoreEngine(QObject):
             try:
                 self._save_order_and_rebuild_async(data_to_save)
             finally:
-                self._on_cache_build_done(None)
+                self._on_cache_build_done(None) # (改良 1.2) 失敗フラグ
                 
     def _save_order_and_rebuild_async(self, data_to_save: dict):
         try:
@@ -583,6 +601,7 @@ class CoreEngine(QObject):
                 
         except Exception as e: 
             self.logger.log("log_error_save_order", str(e))
+            raise # (改良 1.2) エラーを _on_cache_build_done に伝播させる
         
         self._build_template_cache()
         
@@ -608,6 +627,9 @@ class CoreEngine(QObject):
         # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
         if not self.is_monitoring:
+            # --- ▼▼▼ (改良 1.1) 失敗カウンタをリセット ▼▼▼ ---
+            self.consecutive_capture_failures = 0 
+            # --- ▲▲▲ 修正完了 ▲▲▲ ---
             self.is_monitoring = True; self.transition_to(IdleState(self)); self._click_count = 0; self._cooldown_until = 0; self._last_clicked_path = None; self.screen_stability_hashes.clear(); self.last_successful_click_time = 0; self.is_eco_cooldown_active = False; self._last_eco_check_time = time.time(); self.match_detected_at.clear()
             self.ui_manager.set_tree_enabled(False)
             if self.thread_pool:
@@ -619,13 +641,22 @@ class CoreEngine(QObject):
         if self.is_monitoring:
             self.is_monitoring = False
             with self.state_lock: self.state = None
-            self.updateStatus.emit("idle", "green"); self.logger.log("log_monitoring_stopped"); self.ui_manager.set_tree_enabled(True)
+            # (改良 1.1) updateStatus.emit はここでは呼ばず、呼び出し元 (stop_monitoring, _monitoring_loop) が
+            # 適切なステータス (idle または idle_error) を発行する
+            
+            # self.updateStatus.emit("idle", "green"); # ← 削除
+            self.logger.log("log_monitoring_stopped"); self.ui_manager.set_tree_enabled(True)
             if self._monitor_thread and self._monitor_thread.is_alive(): self._monitor_thread.join(timeout=1.0)
             with self.cache_lock:
                 for cache in [self.normal_template_cache, self.backup_template_cache]:
                     for item in cache.values(): item['best_scale'] = None
             self.match_detected_at.clear()
             self.priority_timers.clear()
+            
+            # (改良 1.1) ユーザーによる停止の場合、ステータスを "idle" に設定
+            if self.consecutive_capture_failures == 0:
+                 self.updateStatus.emit("idle", "green")
+
 
     def _monitoring_loop(self):
         last_match_time_map = {}; fps_last_time = time.time(); frame_counter = 0
@@ -674,7 +705,27 @@ class CoreEngine(QObject):
                     continue
 
                 screen_bgr = self.capture_manager.capture_frame(region=self.recognition_area)
-                if screen_bgr is None: self._log("log_capture_failed"); time.sleep(1.0); continue
+                
+                # --- ▼▼▼ (改良 1.1) 連続キャプチャ失敗の処理 ▼▼▼ ---
+                if screen_bgr is None:
+                    self.consecutive_capture_failures += 1
+                    self._log("log_capture_failed") # 既存のログ
+                    
+                    # 連続失敗が閾値 (例: 10回) を超えたかチェック
+                    if self.consecutive_capture_failures >= 10:
+                        self.logger.log("log_capture_failed_limit_reached", force=True)
+                        # UIにエラーステータスを通知
+                        self.updateStatus.emit("idle_error", "red")
+                        # 監視を停止 (ループはこの後 finally を経て終了)
+                        self.is_monitoring = False # stop_monitoring() を直接呼ぶとデッドロックの可能性があるためフラグのみ変更
+                        
+                    time.sleep(1.0) # 1秒待機
+                    continue
+                
+                # キャプチャ成功時
+                self.consecutive_capture_failures = 0 # カウンタをリセット
+                # --- ▲▲▲ 修正完了 ▲▲▲ ---
+                
                 if self.effective_capture_scale != 1.0: screen_bgr = cv2.resize(screen_bgr, None, fx=self.effective_capture_scale, fy=self.effective_capture_scale, interpolation=cv2.INTER_AREA)
 
                 self.latest_frame_for_hash = screen_bgr.copy() 
@@ -886,7 +937,7 @@ class CoreEngine(QObject):
             if not cache:
                 return []
 
-            # [cite_start]--- ▼▼▼ 修正箇所 (5.3) [cite: 47-49] ▼▼▼ ---
+            # --- ▼▼▼ 修正箇所 (5.3) ▼▼▼ ---
             use_cl = OPENCL_AVAILABLE and cv2.ocl.useOpenCL()
             use_gs = self.app_config.get('grayscale_matching', False)
             strict_color = self.app_config.get('strict_color_matching', False)
@@ -924,7 +975,7 @@ class CoreEngine(QObject):
                         task_data = {'path': path, 'settings': data['settings'], 'template': template_image, 'scale': t['scale']}
                         t_shape = t['shape']
 
-                        # [cite_start]--- ▼▼▼ 修正箇所 (5.3) [cite: 52-55] ▼▼▼ ---
+                        # --- ▼▼▼ 修正箇所 (5.3) ▼▼▼ ---
                         # OpenCL (use_cl) が有効な場合はスレッドプールを使わない
                         if self.thread_pool and not use_cl:
                             # OpenCLが無効な場合のみスレッドプールでタスクを投入
@@ -1373,7 +1424,8 @@ class CoreEngine(QObject):
             
             if self.is_monitoring:
                 self.stop_monitoring()
-                self.updateStatus.emit("idle", "green")
+                # (改良 1.1) 停止ステータスは stop_monitoring() が発行する
+                # self.updateStatus.emit("idle", "green") # ← 削除
 
             if self.recognition_area:
                 self.clear_recognition_area()

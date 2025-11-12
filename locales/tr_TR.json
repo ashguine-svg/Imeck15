@@ -373,5 +373,9 @@
   "log_warn_display_reinitializing": "[UYARI] Şu anda ekran ayarları (çözünürlük/DPI) değişikliği işleniyor. Lütfen tamamlanana kadar bekleyin.",
   "log_warn_display_reinitializing_monitor_loop": "[UYARI] Ekran ayarı değişikliği işleniyor... İzleme döngüsü duraklatılıyor.",
   "log_mss_instance_closed": "[INFO] Mevcut MSS yakalama örneği kapatıldı.",
-  "log_mss_close_error": "[UYARI] Mevcut MSS örneği kapatılırken hata oluştu: %s"
+  "log_mss_close_error": "[UYARI] Mevcut MSS örneği kapatılırken hata oluştu: %s",
+  "log_capture_failed_limit_reached": "Monitoring automatisch gestopt na 10 opeenvolgende mislukte opnames.",
+  "status_label_idle_error": "Hata (Durduruldu)",
+  "error_title_cache_build_failed": "Önbellek Oluşturma Hatası",
+  "error_message_cache_build_failed": "Kan de afbeeldingscache niet opnieuw opbouwen. De gebruikersinterface blijft uit veiligheidsoverwegingen vergrendeld. Controleer op beschadigde afbeeldingsbestanden en start de applicatie opnieuw."
 }

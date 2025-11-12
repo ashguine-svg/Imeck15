@@ -372,5 +372,9 @@
   "log_warn_display_reinitializing": "[WARN] 현재 디스플레이 설정(해상도/DPI) 변경을 처리 중입니다. 완료될 때까지 기다려 주십시오.",
   "log_warn_display_reinitializing_monitor_loop": "[WARN] 디스플레이 설정 변경 처리 중... 모니터링 루프를 일시 중지합니다.",
   "log_mss_instance_closed": "[INFO] 기존 MSS 캡처 인스턴스를 닫았습니다.",
-  "log_mss_close_error": "[WARN] 기존 MSS 인스턴스를 닫는 중 오류 발생: %s"
+  "log_mss_close_error": "[WARN] 기존 MSS 인스턴스를 닫는 중 오류 발생: %s",
+  "log_capture_failed_limit_reached": "تم إيقاف المراقبة تلقائيًا بعد 10 محاولات التقاط فاشلة متتالية.",
+  "status_label_idle_error": "오류 (정지됨)",
+  "error_title_cache_build_failed": "캐시 빌드 오류",
+  "error_message_cache_build_failed": "이미지 캐시를 다시 빌드하지 못했습니다. 안전을 위해 UI가 잠긴 상태로 유지됩니다. 손상된 이미지 파일이 있는지 확인하고 애플리케이션을 다시 시작하십시오."
 }

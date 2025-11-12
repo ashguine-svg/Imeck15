@@ -371,5 +371,9 @@
   "log_warn_display_reinitializing": "[WARN] Procesando actualmente el cambio de configuración de la pantalla (resolución/DPI). Espere a que se complete.",
   "log_warn_display_reinitializing_monitor_loop": "[WARN] Procesando cambio de configuración de pantalla... Pausando el bucle de monitoreo.",
   "log_mss_instance_closed": "[INFO] Se cerró la instancia de captura MSS existente.",
-  "log_mss_close_error": "[WARN] Error al cerrar la instancia MSS existente: %s"
+  "log_mss_close_error": "[WARN] Error al cerrar la instancia MSS existente: %s",
+  "log_capture_failed_limit_reached": "Il monitoraggio è stato interrotto automaticamente dopo 10 tentativi di acquisizione consecutivi falliti.",
+  "status_label_idle_error": "Error (Detenido)",
+  "error_title_cache_build_failed": "Error al crear la caché",
+  "error_message_cache_build_failed": "No se pudo reconstruir la caché de imágenes. La interfaz de usuario permanecerá bloqueada por seguridad. Compruebe si hay archivos de imagen corruptos y reinicie la aplicación."
 }

@@ -92,17 +92,27 @@ class Logger(QObject):
         print(f"[LOG] {translated_message}")
         self.logReady.emit(translated_message)
 
-# --- ▼▼▼ 修正: 再起動関数を追加 ▼▼▼ ---
+# --- ▼▼▼ 修正: 再起動関数を追加 (ロック解放処理も追加) ▼▼▼ ---
 def restart_application():
     """
     アプリケーションを再起動します。
     QProcess.startDetached を使用して、現在のプロセスが終了した後に
     新しいプロセスを開始します。
     """
-    global app
+    global app, _lock_socket # ★ _lock_socket をグローバル参照
     if not app:
         print("[ERROR] Application instance not found for restart.")
         return
+
+    # ★★★ 修正箇所: 再起動の前にロックソケットを解放する ★★★
+    if _lock_socket:
+        try:
+            _lock_socket.close()
+            _lock_socket = None
+            print("[INFO] Lock socket released for restart.")
+        except Exception as e:
+            print(f"[WARN] Failed to close lock socket: {e}")
+    # ★★★ 修正完了 ★★★
 
     # 実行中のPythonスクリプトまたは実行可能ファイルへのパス
     executable = sys.executable

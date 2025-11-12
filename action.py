@@ -1,4 +1,5 @@
 # action.py
+# ★★★ (改良 1.3) _activate_window にリトライ処理を追加し、クリック中止ロジックを実装 ★★★
 
 import sys
 import time
@@ -49,17 +50,21 @@ class ActionManager:
     def __init__(self, logger):
         self.logger = logger
 
-    def _activate_window(self, target_hwnd):
+    # --- ▼▼▼ (改良 1.3) _activate_window を修正 ▼▼▼ ---
+    def _activate_window(self, target_hwnd) -> bool:
         """
         指定されたウィンドウをフォアグラウンドにし、アクティブ化を試みます。
         タスクバーが点滅する問題を回避するための高度な手法を使用します。
+        
+        Returns:
+            bool: アクティブ化に成功したかどうか。
         """
         if not (sys.platform == 'win32' and target_hwnd):
-            return
+            return True # Windows以外、または対象なしは「成功」扱い
 
         # ターゲットが既にフォアグラウンドなら何もしない
         if win32gui.GetForegroundWindow() == target_hwnd:
-            return
+            return True # 既にアクティブ
 
         try:
             # 現在フォアグラウンドのウィンドウのスレッドIDを取得
@@ -75,23 +80,33 @@ class ActionManager:
                 if win32gui.IsIconic(target_hwnd):
                     win32gui.ShowWindow(target_hwnd, win32con.SW_NORMAL)
                 
-                # ウィンドウをフォアグラウンドに設定する
-                win32gui.SetForegroundWindow(target_hwnd)
+                # --- ▼▼▼ リトライロジック ▼▼▼ ---
+                retries = 3
+                while retries > 0:
+                    win32gui.SetForegroundWindow(target_hwnd)
+                    time.sleep(0.1) # 0.2秒から0.1秒に変更
+                    
+                    if win32gui.GetForegroundWindow() == target_hwnd:
+                        self.logger.log("log_activate_window_success", win32gui.GetWindowText(target_hwnd))
+                        return True # ★ 成功
+                        
+                    retries -= 1
+                # --- ▲▲▲ リトライロジック ▲▲▲ ---
+
             finally:
                 # 処理が終わったら、必ずデタッチする
                 win32process.AttachThreadInput(foreground_thread_id, current_thread_id, False)
 
-            time.sleep(0.2) # ウィンドウが切り替わるのを少し待つ
-            
-            # ★★★ 5. self.logger.log に変更 (翻訳キー使用) ★★★
-            if win32gui.GetForegroundWindow() == target_hwnd:
-                self.logger.log("log_activate_window_success", win32gui.GetWindowText(target_hwnd))
-            else:
-                 self.logger.log("log_activate_window_failed", win32gui.GetWindowText(target_hwnd))
+            # リトライしても失敗した場合
+            self.logger.log("log_activate_window_failed", win32gui.GetWindowText(target_hwnd))
+            return False # ★ 失敗
 
         except Exception as e:
             self.logger.log("log_activate_window_error", str(e))
+            return False # ★ 失敗
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
+    # --- ▼▼▼ (改良 1.3) execute_click を修正 ▼▼▼ ---
     def execute_click(self, match_info, recognition_area, target_hwnd, effective_capture_scale):
         """
         マッチング情報に基づいてクリックを実行します。
@@ -106,7 +121,14 @@ class ActionManager:
             dict: クリックが成功したかどうかと関連情報を含む辞書。
                   例: {'success': True, 'path': '/path/to/image.png'}
         """
-        self._activate_window(target_hwnd)
+        
+        # ▼▼▼ 変更箇所 ▼▼▼
+        is_active = self._activate_window(target_hwnd)
+        if not is_active:
+            # アクティブ化に失敗した場合、入力ブロックを解除して即時終了
+            # (block_input(True) の前に呼ばれるため、解除は不要)
+            return {'success': False, 'path': match_info.get('path', 'Unknown')}
+        # ▲▲▲ 変更完了 ▲▲▲
 
         block_input(True)
         try:
@@ -214,3 +236,4 @@ class ActionManager:
             return {'success': False, 'path': match_info.get('path', 'Unknown')}
         finally:
             block_input(False)
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---

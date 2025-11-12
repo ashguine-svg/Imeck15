@@ -372,5 +372,9 @@
   "log_warn_display_reinitializing": "[WARN] В настоящее время обрабатывается изменение настроек дисплея (разрешение/DPI). Пожалуйста, подождите завершения.",
   "log_warn_display_reinitializing_monitor_loop": "[WARN] Обработка изменения настроек дисплея... Приостановка цикла мониторинга.",
   "log_mss_instance_closed": "[INFO] Существующий экземпляр захвата MSS закрыт.",
-  "log_mss_close_error": "[WARN] Произошла ошибка при закрытии существующего экземпляра MSS: %s"
+  "log_mss_close_error": "[WARN] Произошла ошибка при закрытии существующего экземпляра MSS: %s",
+  "log_capture_failed_limit_reached": "O monitoramento foi interrompido automaticamente após 10 falhas consecutivas de captura.",
+  "status_label_idle_error": "Ошибка (Остановлено)",
+  "error_title_cache_build_failed": "Ошибка построения кэша",
+  "error_message_cache_build_failed": "Не удалось перестроить кэш изображений. Пользовательский интерфейс останется заблокированным в целях безопасности. Проверьте наличие поврежденных файлов изображений и перезапустите приложение."
 }

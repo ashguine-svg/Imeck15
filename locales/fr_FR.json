@@ -373,5 +373,9 @@
   "log_warn_display_reinitializing": "[WARN] Traitement en cours du changement des paramètres d'affichage (résolution/DPI). Veuillez patienter jusqu'à la fin.",
   "log_warn_display_reinitializing_monitor_loop": "[WARN] Traitement du changement des paramètres d'affichage... Mise en pause de la boucle de surveillance.",
   "log_mss_instance_closed": "[INFO] Instance de capture MSS existante fermée.",
-  "log_mss_close_error": "[WARN] Erreur lors de la fermeture de l'instance MSS existante : %s"
+  "log_mss_close_error": "[WARN] Erreur lors de la fermeture de l'instance MSS existante : %s",
+  "log_capture_failed_limit_reached": " nachdem 10 aufeinanderfolgende Erfassungsversuche fehlgeschlagen sind.",
+  "status_label_idle_error": "Erreur (Arrêté)",
+  "error_title_cache_build_failed": "Erreur de création du cache",
+  "error_message_cache_build_failed": "Échec de la reconstruction du cache d'images. L'interface utilisateur restera verrouillée par sécurité. Veuillez vérifier s'il y a des fichiers image corrompus et redémarrer l'application."
 }

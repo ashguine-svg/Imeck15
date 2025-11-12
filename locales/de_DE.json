@@ -371,5 +371,9 @@
   "log_warn_display_reinitializing": "[WARN] Verarbeite gerade Änderungen der Anzeigeeinstellungen (Auflösung/DPI). Bitte warten Sie bis zum Abschluss.",
   "log_warn_display_reinitializing_monitor_loop": "[WARN] Verarbeite Änderung der Anzeigeeinstellungen... Pausiere Überwachungsschleife.",
   "log_mss_instance_closed": "[INFO] Vorhandene MSS-Capture-Instanz geschlossen.",
-  "log_mss_close_error": "[WARN] Fehler beim Schließen der vorhandenen MSS-Instanz: %s"
+  "log_mss_close_error": "[WARN] Fehler beim Schließen der vorhandenen MSS-Instanz: %s",
+  "log_capture_failed_limit_reached": "Die Überwachung wurde automatisch gestoppt",
+  "status_label_idle_error": "Fehler (Gestoppt)",
+  "error_title_cache_build_failed": "Cache-Erstellungsfehler",
+  "error_message_cache_build_failed": "Der Image-Cache konnte nicht neu erstellt werden. Die Benutzeroberfläche bleibt aus Sicherheitsgründen gesperrt. Bitte prüfen Sie auf beschädigte Bilddateien und starten Sie die Anwendung neu."
 }

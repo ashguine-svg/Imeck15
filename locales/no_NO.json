@@ -373,5 +373,9 @@
   "log_warn_display_reinitializing": "[ADVARSEL] Behandler for øyeblikket endring i skjerminnstillinger (oppløsning/DPI). Vent til det er fullført.",
   "log_warn_display_reinitializing_monitor_loop": "[ADVARSEL] Behandler endring i skjerminnstilling... Pauser overvåkingssløyfen.",
   "log_mss_instance_closed": "[INFO] Lukket eksisterende MSS-fangstforekomst.",
-  "log_mss_close_error": "[ADVARSEL] Feil under lukking av eksisterende MSS-instans: %s"
+  "log_mss_close_error": "[ADVARSEL] Feil under lukking av eksisterende MSS-instans: %s",
+  "log_capture_failed_limit_reached": "Övervakningen stoppades automatiskt efter 10 misslyckade infångningar i rad.",
+  "status_label_idle_error": "Feil (Stoppet)",
+  "error_title_cache_build_failed": "Feil ved bygging av hurtigbuffer",
+  "error_message_cache_build_failed": "Det gick inte att återskapa bildcachen. Användargränssnittet förblir låst för säkerhets skull. Kontrollera om det finns korrupta bildfiler och starta om programmet."
 }

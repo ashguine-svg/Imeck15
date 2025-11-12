@@ -373,5 +373,9 @@
   "log_warn_display_reinitializing": "[WARN] Elaborazione della modifica delle impostazioni dello schermo (risoluzione/DPI) in corso. Attendere il completamento.",
   "log_warn_display_reinitializing_monitor_loop": "[WARN] Elaborazione modifica impostazioni schermo... Messa in pausa del ciclo di monitoraggio.",
   "log_mss_instance_closed": "[INFO] Istanza di cattura MSS esistente chiusa.",
-  "log_mss_close_error": "[WARN] Errore durante la chiusura dell'istanza MSS esistente: %s"
+  "log_mss_close_error": "[WARN] Errore durante la chiusura dell'istanza MSS esistente: %s",
+  "log_capture_failed_limit_reached": "La surveillance s'est arrêtée automatiquement après 10 échecs consécutifs de capture.",
+  "status_label_idle_error": "Errore (Fermato)",
+  "error_title_cache_build_failed": "Errore creazione cache",
+  "error_message_cache_build_failed": "Impossibile ricostruire la cache delle immagini. L'interfaccia utente rimarrà bloccata per sicurezza. Controlla eventuali file immagine danneggiati e riavvia l'applicazione."
 }

@@ -373,5 +373,9 @@
   "log_warn_display_reinitializing": "[WARN] Käsitellään parhaillaan näytön asetusten (resoluutio/DPI) muutosta. Odota, kunnes se on valmis.",
   "log_warn_display_reinitializing_monitor_loop": "[WARN] Käsitellään näytön asetusten muutosta... Keskeytetään valvontasilmukka.",
   "log_mss_instance_closed": "[INFO] Suljettiin olemassa oleva MSS-kaappausinstanssi.",
-  "log_mss_close_error": "[WARN] Virhe suljettaessa olemassa olevaa MSS-instanssia: %s"
+  "log_mss_close_error": "[WARN] Virhe suljettaessa olemassa olevaa MSS-instanssia: %s",
+  "log_capture_failed_limit_reached": "Overvågning stoppet automatisk efter 10 mislykkede optagelser i træk.",
+  "status_label_idle_error": "Virhe (Pysäytetty)",
+  "error_title_cache_build_failed": "Välimuistin luontivirhe",
+  "error_message_cache_build_failed": "Kuvavälimuistin uudelleenrakentaminen epäonnistui. Käyttöliittymä pysyy lukittuna turvallisuussyistä. Tarkista vioittuneet kuvatiedostot ja käynnistä sovellus uudelleen."
 }
