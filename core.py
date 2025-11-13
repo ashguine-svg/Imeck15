@@ -686,9 +686,11 @@ class CoreEngine(QObject):
                 is_eco_enabled = self.app_config.get('eco_mode',{}).get('enabled',True)
                 is_eco_eligible = (is_eco_enabled and self.last_successful_click_time > 0 and isinstance(current_state, IdleState) and (current_time - self.last_successful_click_time > self.ECO_MODE_DELAY))
                 self.is_eco_cooldown_active = is_eco_eligible
-                skip_handle = False
+                # skip_handle = False # ← 削除
 
                 if isinstance(current_state, CountdownState): time.sleep(1.0) # カウントダウン中は常に1秒待機
+                
+                # --- ▼▼▼ 修正箇所 1/2: エコモードを先に判定 ▼▼▼ ---
                 elif self.is_eco_cooldown_active:
                     self._log("log_eco_mode_standby")
                     time_since_last_check = current_time - self._last_eco_check_time
@@ -696,35 +698,34 @@ class CoreEngine(QObject):
                     if time_since_last_check < self.ECO_CHECK_INTERVAL:
                         sleep_time = self.ECO_CHECK_INTERVAL - time_since_last_check
                         time.sleep(sleep_time)
-                        continue 
+                        continue # 1.0秒経つまで待機
                     else: 
                         self._last_eco_check_time = current_time
-                        skip_handle = True 
+                        # 1.0秒経過したので、そのまま下のキャプチャ処理に進む
+                        # (skip_handle = True は削除)
+                
+                # --- ▼▼▼ 修正箇所 2/2: 通常スキップを後に判定 ▼▼▼ ---
                 elif (frame_counter % self.effective_frame_skip_rate) != 0: # 通常のフレームスキップ
                     time.sleep(0.01)
                     continue
 
                 screen_bgr = self.capture_manager.capture_frame(region=self.recognition_area)
                 
-                # --- ▼▼▼ (改良 1.1) 連続キャプチャ失敗の処理 ▼▼▼ ---
+                # --- (改良 1.1) 連続キャプチャ失敗の処理 (変更なし) ---
                 if screen_bgr is None:
                     self.consecutive_capture_failures += 1
                     self._log("log_capture_failed") # 既存のログ
                     
-                    # 連続失敗が閾値 (例: 10回) を超えたかチェック
                     if self.consecutive_capture_failures >= 10:
                         self.logger.log("log_capture_failed_limit_reached", force=True)
-                        # UIにエラーステータスを通知
                         self.updateStatus.emit("idle_error", "red")
-                        # 監視を停止 (ループはこの後 finally を経て終了)
-                        self.is_monitoring = False # stop_monitoring() を直接呼ぶとデッドロックの可能性があるためフラグのみ変更
+                        self.is_monitoring = False 
                         
                     time.sleep(1.0) # 1秒待機
                     continue
                 
-                # キャプチャ成功時
                 self.consecutive_capture_failures = 0 # カウンタをリセット
-                # --- ▲▲▲ 修正完了 ▲▲▲ ---
+                # --- (改良 1.1) ここまで ---
                 
                 if self.effective_capture_scale != 1.0: screen_bgr = cv2.resize(screen_bgr, None, fx=self.effective_capture_scale, fy=self.effective_capture_scale, interpolation=cv2.INTER_AREA)
 
@@ -743,8 +744,9 @@ class CoreEngine(QObject):
                     self.last_successful_click_time = time.time() 
                     self._log("log_eco_mode_resumed", force=True)
 
-                if not skip_handle: 
-                    current_state.handle(current_time, screen_data, last_match_time_map, pre_matches=all_matches)
+                # --- ▼▼▼ 修正箇所 (if not skip_handle: を削除し、インデント解除) ▼▼▼ ---
+                current_state.handle(current_time, screen_data, last_match_time_map, pre_matches=all_matches)
+                # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
             except Exception as e:
                 if isinstance(e, AttributeError) and "'NoneType' object has no attribute 'handle'" in str(e):
@@ -775,15 +777,11 @@ class CoreEngine(QObject):
                     
                     cpu_percent = 0.0
                     
-                    # --- ▼▼▼ エラー箇所 (インデント修正済み) ▼▼▼ ---
-                    # 577行目の 'if'
                     if self.performance_monitor:
-                        # 579行目の 'try:' ( 'if' の内側にインデント)
                         try:
                             cpu_percent = self.performance_monitor.get_last_cpu()
                         except Exception:
                             cpu_percent = 0.0 # 取得失敗
-                    # --- ▲▲▲ 修正完了 ▲▲▲ ---
                     
                     fps_value = self.current_fps
                     
