@@ -4,6 +4,7 @@
 # ★★★ 色調厳格モードのUI要素を追加  ★★★
 # ★★★ (改良 1.1) エラーステータス (idle_error) の処理を追加 ★★★
 # ★★★ (改良 1.2) on_cache_build_finished で成功フラグを処理するよう修正 ★★★
+# ★★★ 修正: 画像キャプチャ後のUI復帰ロジックを ui.py に集約 ★★★
 
 import sys
 import json
@@ -18,10 +19,11 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import (
     QIcon, QPixmap, QImage, QPainter, QColor, QBrush, QFont, QPalette,
-    QCursor # ★★★ 修正: QCursor をインポート ★★★
+    QCursor 
 )
 from PySide6.QtCore import (
-    Qt, QSize, QThread, Signal, QTimer, QObject, QRect, QPoint, QRectF, QPointF, QEvent
+    Qt, QSize, QThread, Signal, QTimer, QObject, QRect, QPoint, QRectF, QPointF, QEvent,
+    Slot # ★★★ 修正: Slot をインポート ★★★
 )
 
 import os
@@ -44,7 +46,7 @@ except:
 
 # --- UIManager ---
 class UIManager(QMainWindow):
-    startMonitoringRequested = Signal(); stopMonitoringRequested = Signal(); openPerformanceMonitorRequested = Signal()
+    startMonitoringRequested = Signal(); stopMonitoringRequested = Signal();
     loadImagesRequested = Signal(list); setRecAreaMethodSelected = Signal(str); captureImageRequested = Signal()
     deleteItemsRequested = Signal(list)
     orderChanged = Signal()
@@ -55,6 +57,10 @@ class UIManager(QMainWindow):
     appConfigChanged = Signal()
     
     renameItemRequested = Signal(str, str)
+    
+    # --- ▼▼▼ 修正箇所 1/12: キャプチャ画像保存用シグナル ▼▼▼ ---
+    saveCapturedImageRequested = Signal(str, np.ndarray)
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
     
     def create_colored_icon(self, color):
         """Creates a small QIcon with a specified color indicator."""
@@ -104,10 +110,13 @@ class UIManager(QMainWindow):
         except Exception as e: 
             self.logger.log("log_error_splash_load", str(e)); self.splash_pixmap = None
 
-        self.performance_monitor = None
         self.is_minimal_mode = False
         self.normal_ui_geometries = {}
         self.floating_window = None
+        
+        # --- ▼▼▼ 修正箇所 2/12: キャプチャ画像一時保持 ▼▼▼ ---
+        self.pending_captured_image = None
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
         self.setup_ui()
         self.retranslate_ui()
@@ -130,7 +139,7 @@ class UIManager(QMainWindow):
         QTimer.singleShot(100, self.adjust_initial_size)
         QTimer.singleShot(0, lambda: self.update_image_preview(None, None))
         QTimer.singleShot(0, self._update_capture_button_state)
-        
+            
     def open_image_folder(self):
         """Opens the base image directory in the system's file explorer."""
         folder_path = str(self.config_manager.base_dir)
@@ -146,8 +155,7 @@ class UIManager(QMainWindow):
             self.logger.log("log_error_open_folder", str(e))
             QMessageBox.warning(self, self.locale_manager.tr("error_title_open_folder"), self.locale_manager.tr("error_message_open_folder", str(e)))
             
-    def set_performance_monitor(self, monitor):
-        self.performance_monitor = monitor
+    # set_performance_monitor は削除済み
 
     def setup_ui(self):
         central_widget = QWidget()
@@ -159,9 +167,9 @@ class UIManager(QMainWindow):
         self.monitor_button = QPushButton()
         self.monitor_button.setFixedSize(120, 30)
         header_layout.addWidget(self.monitor_button)
-        self.perf_monitor_button = QPushButton()
-        self.perf_monitor_button.setFixedSize(120, 30)
-        header_layout.addWidget(self.perf_monitor_button)
+        
+        # perf_monitor_button は削除済み
+        
         self.header_rec_area_button = QPushButton()
         self.header_rec_area_button.setFixedSize(120, 30)
         self.header_rec_area_button.clicked.connect(self.setRecAreaDialog)
@@ -173,7 +181,6 @@ class UIManager(QMainWindow):
         self.open_image_folder_button.setFixedSize(120, 30)
         header_layout.addWidget(self.open_image_folder_button)
         
-        # (画像キャプチャボタンをヘッダーに移動)
         self.capture_image_button = QPushButton()
         self.capture_image_button.setFixedSize(120, 30)
         self.capture_image_button.clicked.connect(self.captureImageRequested.emit)
@@ -203,7 +210,7 @@ class UIManager(QMainWindow):
         
         self.image_tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
         
-        self.image_tree.setDragDropMode(QAbstractItemView.DragDrop) # ← 修正後
+        self.image_tree.setDragDropMode(QAbstractItemView.DragDrop) 
 
         self.image_tree.setDragEnabled(True)
         self.image_tree.setAcceptDrops(True)
@@ -217,7 +224,6 @@ class UIManager(QMainWindow):
         self.load_image_button = QPushButton()
         button_layout.addWidget(self.load_image_button, 0, 0)
         
-        # (リネームボタンを追加)
         self.rename_button = QPushButton()
         button_layout.addWidget(self.rename_button, 0, 1)
         
@@ -231,7 +237,6 @@ class UIManager(QMainWindow):
         button_layout.addWidget(self.move_out_button, 2, 1)
         
         self.load_image_button.clicked.connect(self.load_images_dialog)
-        # (capture_image_button.clicked.connect はヘッダーで接続済みの為、ここでは不要)
         self.delete_item_button.clicked.connect(self.on_delete_button_clicked)
         self.move_up_button.clicked.connect(self.move_item_up)
         self.move_down_button.clicked.connect(self.move_item_down)
@@ -318,14 +323,12 @@ class UIManager(QMainWindow):
         self.gs_desc_label.setWordWrap(True); self.gs_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
         app_settings_layout.addWidget(self.gs_desc_label)
         
-        # --- ▼▼▼ 修正箇所 (setup_ui)  ▼▼▼ ---
         self.app_settings_widgets['strict_color_matching'] = QCheckBox()
         app_settings_layout.addWidget(self.app_settings_widgets['strict_color_matching'])
         self.strict_color_desc_label = QLabel()
         self.strict_color_desc_label.setWordWrap(True)
         self.strict_color_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
         app_settings_layout.addWidget(self.strict_color_desc_label)
-        # --- ▲▲▲ 修正完了 ▲▲▲ ---
         
         self.app_settings_widgets['capture_method'] = QCheckBox()
         self.app_settings_widgets['capture_method'].setEnabled(DXCAM_AVAILABLE)
@@ -452,7 +455,8 @@ class UIManager(QMainWindow):
             return
 
         self.monitor_button.clicked.connect(self.toggle_monitoring)
-        self.perf_monitor_button.clicked.connect(self.openPerformanceMonitorRequested.emit)
+        
+        # perf_monitor_button 接続は削除済み
         
         self.toggle_minimal_ui_button.clicked.connect(self.toggle_minimal_ui_mode)
         self.open_image_folder_button.clicked.connect(self.open_image_folder)
@@ -517,6 +521,13 @@ class UIManager(QMainWindow):
             self.preview_mode_manager.previewDataApplied.connect(self._emit_settings_for_save)
             self.save_timer.timeout.connect(self.core_engine.save_current_settings)
             self.appConfigChanged.connect(self.core_engine.on_app_config_changed)
+            
+            # --- ▼▼▼ 修正箇所 3/12: 新しいシグナルを接続 ▼▼▼ ---
+            self.core_engine.capturedImageReadyForPreview.connect(self.on_captured_image_ready_for_preview)
+            self.core_engine.captureFailedSignal.connect(self.on_capture_failed)
+            
+            self.saveCapturedImageRequested.connect(self.core_engine.handle_save_captured_image) # UI -> Core
+            # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
         self._signals_connected = True
         
@@ -629,53 +640,43 @@ class UIManager(QMainWindow):
         if self.core_engine: self.core_engine.cleanup()
         self.stopMonitoringRequested.emit(); QApplication.instance().quit(); event.accept()
 
-    # --- ▼▼▼ 修正箇所 (setRecAreaDialog と _handle_rec_area_selection) ▼▼▼ ---
-
     def _handle_rec_area_selection(self, method: str):
         """
         (スロット) RecAreaSelectionDialog からのシグナルを受け取ります。
         QTimer.singleShotを使用して、ダイアログが閉じるのを待ってから
         CoreEngineにシグナルを転送します。
         """
-        # 0msタイマーで、現在のイベントループ処理(ダイアログの非表示)が
-        # 完了した後に setRecAreaMethodSelected シグナルを発行します。
-        # (50msなど小さな待機時間を指定すると、より確実になりますが、通常は0msで十分です)
         QTimer.singleShot(0, lambda: self.setRecAreaMethodSelected.emit(method))
 
     def setRecAreaDialog(self):
         """Shows the dialog to choose recognition area selection method."""
         dialog = RecAreaSelectionDialog(self.locale_manager, self)
         
-        # ★★★ 修正: 間に _handle_rec_area_selection を挟む ★★★
-        # 変更前: dialog.selectionMade.connect(self.setRecAreaMethodSelected)
         dialog.selectionMade.connect(self._handle_rec_area_selection)
-        # ★★★ 修正完了 ★★★
         
         dialog.move(QCursor.pos())
         dialog.exec()
-
-    # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
     def adjust_initial_size(self):
         """Adjusts the initial window size after widgets are potentially rendered."""
         self.setMinimumWidth(0); self.resize(960, 640)
 
+    # --- ▼▼▼ 修正箇所 4/12: toggle_minimal_ui_mode を修正 ▼▼▼ ---
     def toggle_minimal_ui_mode(self):
         """Switches between the main window and the minimal floating window."""
         lm = self.locale_manager.tr; self.is_minimal_mode = not self.is_minimal_mode
         if self.is_minimal_mode:
             self.normal_ui_geometries['main'] = self.geometry()
-            if self.performance_monitor and self.performance_monitor.isVisible(): 
-                self.normal_ui_geometries['perf'] = self.performance_monitor.geometry()
+            # if self.performance_monitor and self.performance_monitor.isVisible(): # 削除
+            #     self.normal_ui_geometries['perf'] = self.performance_monitor.geometry() # 削除
             
             self.showMinimized();
-            if self.performance_monitor: self.performance_monitor.hide()
+            # if self.performance_monitor: self.performance_monitor.hide() # 削除
             
             self.floating_window = FloatingWindow(self.locale_manager)
             self.floating_window.startMonitoringRequested.connect(self.startMonitoringRequested)
             self.floating_window.stopMonitoringRequested.connect(self.stopMonitoringRequested)
             self.floating_window.captureImageRequested.connect(self.captureImageRequested)
-            self.floating_window.toggleMainUIRequested.connect(self.toggle_minimal_ui_mode)
             self.floating_window.closeRequested.connect(self.toggle_minimal_ui_mode)
             self.floating_window.setRecAreaRequested.connect(self.setRecAreaDialog)
             
@@ -685,9 +686,7 @@ class UIManager(QMainWindow):
             current_status_text = self.status_label.text(); current_status_color = "green"
             if current_status_text == lm("status_label_monitoring"): current_status_color = "blue"
             elif current_status_text == lm("status_label_unstable"): current_status_color = "orange"
-            # --- ▼▼▼ (改良 1.1) エラー色を追加 ▼▼▼ ---
             elif current_status_text == lm("status_label_idle_error"): current_status_color = "red"
-            # --- ▲▲▲ 修正完了 ▲▲▲ ---
             self.floating_window.update_status(current_status_text, current_status_color); 
             self.floating_window.show(); 
             self.toggle_minimal_ui_button.setText(lm("minimal_ui_button_stop")); 
@@ -705,21 +704,26 @@ class UIManager(QMainWindow):
             
             self.showNormal();
             if 'main' in self.normal_ui_geometries: self.setGeometry(self.normal_ui_geometries['main'])
-            if self.performance_monitor:
-                if 'perf' in self.normal_ui_geometries and not self.performance_monitor.isVisible(): 
-                    self.performance_monitor.show(); 
-                    self.performance_monitor.setGeometry(self.normal_ui_geometries['perf'])
+            
+            # if self.performance_monitor: # 削除
+            #     if 'perf' in self.normal_ui_geometries and not self.performance_monitor.isVisible(): # 削除
+            #         self.performance_monitor.show(); # 削除
+            #         self.performance_monitor.setGeometry(self.normal_ui_geometries['perf']) # 削除
             
             self.activateWindow(); 
             self.toggle_minimal_ui_button.setText(lm("minimal_ui_button")); 
             self._update_capture_button_state()
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
+    # --- ▼▼▼ 修正箇所 5/12: retranslate_ui を修正 ▼▼▼ ---
     def retranslate_ui(self):
         """Sets or updates all translatable text in the UI based on the current language."""
         lm = self.locale_manager.tr
 
         self.setWindowTitle(lm("window_title"))
-        self.perf_monitor_button.setText(lm("performance_monitor_button"))
+        
+        # self.perf_monitor_button.setText(lm("performance_monitor_button")) # 削除
+        
         self.header_rec_area_button.setText(lm("recognition_area_button"))
         self.toggle_minimal_ui_button.setText(lm("minimal_ui_button") if not self.is_minimal_mode else lm("minimal_ui_button_stop"))
         self.open_image_folder_button.setText(lm("open_image_folder_button"))
@@ -736,7 +740,6 @@ class UIManager(QMainWindow):
         self.move_down_button.setText(lm("move_down_button"))
         self.load_image_button.setText(lm("add_image_button"))
         
-        # (修正：リネームボタンのテキスト設定を追加)
         self.capture_image_button.setText(lm("capture_image_button"))
         self.rename_button.setText(lm("rename_button"))
         
@@ -761,12 +764,9 @@ class UIManager(QMainWindow):
         self.auto_scale_group.setTitle(lm("tab_auto_scale"))
         self.auto_scale_widgets['use_window_scale'].setText(lm("auto_scale_use_window"))
         self.auto_scale_widgets['use_window_scale'].setToolTip(lm("auto_scale_use_window_tooltip"))
-        self.auto_scale_widgets['enabled'].setText(lm("auto_scale_enable_search"))
-        self.auto_scale_center_label.setText(lm("auto_scale_center"))
-        self.auto_scale_range_label.setText(lm("auto_scale_range"))
-        # self.auto_scale_widgets['range'].setValue(lm("auto_scale_range")) # 値の設定はload_app_settings_to_uiで行うためコメントアウト
-        # self.auto_scale_widgets['steps'].setValue(lm("auto_scale_steps")) # 値の設定はload_app_settings_to_uiで行うためコメントアウト
-        self.auto_scale_steps_label.setText(lm("auto_scale_steps"))
+        
+        # ... (auto_scale のラベル削除は適用済み) ...
+        
         self.as_desc_label.setText(lm("auto_scale_desc"))
 
         app_settings_tab_index = self.preview_tabs.indexOf(self.preview_tabs.findChild(QScrollArea))
@@ -775,10 +775,8 @@ class UIManager(QMainWindow):
         self.app_settings_widgets['grayscale_matching'].setText(lm("app_setting_grayscale"))
         self.gs_desc_label.setText(lm("app_setting_grayscale_desc"))
         
-        # --- ▼▼▼ 修正箇所 (retranslate_ui)  ▼▼▼ ---
         self.app_settings_widgets['strict_color_matching'].setText(lm("app_setting_strict_color"))
         self.strict_color_desc_label.setText(lm("app_setting_strict_color_desc"))
-        # --- ▲▲▲ 修正完了 ▲▲▲ ---
         
         self.app_settings_widgets['capture_method'].setText(lm("app_setting_dxcam"))
         self.dxcam_desc_label.setText(lm("app_setting_dxcam_desc"))
@@ -786,7 +784,7 @@ class UIManager(QMainWindow):
         self.eco_desc_label.setText(lm("app_setting_eco_mode_desc"))
         self.fs_label.setText(lm("app_setting_frame_skip"))
         self.fs_desc_label.setText(lm("app_setting_frame_skip_desc"))
-        self.app_settings_widgets['frame_skip_rate'].setRange(1, 20) # 範囲設定を再確認
+        self.app_settings_widgets['frame_skip_rate'].setRange(1, 20) 
         self.app_settings_widgets['use_opencl'].setText(lm("app_setting_opencl"))
         self.opencl_desc_label.setText(lm("app_setting_opencl_desc"))
         self.stability_group.setTitle(lm("app_setting_stability_group"))
@@ -871,15 +869,12 @@ class UIManager(QMainWindow):
         self.item_settings_widgets['set_roi_variable_button'].setText(lm("item_setting_roi_button"))
         self.item_settings_widgets['set_roi_variable_button'].setToolTip(lm("item_setting_roi_button_tooltip"))
 
-        self.update_auto_scale_info()
         if self.core_engine:
-            # (改良 1.1) 起動時のステータスチェックを簡素化
             current_status = self.status_label.text()
             if current_status == lm("status_label_idle") or current_status == lm("status_label_idle_error"):
                 self.set_status("idle", "green")
             elif current_status == lm("status_label_monitoring"):
                 self.set_status("monitoring", "blue")
-            # 他のステータス (unstableなど) はそのまま維持
         else: 
             self.set_status("idle", "green")
             
@@ -888,6 +883,7 @@ class UIManager(QMainWindow):
             current_scale = self.core_engine.current_window_scale
         self.on_window_scale_calculated(current_scale)
         self._update_capture_button_state()
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
         
     def is_dark_mode(self):
         palette = self.palette()
@@ -898,18 +894,14 @@ class UIManager(QMainWindow):
     def load_app_settings_to_ui(self):
         as_conf = self.app_config.get('auto_scale', {})
         self.auto_scale_widgets['use_window_scale'].setChecked(as_conf.get('use_window_scale', True))
-        self.auto_scale_widgets['enabled'].setChecked(as_conf.get('enabled', False))
-        self.auto_scale_widgets['center'].setValue(as_conf.get('center', 1.0))
-        self.auto_scale_widgets['range'].setValue(as_conf.get('range', 0.2))
-        self.auto_scale_widgets['steps'].setValue(as_conf.get('steps', 5))
+        
+        # auto_scale の他ウィジェット設定削除 (適用済み)
 
         self.app_settings_widgets['capture_method'].setChecked(self.app_config.get('capture_method', 'dxcam') == 'dxcam')
         self.app_settings_widgets['frame_skip_rate'].setValue(self.app_config.get('frame_skip_rate', 2))
         self.app_settings_widgets['grayscale_matching'].setChecked(self.app_config.get('grayscale_matching', False))
         
-        # --- ▼▼▼ 修正箇所 (load_app_settings_to_ui)  ▼▼▼ ---
         self.app_settings_widgets['strict_color_matching'].setChecked(self.app_config.get('strict_color_matching', False))
-        # --- ▲▲▲ 修正完了 ▲▲▲ ---
         
         self.app_settings_widgets['use_opencl'].setChecked(self.app_config.get('use_opencl', True))
 
@@ -929,7 +921,6 @@ class UIManager(QMainWindow):
              preset_display_text = self.locale_manager.tr("app_setting_lw_mode_preset_standard")
         self.app_settings_widgets['lightweight_mode_preset'].setCurrentText(preset_display_text)
 
-        self.update_auto_scale_info()
         self.update_dependent_widgets_state()
 
     def update_dependent_widgets_state(self):
@@ -950,22 +941,8 @@ class UIManager(QMainWindow):
             "steps": self.auto_scale_widgets['steps'].value()
         }
 
-    def update_auto_scale_info(self):
-        lm = self.locale_manager.tr
-        if self.auto_scale_widgets['enabled'].isChecked():
-            center = self.auto_scale_widgets['center'].value()
-            range_ = self.auto_scale_widgets['range'].value()
-            steps = self.auto_scale_widgets['steps'].value()
-            if steps > 1:
-                scales = np.linspace(center - range_, center + range_, steps)
-                self.auto_scale_info_label.setText(lm("auto_scale_info_searching", f"{scales[0]:.3f}", f"{scales[-1]:.3f}"))
-            else:
-                 self.auto_scale_info_label.setText(lm("auto_scale_info_searching", f"{center:.3f}", f"{center:.3f}"))
-            self.auto_scale_info_label.setStyleSheet("color: blue;")
-        else:
-            self.auto_scale_info_label.setText(lm("auto_scale_info_disabled"))
-            self.auto_scale_info_label.setStyleSheet("color: gray;")
-
+    # update_auto_scale_info() は削除済み
+    
     def on_app_settings_changed(self):
         lm = self.locale_manager.tr
         self.app_config['auto_scale'] = self.get_auto_scale_settings()
@@ -973,9 +950,7 @@ class UIManager(QMainWindow):
         self.app_config['frame_skip_rate'] = self.app_settings_widgets['frame_skip_rate'].value()
         self.app_config['grayscale_matching'] = self.app_settings_widgets['grayscale_matching'].isChecked()
         
-        # --- ▼▼▼ 修正箇所 (on_app_settings_changed)  ▼▼▼ ---
         self.app_config['strict_color_matching'] = self.app_settings_widgets['strict_color_matching'].isChecked()
-        # --- ▲▲▲ 修正完了 ▲▲▲ ---
         
         self.app_config['use_opencl'] = self.app_settings_widgets['use_opencl'].isChecked()
         self.app_config['eco_mode'] = {"enabled": self.app_settings_widgets['eco_mode_enabled'].isChecked()}
@@ -993,7 +968,9 @@ class UIManager(QMainWindow):
             "preset": preset_internal_name
         }
         self.config_manager.save_app_config(self.app_config)
-        self.update_auto_scale_info()
+        
+        # update_auto_scale_info() 削除 (適用済み)
+        
         self.update_dependent_widgets_state()
         self.appConfigChanged.emit()
 
@@ -1010,7 +987,6 @@ class UIManager(QMainWindow):
                     expanded_folders.add(path)
         self.image_tree.clear()
 
-        # ★ 修正: CoreEngine から現在のアプリ名を取得して渡す
         current_app_name = None
         if self.core_engine and self.core_engine.environment_tracker:
             current_app_name = self.core_engine.environment_tracker.recognition_area_app_title
@@ -1056,17 +1032,13 @@ class UIManager(QMainWindow):
         """
         lm = self.locale_manager.tr
         
-        # 1. ツリーのタイトルを変更 (要求 2)
         if app_name:
             self.list_title_label.setText(app_name)
         else:
-            self.list_title_label.setText(lm("list_title")) # デフォルトに戻す
+            self.list_title_label.setText(lm("list_title")) 
             
-        # 2. ツリーを再描画 (フィルタリングを適用)
         self.update_image_tree()
         
-        # 3. キャッシュの再構築をトリガー
-        # (CoreEngine側でシグナル発行と同時に実行されるはずだが、念のため)
         if self.core_engine and self.core_engine.thread_pool:
              self.set_tree_enabled(False)
              self.core_engine.thread_pool.submit(self.core_engine._build_template_cache).add_done_callback(self.core_engine._on_cache_build_done)
@@ -1101,20 +1073,16 @@ class UIManager(QMainWindow):
                 
                 tooltip_text = f"{mode_str}\n{threshold_str}：{interval_str}\n{img_size_text}"
 
-                # --- ▼▼▼ 修正箇所 ▼▼▼ ---
                 try:
                     env_list = settings.get("environment_info", [])
                     env_tooltip_lines = []
-                    MAX_ENV_DISPLAY = 5 # 最大表示件数
+                    MAX_ENV_DISPLAY = 5 
 
                     if env_list:
-                        # ヘッダーを追加
                         env_tooltip_lines.append(
-                            # ★ 改行コードを削除
                             lm("context_menu_env_header", min(len(env_list), MAX_ENV_DISPLAY))
                         )
                         
-                        # 最新5件のみ表示
                         for env_data in env_list[-MAX_ENV_DISPLAY:]:
                             app = env_data.get("app_name")
                             res = env_data.get("resolution", "N/A")
@@ -1122,48 +1090,38 @@ class UIManager(QMainWindow):
                             scale = env_data.get("imeck_scale", 0.0)
                             
                             if app:
-                                # ★ 改行コードを削除
                                 env_tooltip_lines.append(
                                     lm("context_menu_env_entry", app, res, dpi, scale)
                                 )
                             else:
-                                # ★ 改行コードを削除
                                 env_tooltip_lines.append(
                                     lm("context_menu_env_entry_no_app", res, dpi, scale)
                                 )
                     
-                    # 組み立てた環境情報文字列を結合
                     if env_tooltip_lines:
-                        # ★★★ 修正: ここで "\n" を使って結合する ★★★
                         tooltip_text += "\n" + "\n".join(env_tooltip_lines)
                         
                 except Exception as e:
-                    tooltip_text += f"\n[Env Info Error: {e}]" # エラー時
-                # --- ▲▲▲ 修正完了 ▲▲▲ ---
+                    tooltip_text += f"\n[Env Info Error: {e}]" 
 
                 global_pos = self.image_tree.mapToGlobal(pos); QToolTip.showText(global_pos, tooltip_text, self.image_tree)
             except Exception as e: global_pos = self.image_tree.mapToGlobal(pos); QToolTip.showText(global_pos, lm("context_menu_info_error", str(e)), self.image_tree)
     def set_tree_enabled(self, enabled: bool):
         self.image_tree.setEnabled(enabled)
 
-    # --- ▼▼▼ (改良 1.2) on_cache_build_finished を修正 ▼▼▼ ---
     def on_cache_build_finished(self, success: bool):
         lm = self.locale_manager.tr
         
         if success:
-            # 成功した場合: 従来通りUIを更新・有効化
             self.update_image_tree()
             self.set_tree_enabled(True)
         else:
-            # 失敗した場合: UIは無効のままエラーを表示
             self.set_tree_enabled(False)
             QMessageBox.critical(self, 
                                  lm("error_title_cache_build_failed"), 
                                  lm("error_message_cache_build_failed"))
         
-        # 処理中フラグはどちらの場合でもリセット
         self.is_processing_tree_change = False
-    # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
     def get_selected_item_path(self):
         selected_items = self.image_tree.selectedItems()
@@ -1181,13 +1139,10 @@ class UIManager(QMainWindow):
         if self.preview_tabs and self.main_preview_widget: self.preview_tabs.setCurrentWidget(self.main_preview_widget)
 
     def on_image_tree_selection_changed(self):
-        self.current_best_scale_label.setText(self.locale_manager.tr("auto_scale_best_scale_default"))
-        self.current_best_scale_label.setStyleSheet("color: gray;")
         path, name = self.get_selected_item_path()
         if self.core_engine: self.core_engine.load_image_and_settings(path)
 
     def move_item_up(self):
-        # 選択されたアイテムを取得し、単一のアイテムであることを確認
         selected_items = self.image_tree.selectedItems()
         if not selected_items or len(selected_items) != 1:
             self.logger.log(self.locale_manager.tr("log_move_item_warn_selection"))
@@ -1197,17 +1152,15 @@ class UIManager(QMainWindow):
         parent = item.parent()
 
         if parent:
-            # フォルダ内のアイテムの場合
             index = parent.indexOfChild(item)
             if index > 0:
                 self.set_tree_enabled(False)
                 taken_item = parent.takeChild(index)
                 parent.insertChild(index - 1, taken_item)
-                self.image_tree.setCurrentItem(taken_item) # 選択状態を維持
+                self.image_tree.setCurrentItem(taken_item) 
             else:
                 return
         else:
-            # トップレベルのアイテムの場合
             index = self.image_tree.indexOfTopLevelItem(item)
             if index > 0:
                 self.set_tree_enabled(False)
@@ -1217,12 +1170,10 @@ class UIManager(QMainWindow):
             else:
                 return
         
-        # 順序の変更を通知
         self.orderChanged.emit()
         self.set_tree_enabled(True)
         
     def move_item_down(self):
-        # 選択されたアイテムを取得
         selected_items = self.image_tree.selectedItems()
         if not selected_items or len(selected_items) != 1:
             self.logger.log(self.locale_manager.tr("log_move_item_warn_selection"))
@@ -1232,17 +1183,15 @@ class UIManager(QMainWindow):
         parent = item.parent()
 
         if parent:
-            # フォルダ内のアイテムの場合
             index = parent.indexOfChild(item)
             if index < parent.childCount() - 1: 
                 self.set_tree_enabled(False)
                 taken_item = parent.takeChild(index)
                 parent.insertChild(index + 1, taken_item)
-                self.image_tree.setCurrentItem(taken_item) # 選択状態を維持
+                self.image_tree.setCurrentItem(taken_item) 
             else:
                 return
         else:
-            # トップレベルのアイテムの場合
             index = self.image_tree.indexOfTopLevelItem(item)
             if index < self.image_tree.topLevelItemCount() - 1: 
                 self.set_tree_enabled(False)
@@ -1252,7 +1201,6 @@ class UIManager(QMainWindow):
             else:
                 return
         
-        # 順序の変更を通知
         self.orderChanged.emit()
         self.set_tree_enabled(True)
 
@@ -1397,12 +1345,11 @@ class UIManager(QMainWindow):
         if self.monitor_button.text() == self.locale_manager.tr("monitor_button_start"): self.startMonitoringRequested.emit()
         else: self.stopMonitoringRequested.emit()
 
-    # --- ▼▼▼ 修正箇所 ▼▼▼ ---
     def set_status(self, text_key, color="green"):
         lm = self.locale_manager.tr
         display_text = ""
         style_color = color
-        is_idle = False # ★ アイドル状態かどうかのフラグ
+        is_idle = False 
 
         if text_key == "monitoring":
             self.monitor_button.setText(lm("monitor_button_stop"))
@@ -1414,7 +1361,7 @@ class UIManager(QMainWindow):
             style_color = "green"
             self.current_best_scale_label.setText(lm("auto_scale_best_scale_default"))
             self.current_best_scale_label.setStyleSheet("color: gray;")
-            is_idle = True # ★ アイドル状態
+            is_idle = True 
         elif text_key == "unstable":
             display_text = lm("status_label_unstable")
             style_color = "orange"
@@ -1422,7 +1369,7 @@ class UIManager(QMainWindow):
             self.monitor_button.setText(lm("monitor_button_start"))
             display_text = lm("status_label_idle_error")
             style_color = "red"
-            is_idle = True # ★ アイドル状態 (エラー)
+            is_idle = True 
         else:
             display_text = text_key
             
@@ -1432,17 +1379,13 @@ class UIManager(QMainWindow):
         if self.floating_window:
             self.floating_window.update_status(display_text, style_color)
             
-            # ★ 監視停止時 (idle または idle_error) にリセットメソッドを呼び出す
             if is_idle and hasattr(self.floating_window, 'reset_performance_stats'):
                 self.floating_window.reset_performance_stats()
 
         self._update_capture_button_state()
-    # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
-    def on_best_scale_found(self, image_path: str, scale: float):
-        lm = self.locale_manager.tr; current_selected_path, _ = self.get_selected_item_path();
-        if image_path and image_path == current_selected_path: self.current_best_scale_label.setText(lm("auto_scale_best_scale_found", f"{scale:.3f}")); self.current_best_scale_label.setStyleSheet("color: green;")
-
+    # on_best_scale_found() は削除済み
+    
     def on_window_scale_calculated(self, scale: float):
         lm = self.locale_manager.tr
         if scale > 0: 
@@ -1459,14 +1402,11 @@ class UIManager(QMainWindow):
     def _update_capture_button_state(self, current_scale=None):
         if not self.core_engine: return
         
-        # 1. 認識範囲が設定されているか
         is_rec_area_set = self.core_engine.recognition_area is not None
         
-        # 2. ウィンドウスケールが 1.0 または None か
         if current_scale is None: 
             current_scale = self.core_engine.current_window_scale
         
-        # キャプチャを無効にする条件: 認識エリア未設定 OR スケールが 1.0 以外
         is_disabled_by_scale = (current_scale is not None and 
                                 current_scale != 0.0 and 
                                 not (0.995 <= current_scale <= 1.005))
@@ -1520,15 +1460,106 @@ class UIManager(QMainWindow):
 
         self.item_settings_group.setEnabled(not is_folder_or_no_data)
    
+    # --- ▼▼▼ 修正箇所 6/12: on_selection_process_started を修正 ▼▼▼ ---
     def on_selection_process_started(self):
         """Hides UI elements when recognition area selection starts."""
-        if self.performance_monitor: self.performance_monitor.hide()
-        if self.is_minimal_mode and self.floating_window: self.floating_window.hide()
+        # performance_monitor 関連を削除
+        if self.is_minimal_mode and self.floating_window: 
+            self.floating_window.hide()
+        elif not self.is_minimal_mode:
+            # メインUIも非表示にする
+            self.hide()
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
+    # --- ▼▼▼ 修正箇所 7/12: on_selection_process_finished を修正 ▼▼▼ ---
+    @Slot()
     def on_selection_process_finished(self):
-        """Restores UI elements after recognition area selection finishes."""
+        """
+        Restores UI elements after recognition area selection finishes.
+        This is the single point of truth for UI restoration.
+        """
         if self.is_minimal_mode:
-            if self.floating_window: self.floating_window.show()
+            if self.floating_window: 
+                self.floating_window.show()
+            
+            # メインUIが（プレビューなどで）表示されていれば最小化する
+            if self.isVisible() and not self.isMinimized():
+                self.showMinimized()
         else:
-             if self.performance_monitor and 'perf' in self.normal_ui_geometries and not self.performance_monitor.isVisible():
-                 self.performance_monitor.show()
+            # メインUIモード時は、メインUIを復帰させる
+            self.showNormal()
+            self.raise_()
+            self.activateWindow()
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
+    
+    # --- ▼▼▼ 修正箇所 8/12: _get_filename_from_user を追加 (core.py から移動) ▼▼▼ ---
+    def _get_filename_from_user(self):
+        lm = self.locale_manager.tr
+        return QInputDialog.getText(self, lm("dialog_filename_prompt_title"), lm("dialog_filename_prompt_text"))
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
+    
+    # --- ▼▼▼ 修正箇所 9/12: on_capture_failed スロットを追加 ▼▼▼ ---
+    @Slot()
+    def on_capture_failed(self):
+        """(スロット) coreからキャプチャ失敗通知を受け取り、エラー表示する"""
+        lm = self.locale_manager.tr
+        QMessageBox.warning(self, lm("warn_title_capture_failed"), lm("warn_message_capture_failed"))
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
+    
+    # --- ▼▼▼ 修正箇所 10/12: on_captured_image_ready_for_preview スロットを追加 ▼▼▼ ---
+    @Slot(np.ndarray)
+    def on_captured_image_ready_for_preview(self, captured_image):
+        """
+        (スロット) coreからキャプチャ画像を受け取り、プレビューを表示し、
+        保存ダイアログの表示をトリガーします。
+        """
+        # 1. 画像を一時保持
+        self.pending_captured_image = captured_image
+        
+        # 2. メインUIを表示・アクティブ化 (最小UIモードでも一時的に表示)
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+        
+        # 3. プレビューを更新
+        self.switch_to_preview_tab()
+        self.update_image_preview(captured_image, settings_data=None)
+        QApplication.processEvents()
+        
+        # 4. プレビュー描画後にダイアログを表示
+        QTimer.singleShot(100, self._prompt_for_save_filename)
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
+    
+    # --- ▼▼▼ 修正箇所 11/12: _prompt_for_save_filename を追加 (core.py からロジック移動) ▼▼▼ ---
+    def _prompt_for_save_filename(self):
+        """
+        (UIスレッド) ファイル名入力ダイアログを表示し、
+        結果をcoreにシグナルで送信します。
+        """
+        if self.pending_captured_image is None:
+            self.logger.log("[ERROR] _prompt_for_save_filename called, but pending_captured_image is None.")
+            if self.core_engine:
+                self.core_engine.selectionProcessFinished.emit()
+            return
+
+        captured_image = self.pending_captured_image
+        self.pending_captured_image = None # クリア
+        
+        try:
+            file_name, ok = self._get_filename_from_user()
+            if ok and file_name:
+                # ユーザーがファイル名を入力した
+                self.set_tree_enabled(False)
+                # CoreEngineにファイル名と画像を渡して保存を依頼
+                # (ファイルの上書き確認は CoreEngine 側で行う)
+                self.saveCapturedImageRequested.emit(file_name, captured_image)
+            else:
+                # ユーザーがキャンセルした
+                if self.core_engine:
+                    self.core_engine.selectionProcessFinished.emit()
+                    
+        except Exception as e:
+            QMessageBox.critical(self, self.locale_manager.tr("error_title_capture_save_failed"), self.locale_manager.tr("error_message_capture_save_failed", str(e)))
+            if self.core_engine:
+                self.core_engine.selectionProcessFinished.emit()
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---

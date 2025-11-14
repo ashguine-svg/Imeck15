@@ -61,14 +61,33 @@ class CaptureManager(QObject):
         is_dxcam_preferred = False
         if DXCAM_AVAILABLE:
             self.logger.log("log_dxcam_available")
+            
+            # --- ▼▼▼ 修正箇所: with ステートメントを削除 ▼▼▼ ---
+            d = None # インスタンスを保持する変数
             try:
-                with dxcam.create(output_idx=None) as d:
-                    if d.grab() is not None:
-                        is_dxcam_preferred = True
-                self.logger.log("log_dxcam_check_success")
+                d = dxcam.create(output_idx=None) # with を使わずに作成
+                if d and d.grab() is not None:
+                    is_dxcam_preferred = True
+                    self.logger.log("log_dxcam_check_success")
+                else:
+                    # grab() が None を返した場合
+                    is_dxcam_preferred = False
+                    self.logger.log("log_dxcam_check_failed", "grab() returned None or create() failed.")
             except Exception as e:
                 self.logger.log("log_dxcam_check_failed", str(e))
                 is_dxcam_preferred = False
+            finally:
+                if d:
+                    try:
+                        d.release() # チェックが終わったら解放
+                    except Exception:
+                        pass # 解放失敗は無視
+                    
+                    # --- ▼▼▼ ★ 修正箇所: del d を追加 ★ ▼▼▼ ---
+                    del d
+                    # --- ▲▲▲ 修正完了 ▲▲▲ ---
+            # --- ▲▲▲ 修正完了 ▲▲▲ ---
+            
         else:
             if sys.platform == 'win32':
                 self.logger.log("log_dxcam_unavailable")

@@ -61,13 +61,23 @@ class FloatingWindow(QDialog):
         self.start_button = QPushButton(lm("float_button_start"))
         self.stop_button = QPushButton(lm("float_button_stop"))
         self.capture_button = QPushButton(lm("float_button_capture"))
-        self.set_rec_area_button = QPushButton(lm("float_button_rec_area"))
-        self.toggle_ui_button = QPushButton(lm("float_button_toggle_ui"))
+        
+        # --- ▼▼▼ 修正箇所 ▼▼▼ ---
+        
+        # [認識範囲設定] ボタンをアイコンに変更
+        self.set_rec_area_button = QPushButton()
+        
+        # ★ アイコンを SP_ArrowHorizontal から SP_TitleBarMaxButton (最大化 [ ]) に変更
+        toggle_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_TitleBarMaxButton)
+        self.set_rec_area_button.setIcon(toggle_icon)
+        
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
+        
         self.close_button = QPushButton(lm("float_button_close"))
         
         buttons_list = [
             self.start_button, self.stop_button, self.capture_button, 
-            self.set_rec_area_button, self.toggle_ui_button, self.close_button
+            self.set_rec_area_button, self.close_button # ← toggle_ui_button を削除
         ]
         
         for btn in buttons_list:
@@ -134,7 +144,9 @@ class FloatingWindow(QDialog):
         main_layout.addWidget(self.stop_button)
         main_layout.addWidget(self.capture_button)
         main_layout.addWidget(self.set_rec_area_button)
-        main_layout.addWidget(self.toggle_ui_button)
+        
+        # main_layout.addWidget(self.toggle_ui_button) # ← 削除
+        
         main_layout.addSpacerItem(QSpacerItem(10, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
 
         # 統計情報を追加
@@ -158,14 +170,18 @@ class FloatingWindow(QDialog):
         self.stop_button.setToolTip(lm("float_tooltip_stop"))
         self.capture_button.setToolTip(lm("float_tooltip_capture"))
         self.set_rec_area_button.setToolTip(lm("float_tooltip_rec_area"))
-        self.toggle_ui_button.setToolTip(lm("float_tooltip_toggle_ui"))
+        
+        # self.toggle_ui_button.setToolTip(lm("float_tooltip_toggle_ui")) # ← 削除
+        
         self.close_button.setToolTip(lm("float_tooltip_close"))
 
         # --- 5. シグナル接続 ---
         self.start_button.clicked.connect(self.startMonitoringRequested)
         self.stop_button.clicked.connect(self.stopMonitoringRequested)
         self.capture_button.clicked.connect(self.captureImageRequested)
-        self.toggle_ui_button.clicked.connect(self.toggleMainUIRequested)
+        
+        # self.toggle_ui_button.clicked.connect(self.toggleMainUIRequested) # ← 削除
+        
         self.close_button.clicked.connect(self.closeRequested)
         self.set_rec_area_button.clicked.connect(self.setRecAreaRequested)
         
@@ -178,10 +194,12 @@ class FloatingWindow(QDialog):
         インストールされたイベントフィルター。
         ボタンに対する右クリックイベントをすべて無視します。
         """
+        # --- ▼▼▼ 修正箇所 ▼▼▼ ---
         buttons_list = [
             self.start_button, self.stop_button, self.capture_button, 
-            self.set_rec_area_button, self.toggle_ui_button, self.close_button
-        ]
+            self.set_rec_area_button, self.close_button
+        ] # ← toggle_ui_button を削除
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
         # 監視対象がリスト内のボタンであり、
         # イベントが「右クリック」のプレスまたはダブルクリックの場合

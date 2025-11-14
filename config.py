@@ -77,10 +77,12 @@ class ConfigManager:
     def load_app_config(self) -> dict:
         default_config = {
             "auto_scale": {
-                "enabled": False,
-                "center": 1.0,
-                "range": 0.2,
-                "steps": 5,
+                # --- ▼▼▼ 修正箇所 (4行削除) ▼▼▼ ---
+                # "enabled": False,
+                # "center": 1.0,
+                # "range": 0.2,
+                # "steps": 5,
+                # --- ▲▲▲ 修正完了 ▲▲▲ ---
                 "use_window_scale": True,
             },
             "capture_method": "mss",

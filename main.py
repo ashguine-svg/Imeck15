@@ -1,5 +1,6 @@
 # main.py (D&D対応版・多言語対応版)
 # ★★★ (再起動ロジック) 解像度変更時にアプリを再起動する ★★★
+# ★★★ パフォーマンスモニターを削除 ★★★
 
 import sys
 import os
@@ -28,7 +29,9 @@ from ui import UIManager
 from core import CoreEngine
 from capture import CaptureManager
 from config import ConfigManager
-from monitor import PerformanceMonitor
+# --- ▼▼▼ 修正箇所 1/7: monitor.py のインポートを削除 ▼▼▼ ---
+# from monitor import PerformanceMonitor # 削除
+# --- ▲▲▲ 修正完了 ▲▲▲ ---
 from dialogs import InitializationDialog
 # ★★★ 1. LocaleManager と QObject/Signal (Logger用) をインポート ★★★
 from locale_manager import LocaleManager
@@ -55,17 +58,19 @@ class Logger(QObject):
     logReady = Signal(str)
     
     # ★★★ 2. __init__ を修正 (locale_manager を None で初期化) ★★★
-    def __init__(self, ui_manager=None, perf_monitor=None):
+    # --- ▼▼▼ 修正箇所 2/7: Loggerから perf_monitor を削除 ▼▼▼ ---
+    def __init__(self, ui_manager=None): # perf_monitor=None を削除
         super().__init__()
         self.ui_manager = ui_manager
-        self.perf_monitor = perf_monitor
+        # self.perf_monitor = perf_monitor # 削除
         self.locale_manager = None # LocaleManagerインスタンスを保持
 
-    def set_ui(self, ui_manager, perf_monitor):
+    def set_ui(self, ui_manager): # perf_monitor を引数から削除
         self.ui_manager = ui_manager
-        self.perf_monitor = perf_monitor
+        # self.perf_monitor = perf_monitor # 削除
         self.logReady.connect(self.ui_manager.update_log)
-        self.logReady.connect(self.perf_monitor.update_log)
+        # self.logReady.connect(self.perf_monitor.update_log) # 削除
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
     # ★★★ 3. set_locale_manager メソッドを追加 ★★★
     def set_locale_manager(self, locale_manager):
@@ -185,50 +190,45 @@ def main():
         locale_manager=locale_manager # ★★★ 7. UIManagerに渡す ★★★
     )
     
-    performance_monitor = PerformanceMonitor(ui_manager, locale_manager, parent=None) # ★★★ 8. Monitorに渡す ★★★
+    # --- ▼▼▼ 修正箇所 3/7: PerformanceMonitorのインスタンス化を削除 ▼▼▼ ---
+    # performance_monitor = PerformanceMonitor(ui_manager, locale_manager, parent=None) # 削除
+    # ui_manager.set_performance_monitor(performance_monitor) # 削除
     
-    ui_manager.set_performance_monitor(performance_monitor)
-    
-    logger.set_ui(ui_manager, performance_monitor)
+    # logger.set_ui(ui_manager, performance_monitor) # 修正
+    logger.set_ui(ui_manager) # 引数から performance_monitor を削除
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
     
     core_engine = CoreEngine(
         ui_manager=ui_manager,
         capture_manager=capture_manager,
         config_manager=config_manager,
         logger=logger,
-        performance_monitor=performance_monitor,
+        # --- ▼▼▼ ★★★ ここが今回の修正箇所です ★★★ ▼▼▼ ---
+        # performance_monitor=None, # この行を削除しました
+        # --- ▲▲▲ ★★★ 修正完了 ★★★ ▲▲▲ ---
         locale_manager=locale_manager # ★★★ 9. CoreEngineに渡す ★★★
     )
     
     ui_manager.core_engine = core_engine
     
-    # --- ▼▼▼ 修正箇所 ▼▼▼ ---
+    # --- ▼▼▼ 修正箇所 5/7: シグナル接続を削除 ▼▼▼ ---
     
     # --- シグナル接続 ---
     core_engine.updateStatus.connect(ui_manager.set_status)
-    # core_engine.updateStatus.connect(performance_monitor.update_monitoring_status) # ★★★ 削除 (monitor.py からメソッド削除のため) ★★★
+    # core_engine.updateStatus.connect(performance_monitor.update_monitoring_status) # ★★★ 削除 ★★★
     core_engine.updatePreview.connect(ui_manager.update_image_preview)
     core_engine.updateRecAreaPreview.connect(ui_manager.update_rec_area_preview)
     
-    # (performance_monitor から統計機能が削除されたため、該当の接続を削除)
-    
     core_engine.cacheBuildFinished.connect(ui_manager.on_cache_build_finished)
-    
-    # (statsUpdated, clickCountUpdated, fpsUpdated は、
-    #  ui.py の toggle_minimal_ui_mode で動的に接続/切断されます)
     
     core_engine.selectionProcessStarted.connect(ui_manager.on_selection_process_started)
     core_engine.selectionProcessFinished.connect(ui_manager.on_selection_process_finished)
-
-    core_engine.bestScaleFound.connect(ui_manager.on_best_scale_found)
     core_engine.windowScaleCalculated.connect(ui_manager.on_window_scale_calculated)
     core_engine.askToSaveWindowBaseSizeSignal.connect(ui_manager.show_prompt_to_save_base_size)
     core_engine.askToApplyWindowScaleSignal.connect(ui_manager.show_prompt_to_apply_scale)
     core_engine.appContextChanged.connect(ui_manager.on_app_context_changed)
     
-    # --- ▼▼▼ 修正: 再起動シグナルを接続 ▼▼▼ ---
     core_engine.restartApplicationRequested.connect(restart_application)
-    # --- ▲▲▲ 修正完了 ▲▲▲ ---
     
     ui_manager.startMonitoringRequested.connect(core_engine.start_monitoring)
     ui_manager.stopMonitoringRequested.connect(core_engine.stop_monitoring)
@@ -236,10 +236,7 @@ def main():
     ui_manager.imageSettingsChanged.connect(core_engine.on_image_settings_changed)
     ui_manager.captureImageRequested.connect(core_engine.capture_image_for_registration)
     ui_manager.deleteItemsRequested.connect(core_engine.delete_selected_items)
-    # --- ▼▼▼ 修正箇所 (リネームシグナルを接続) ▼▼▼ ---
     ui_manager.renameItemRequested.connect(core_engine.rename_item)
-    # --- ▲▲▲ 修正完了 ▲▲▲ ---
-    
     ui_manager.folderSettingsChanged.connect(core_engine.on_folder_settings_changed)
     
     ui_manager.orderChanged.connect(core_engine.on_order_changed)
@@ -250,17 +247,17 @@ def main():
     ui_manager.itemsMovedIntoFolder.connect(core_engine.move_items_into_folder)
 
     ui_manager.moveItemOutOfFolderRequested.connect(core_engine.move_item_out_of_folder)
-    ui_manager.openPerformanceMonitorRequested.connect(performance_monitor.show)
+    # ui_manager.openPerformanceMonitorRequested.connect(performance_monitor.show) # ★★★ 削除 ★★★
     ui_manager.setRecAreaMethodSelected.connect(core_engine.set_recognition_area)
 
     ui_manager.connect_signals()
     
     # (monitor.py からボタンとシグナルを削除したため、以下の行を削除)
-    # performance_monitor.toggleMonitoringRequested.connect(ui_manager.toggle_monitoring)
-    performance_monitor.connect_signals()
+    # performance_monitor.toggleMonitoringRequested.connect(ui_manager.toggle_monitoring) # ★★★ 削除 ★★★
+    # performance_monitor.connect_signals() # ★★★ 削除 ★★★
     
     # ★★★ 修正箇所 3/4: monitor.py の言語変更シグナルを接続 (仕様書 [27] 対応) ★★★
-    locale_manager.languageChanged.connect(performance_monitor.on_language_changed)
+    # locale_manager.languageChanged.connect(performance_monitor.on_language_changed) # ★★★ 削除 ★★★
     
     # --- ▲▲▲ 修正完了 ▲▲▲ ---
     
@@ -289,7 +286,9 @@ def main():
         def run_initialization_dialog():
             try:
                 # ★★★ 10. InitializationDialog に locale_manager を渡す ★★★
+                # --- ▼▼▼ 修正箇所 6/7: loggerを渡すように修正 ▼▼▼ ---
                 dialog = InitializationDialog(core_engine, logger, locale_manager, ui_manager)
+                # --- ▲▲▲ 修正完了 ▲▲▲ ---
                 dialog.exec()
             except ImportError:
                 logger.log("init_dialog_error_not_found")
@@ -299,7 +298,9 @@ def main():
         QTimer.singleShot(200, run_initialization_dialog)
 
     # ★★★ 修正箇所 4/4: logger インスタンスを渡す (仕様書 [26] 確認) ★★★
+    # --- ▼▼▼ 修正箇所 7/7: loggerのセットアップを確認 ▼▼▼ ---
     ui_manager.logger = logger
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
     
     sys.exit(app.exec())
 

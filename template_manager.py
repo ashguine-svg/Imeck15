@@ -24,14 +24,7 @@ class TemplateManager:
     def build_cache(self, app_config, current_window_scale, effective_capture_scale, is_monitoring, existing_priority_timers, current_app_name: str = None):
         """
         設定に基づいてテンプレートキャッシュを構築します。
-
-        Args:
-            app_config (dict): アプリケーション全体の設定。
-            current_window_scale (float | None): 現在のウィンドウのスケール。
-            effective_capture_scale (float): 軽量化モードなどを考慮した実効キャプチャスケール。
-            is_monitoring (bool): 現在監視中かどうかのフラグ。
-            existing_priority_timers (dict): 既存の優先タイマー情報。
-            current_app_name (str, optional): フィルタリング対象のアプリ名。
+        (スケール検索ロジックを削除し、ウィンドウスケール専用に簡素化)
         """
         normal_cache = {}
         backup_cache = {}
@@ -43,27 +36,25 @@ class TemplateManager:
         
         base_scales = [1.0]
 
+        # --- ▼▼▼ 修正箇所 (ロジックを大幅に簡素化) ▼▼▼ ---
         if use_window_scale_base:
-            use_scale_search = auto_scale_settings.get('enabled', False) and effective_capture_scale == 1.0
+            # 「スケール検索(use_scale_search)」の if/else を削除
             
-            center_scale = current_window_scale if current_window_scale is not None else auto_scale_settings.get('center', 1.0)
-
-            if use_scale_search:
-                range_ = auto_scale_settings.get('range', 0.2)
-                steps = auto_scale_settings.get('steps', 5)
-                if steps > 1:
-                    base_scales = np.linspace(center_scale - range_, center_scale + range_, steps)
-                # ★★★ 2. ログを翻訳キーに置き換え ★★★
-                self.logger.log("log_scale_search_enabled", len(base_scales), f"{center_scale:.3f}")
-            else:
-                base_scales = [center_scale]
+            # 常に「ウィンドウスケール」またはデフォルト(1.0)を使用
+            center_scale = current_window_scale if current_window_scale is not None else 1.0
+            base_scales = [center_scale]
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
         
         scales = [s * effective_capture_scale for s in base_scales]
 
         if effective_capture_scale != 1.0:
             self.logger.log("log_capture_scale_applied", f"{effective_capture_scale:.2f}")
+        
+        # --- ▼▼▼ 修正箇所 (インデントエラーを修正) ▼▼▼ ---
+        # この if ブロックに中身を追加します
         if use_window_scale_base and current_window_scale is not None:
             self.logger.log("log_window_scale_applied", f"{current_window_scale:.3f}")
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
         log_scales = ", ".join([f"{s:.3f}" for s in scales])
         self.logger.log("log_final_scales", log_scales)
@@ -177,7 +168,7 @@ class TemplateManager:
 
             cache_entry = {
                 'settings': settings, 'path': path, 'scaled_templates': scaled_templates,
-                'best_scale': None if len(scales) > 1 else (scales[0] if scales else None),
+                # 'best_scale': None if len(scales) > 1 else (scales[0] if scales else None), # ← この行を削除
                 'folder_path': folder_path, 'folder_mode': folder_mode,
             }
             
