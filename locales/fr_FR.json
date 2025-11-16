@@ -1,6 +1,6 @@
 {
     "language_name": "Français",
-    "window_title": "Imeck15 v1.5.6.2 Édition multilingue",
+    "window_title": "Imeck15 v1.5.6.3 Édition multilingue",
     "monitor_button_start": "Démarrer la surveillance",
     "monitor_button_stop": "Arrêter la surveillance",
     "monitor_button_tooltip": "Démarrer la surveillance.<br>Double-clic droit pour arrêter, triple-clic droit pour démarrer",
@@ -379,5 +379,11 @@
     "error_title_cache_build_failed": "Erreur de création du cache",
     "error_message_cache_build_failed": "Échec de la reconstruction du cache d'images. L'interface utilisateur restera verrouillée par sécurité. Veuillez vérifier s'il y a des fichiers image corrompus et redémarrer l'application.",
     "log_capture_while_monitoring": "Capture demandée pendant la surveillance. Arrêt de la surveillance...",
-    "log_capture_proceed_after_stop": "Surveillance arrêtée. Poursuite du processus de capture."
+    "log_capture_proceed_after_stop": "Surveillance arrêtée. Poursuite du processus de capture.",
+    "rec_area_dialog_fullscreen_button": "Plein écran",
+    "log_rec_area_set_fullscreen": "Zone de reconnaissance Plein écran définie : %s",
+    "log_capture_area_fullscreen_disabled": "Le mode Plein écran ne peut pas être sélectionné lors de l'enregistrement d'une image.",
+    "warn_capture_fullscreen_title": "Enregistrement non autorisé",
+    "warn_capture_fullscreen_text": "Le mode \"Plein écran\" ne peut pas être utilisé pour l'enregistrement d'image (capture).",
+    "log_error_get_primary_screen_geo": "Échec de la récupération de la géométrie de l'écran principal : %s"
 }

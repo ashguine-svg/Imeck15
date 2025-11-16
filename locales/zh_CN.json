@@ -1,6 +1,6 @@
 {
     "language_name": "简体中文",
-    "window_title": "Imeck15 v1.5.6.2 多语言版",
+    "window_title": "Imeck15 v1.5.6.3 多语言版",
     "monitor_button_start": "开始监控",
     "monitor_button_stop": "停止监控",
     "monitor_button_tooltip": "开始监控。<br>鼠标右键双击停止，鼠标右键三击开始",
@@ -377,5 +377,11 @@
     "error_title_cache_build_failed": "缓存构建错误",
     "error_message_cache_build_failed": "重建图像缓存失败。为安全起见，用户界面将保持锁定状态。请检查损坏的图像文件并重新启动应用程序。",
     "log_capture_while_monitoring": "监控期间请求截图。正在停止监控...",
-    "log_capture_proceed_after_stop": "监控已停止。继续截图流程。"
+    "log_capture_proceed_after_stop": "监控已停止。继续截图流程。",
+    "rec_area_dialog_fullscreen_button": "全屏",
+    "log_rec_area_set_fullscreen": "已设置全屏识别区域：%s",
+    "log_capture_area_fullscreen_disabled": "图像注册期间无法选择全屏模式。",
+    "warn_capture_fullscreen_title": "无法注册",
+    "warn_capture_fullscreen_text": "“全屏”模式不能用于图像注册（抓取）。",
+    "log_error_get_primary_screen_geo": "获取主屏幕几何信息失败：%s"
 }

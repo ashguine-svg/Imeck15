@@ -1,5 +1,5 @@
 {
-    "window_title": "Imeck15 v1.5.6.2 多言語版",
+    "window_title": "Imeck15 v1.5.6.3 多言語版",
     "monitor_button_start": "監視開始",
     "monitor_button_stop": "監視停止",
     "monitor_button_tooltip": "監視を開始します。<br>右ダブルクリックで停止<br>右トリプルクリックで開始",
@@ -401,5 +401,11 @@
     "error_title_cache_build_failed": "キャッシュ構築エラー",
     "error_message_cache_build_failed": "画像キャッシュの再構築に失敗しました。UIは安全のためロックされます。画像ファイルが破損していないか確認し、アプリを再起動してください。",
     "log_capture_while_monitoring": "監視中にキャプチャが要求されました。監視を停止します...",
-    "log_capture_proceed_after_stop": "監視を停止しました。キャプチャ処理を続行します。"
+    "log_capture_proceed_after_stop": "監視を停止しました。キャプチャ処理を続行します。",
+    "rec_area_dialog_fullscreen_button": "全画面",
+    "log_rec_area_set_fullscreen": "全画面認識を設定: %s",
+    "log_capture_area_fullscreen_disabled": "画像登録時に全画面モードは選択できません。",
+    "warn_capture_fullscreen_title": "登録不可",
+    "warn_capture_fullscreen_text": "画像登録（キャプチャ）に「全画面」モードは使用できません。",
+    "log_error_get_primary_screen_geo": "プライマリ画面の座標取得に失敗しました: %s"
 }

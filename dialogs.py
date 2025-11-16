@@ -11,25 +11,40 @@ from PySide6.QtCore import Qt, Signal, QTimer
 
 class RecAreaSelectionDialog(QDialog):
     selectionMade = Signal(str)
-    # ★★★ 1. __init__ に locale_manager を追加 ★★★
+    
     def __init__(self, locale_manager, parent=None):
         super().__init__(parent)
         self.locale_manager = locale_manager
         lm = self.locale_manager.tr
         
-        # ★★★ 2. UI文字列を翻訳キーに置き換え ★★★
         self.setWindowTitle(lm("rec_area_dialog_title"))
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Popup)
-        self.setFixedSize(200, 100)
+        
+        # --- ▼▼▼ 修正箇所 (レイアウトを縦並びに変更) ▼▼▼ ---
+        
+        # 1. サイズを縦長に変更
+        self.setFixedSize(150, 140) # 例: 幅 150, 高さ 140
+        
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel(lm("rec_area_dialog_prompt")))
-        button_layout = QHBoxLayout()
+        
+        # 2. QHBoxLayout から QVBoxLayout に変更
+        button_layout = QVBoxLayout() 
+        button_layout.setSpacing(6) # ボタン間のスペースを適宜設定
+        
         self.rect_button = QPushButton(lm("rec_area_dialog_rect_button"))
         self.rect_button.clicked.connect(lambda: self.on_select("rectangle"))
         button_layout.addWidget(self.rect_button)
+        
         self.window_button = QPushButton(lm("rec_area_dialog_window_button"))
         self.window_button.clicked.connect(lambda: self.on_select("window"))
         button_layout.addWidget(self.window_button)
+
+        self.fullscreen_button = QPushButton(lm("rec_area_dialog_fullscreen_button"))
+        self.fullscreen_button.clicked.connect(lambda: self.on_select("fullscreen"))
+        button_layout.addWidget(self.fullscreen_button)
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
+
         layout.addLayout(button_layout)
         
     def on_select(self, method):

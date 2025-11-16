@@ -1,5 +1,5 @@
 # matcher.py
-# ★★★ 色調厳格モードを (最小値) から (平均値) に変更 ★★★
+# ★★★ 色調厳格モードを (平均値) から (最小値) に戻す ★★★
 
 import cv2
 from PIL import Image
@@ -26,7 +26,7 @@ def calculate_phash(image):
         # 変換やハッシュ計算に失敗した場合
         return None
 
-# --- ▼▼▼ 修正箇所 (5.4) [cite: 58-67] ▼▼▼ ---
+# --- ▼▼▼ 修正箇所 (5.4) ▼▼▼ ---
 def _match_template_task(screen_image, template_image, template_data, screen_shape, template_shape, effective_strict_color: bool):
     """
     画面イメージとテンプレートイメージのマッチングを行うタスク。
@@ -48,6 +48,11 @@ def _match_template_task(screen_image, template_image, template_data, screen_sha
     scale = template_data['scale'] 
     
     threshold = settings.get('threshold', 0.8)
+
+    # --- ▼▼▼ 修正箇所 (閾値調整を削除) ▼▼▼ ---
+    # if effective_strict_color:
+    #     threshold = threshold * 0.9
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
     s_h, s_w = screen_shape
     t_h, t_w = template_shape
@@ -76,16 +81,18 @@ def _match_template_task(screen_image, template_image, template_data, screen_sha
             result_g = cv2.matchTemplate(s_g, t_g, cv2.TM_CCOEFF_NORMED)
             result_r = cv2.matchTemplate(s_r, t_r, cv2.TM_CCOEFF_NORMED)
             
-            # --- ▼▼▼ 修正箇所 (判定を「最小値」から「平均値」に変更) ▼▼▼ ---
-            # (旧) 最小値マップを作成 
-            # result_min = cv2.min(result_b, cv2.min(result_g, result_r))
-            # _, max_val, _, max_loc = cv2.minMaxLoc(result_min)
-
-            # (新) 平均値マップを作成 (Numpy配列として計算)
-            result_avg = (result_b + result_g + result_r) / 3.0
+            # --- ▼▼▼ 修正箇所 (判定を「平均値」から「最小値」に変更) ▼▼▼ ---
             
-            # 平均値マップから最大スコアを探す
-            _, max_val, _, max_loc = cv2.minMaxLoc(result_avg)
+            # (旧: 平均値マップ) 
+            # result_avg = (result_b + result_g + result_r) / 3.0
+            # _, max_val, _, max_loc = cv2.minMaxLoc(result_avg)
+
+            # (新: 最小値マップ) 
+            # 3つの結果マップのうち、すべてのチャンネルでスコアが高い場所を探す
+            result_min = cv2.min(result_b, cv2.min(result_g, result_r))
+            
+            # 最小値マップから最大スコアを探す
+            _, max_val, _, max_loc = cv2.minMaxLoc(result_min)
             # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
         else:

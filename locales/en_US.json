@@ -1,6 +1,6 @@
 {
     "language_name": "English (US)",
-    "window_title": "Imeck15 v1.5.6.2 Multilingual Edition",
+    "window_title": "Imeck15 v1.5.6.3 Multilingual Edition",
     "monitor_button_start": "Start Monitoring",
     "monitor_button_stop": "Stop Monitoring",
     "monitor_button_tooltip": "Start monitoring.<br>Right double-click to stop, Right triple-click to start",
@@ -379,5 +379,11 @@
     "error_title_cache_build_failed": "Cache Build Error",
     "error_message_cache_build_failed": "Failed to rebuild image cache. The UI will remain locked for safety. Please check for corrupted image files and restart the application.",
     "log_capture_while_monitoring": "Capture requested during monitoring. Stopping monitoring...",
-    "log_capture_proceed_after_stop": "Monitoring stopped. Proceeding with capture process."
+    "log_capture_proceed_after_stop": "Monitoring stopped. Proceeding with capture process.",
+    "rec_area_dialog_fullscreen_button": "Fullscreen",
+    "log_rec_area_set_fullscreen": "Fullscreen recognition area set: %s",
+    "log_capture_area_fullscreen_disabled": "Fullscreen mode cannot be selected during image registration.",
+    "warn_capture_fullscreen_title": "Registration Not Allowed",
+    "warn_capture_fullscreen_text": "Fullscreen mode cannot be used for image registration (capture).",
+    "log_error_get_primary_screen_geo": "Failed to get primary screen geometry: %s"
 }

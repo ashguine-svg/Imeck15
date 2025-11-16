@@ -35,12 +35,17 @@ class EnvironmentTracker:
         認識範囲が設定または変更されたときに CoreEngine から呼び出されます。
         
         Args:
-            method (str): 'rectangle' または 'window'
+            method (str): 'rectangle', 'window', 'fullscreen'
             title (str, optional): 'window' の場合のアプリ名
         """
         if method == "rectangle":
             self.recognition_area_app_title = None
             self.logger.log("[DEBUG] EnvironmentTracker: App title cleared (Rectangle mode).")
+        # --- ▼▼▼ 新規追加 (全画面モードの処理) ▼▼▼ ---
+        elif method == "fullscreen":
+            self.recognition_area_app_title = None
+            self.logger.log("[DEBUG] EnvironmentTracker: App title cleared (Fullscreen mode).")
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
         elif method == "window" and title:
             self.recognition_area_app_title = title
             self.logger.log(f"[DEBUG] EnvironmentTracker: App title set to '{title}'.")

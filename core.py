@@ -981,6 +981,14 @@ class CoreEngine(QObject):
                 self.logger.log("log_error_reinitialize_capture", str(e))
             finally:
                 self._is_reinitializing_display = False
+        
+        # --- ▼▼▼ 修正箇所 (前回追加した冒頭の fullscreen チェックを削除) ▼▼▼ ---
+        # (このブロック全体を削除)
+        # fullscreen_rect = None
+        # if method == "fullscreen":
+        # ...
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
+
 
         self.selectionProcessStarted.emit(); self.ui_manager.hide();
         
@@ -991,9 +999,7 @@ class CoreEngine(QObject):
         if method == "rectangle":
             if not self._is_capturing_for_registration: 
                 self.target_hwnd = None; self.current_window_scale = None; self.windowScaleCalculated.emit(0.0); self.logger.log("log_rec_area_set_rect")
-                
                 self.environment_tracker.on_rec_area_set("rectangle")
-                
             else: 
                 self.logger.log("log_capture_area_set_rect")
                 try:
@@ -1039,6 +1045,47 @@ class CoreEngine(QObject):
             self.window_selection_listener.start()
             self.keyboard_selection_listener = keyboard.Listener(on_press=self._on_key_press_for_selection)
             self.keyboard_selection_listener.start()
+
+        # --- ▼▼▼ 修正箇所 (fullscreen の処理を "正しい手順" に修正) ▼▼▼ ---
+        elif method == "fullscreen":
+            if self._is_capturing_for_registration:
+                # 「画像登録」時に「全画面」は選択できない (UIを復帰させる)
+                self.logger.log("log_capture_area_fullscreen_disabled") 
+                self._on_selection_cancelled() # UI復帰とリスナー再起動
+                QMessageBox.warning(
+                    self.ui_manager, 
+                    self.locale_manager.tr("warn_capture_fullscreen_title"), 
+                    self.locale_manager.tr("warn_capture_fullscreen_text")
+                )
+                return # 処理を終了
+            
+            try:
+                # プライマリモニターの座標を取得
+                screen = QApplication.primaryScreen()
+                if not screen:
+                    raise Exception("QApplication.primaryScreen() returned None")
+                
+                geo = screen.geometry()
+                fullscreen_rect = (geo.left(), geo.top(), geo.right() + 1, geo.bottom() + 1)
+                
+                # ログと環境トラッカーの設定 (windowモードと同様に)
+                self.logger.log("log_rec_area_set_fullscreen_internal") # 内部ログ (翻訳キー不要)
+                self.target_hwnd = None
+                self.current_window_scale = None
+                self.windowScaleCalculated.emit(0.0)
+                self.environment_tracker.on_rec_area_set("fullscreen")
+                self.appContextChanged.emit(None)
+                
+                # ★★★ 重要 ★★★
+                # 座標を直接セットするのではなく、
+                # 選択完了シグナルを発行して handle_area_selection を呼び出す
+                self._areaSelectedForProcessing.emit(fullscreen_rect)
+            
+            except Exception as e:
+                self.logger.log("log_error_get_primary_screen_geo", str(e))
+                self._on_selection_cancelled() # 失敗したらUI復帰
+                return
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
     def _on_selection_cancelled(self):
         self.logger.log("log_selection_cancelled"); self._is_capturing_for_registration = False

@@ -252,7 +252,6 @@ class CaptureManager(QObject):
                              return None 
                              
                     sct = self.mss_thread_local.sct
-                    # --- ▲▲▲ 修正完了 ▲▲▲ ---
                     
                     monitor_dict = None
                     if region:
@@ -266,9 +265,16 @@ class CaptureManager(QObject):
                             self.logger.log("log_mss_invalid_region")
                             return None
                     else:
-                        if len(sct.monitors) > 0:
-                            # 0番目 (sct.monitors[0]) は仮想デスクトップ全体
-                            monitor_dict = sct.monitors[0]
+                        # --- ▼▼▼ 修正箇所 (monitors[0] -> monitors[1]) ▼▼▼ ---
+                        # region=None の場合 (全画面指定)
+                        
+                        if len(sct.monitors) > 1:
+                            # monitors[1] (プライマリモニター) を使用
+                            monitor_dict = sct.monitors[1] 
+                        elif len(sct.monitors) == 1:
+                            # モニターが1台しかない場合 (monitors[0] しかない)
+                             monitor_dict = sct.monitors[0]
+                        # --- ▲▲▲ 修正完了 ▲▲▲ ---
                         else:
                             self.logger.log("log_mss_no_monitor")
                             return None

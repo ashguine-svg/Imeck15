@@ -1,6 +1,6 @@
 {
     "language_name": "Dansk",
-    "window_title": "Imeck15 v1.5.6.2 Flersproget udgave",
+    "window_title": "Imeck15 v1.5.6.3 Flersproget udgave",
     "monitor_button_start": "Start Overvågning",
     "monitor_button_stop": "Stop Overvågning",
     "monitor_button_tooltip": "Start overvågning.<br>Højre dobbeltklik for at stoppe, højre tredobbeltklik for at starte",
@@ -379,5 +379,11 @@
     "error_title_cache_build_failed": "Fejl ved opbygning af cache",
     "error_message_cache_build_failed": "Kunne ikke genopbygge billedcache. Brugergrænsefladen forbliver låst for en sikkerheds skyld. Kontrollér venligst for korrupte billedfiler og genstart applikationen.",
     "log_capture_while_monitoring": "Optagelse anmodet under overvågning. Stopper overvågning...",
-    "log_capture_proceed_after_stop": "Overvågning stoppet. Fortsætter med optagelsesprocessen."
+    "log_capture_proceed_after_stop": "Overvågning stoppet. Fortsætter med optagelsesprocessen.",
+    "rec_area_dialog_fullscreen_button": "Fuld skærm",
+    "log_rec_area_set_fullscreen": "Genkendelsesområde sat til Fuld skærm: %s",
+    "log_capture_area_fullscreen_disabled": "Fuld skærm-tilstand kan ikke vælges under billedregistrering.",
+    "warn_capture_fullscreen_title": "Registrering ikke tilladt",
+    "warn_capture_fullscreen_text": "Fuld skærm-tilstand kan ikke bruges til billedregistrering (optagelse).",
+    "log_error_get_primary_screen_geo": "Kunne ikke hente primær skærmgeometri: %s"
 }

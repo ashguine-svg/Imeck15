@@ -1,6 +1,6 @@
 {
     "language_name": "한국어",
-    "window_title": "Imeck15 v1.5.6.2 다국어 버전",
+    "window_title": "Imeck15 v1.5.6.3 다국어 버전",
     "monitor_button_start": "모니터링 시작",
     "monitor_button_stop": "모니터링 중지",
     "monitor_button_tooltip": "모니터링을 시작합니다.<br>마우스 오른쪽 더블클릭으로 중지, 오른쪽 트리플클릭으로 시작",
@@ -378,5 +378,11 @@
     "error_title_cache_build_failed": "캐시 빌드 오류",
     "error_message_cache_build_failed": "이미지 캐시를 다시 빌드하지 못했습니다. 안전을 위해 UI가 잠긴 상태로 유지됩니다. 손상된 이미지 파일이 있는지 확인하고 애플리케이션을 다시 시작하십시오.",
     "log_capture_while_monitoring": "모니터링 중 캡처가 요청되었습니다. 모니터링을 중지합니다...",
-    "log_capture_proceed_after_stop": "모니터링이 중지되었습니다. 캡처 프로세스를 계속합니다."
+    "log_capture_proceed_after_stop": "모니터링이 중지되었습니다. 캡처 프로세스를 계속합니다.",
+    "rec_area_dialog_fullscreen_button": "전체 화면",
+    "log_rec_area_set_fullscreen": "전체 화면 인식 영역 설정: %s",
+    "log_capture_area_fullscreen_disabled": "이미지 등록 중에는 전체 화면 모드를 선택할 수 없습니다.",
+    "warn_capture_fullscreen_title": "등록 불가",
+    "warn_capture_fullscreen_text": "이미지 등록(캡처)에 \"전체 화면\" 모드를 사용할 수 없습니다。",
+    "log_error_get_primary_screen_geo": "주 스크린의 좌표를 가져오는 데 실패했습니다: %s"
 }

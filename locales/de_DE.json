@@ -1,6 +1,6 @@
 {
     "language_name": "Deutsch (DE)",
-    "window_title": "Imeck15 v1.5.6.2 Mehrsprachige Ausgabe",
+    "window_title": "Imeck15 v1.5.6.3 Mehrsprachige Ausgabe",
     "monitor_button_start": "Überwachung starten",
     "monitor_button_stop": "Überwachung stoppen",
     "monitor_button_tooltip": "Überwachung starten.<br>Rechts-Doppelklick zum Stoppen, Rechts-Dreifachklick zum Starten",
@@ -377,5 +377,11 @@
     "error_title_cache_build_failed": "Cache-Erstellungsfehler",
     "error_message_cache_build_failed": "Der Image-Cache konnte nicht neu erstellt werden. Die Benutzeroberfläche bleibt aus Sicherheitsgründen gesperrt. Bitte prüfen Sie auf beschädigte Bilddateien und starten Sie die Anwendung neu.",
     "log_capture_while_monitoring": "Erfassung während der Überwachung angefordert. Überwachung wird gestoppt...",
-    "log_capture_proceed_after_stop": "Überwachung gestoppt. Fahre mit dem Erfassungsvorgang fort."
+    "log_capture_proceed_after_stop": "Überwachung gestoppt. Fahre mit dem Erfassungsvorgang fort.",
+    "rec_area_dialog_fullscreen_button": "Vollbild",
+    "log_rec_area_set_fullscreen": "Vollbild-Erkennungsbereich festgelegt: %s",
+    "log_capture_area_fullscreen_disabled": "Der Vollbildmodus kann während der Bildregistrierung nicht ausgewählt werden.",
+    "warn_capture_fullscreen_title": "Registrierung nicht zulässig",
+    "warn_capture_fullscreen_text": "Der \"Vollbild\"-Modus kann nicht für die Bildregistrierung (Erfassung) verwendet werden.",
+    "log_error_get_primary_screen_geo": "Geometrie des primären Bildschirms konnte nicht abgerufen werden: %s"
 }

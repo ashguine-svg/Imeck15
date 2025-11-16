@@ -1,6 +1,6 @@
 {
     "language_name": "Português (Brasil)",
-    "window_title": "Imeck15 v1.5.6.2 Edição Multilíngue",
+    "window_title": "Imeck15 v1.5.6.3 Edição Multilíngue",
     "monitor_button_start": "Iniciar Monitoramento",
     "monitor_button_stop": "Parar Monitoramento",
     "monitor_button_tooltip": "Iniciar monitoramento.<br>Clique duplo direito para parar, clique triplo direito para iniciar",
@@ -379,5 +379,11 @@
     "error_title_cache_build_failed": "Erro na Compilação do Cache",
     "error_message_cache_build_failed": "Falha ao reconstruir o cache de imagens. A interface do usuário permanecerá bloqueada por segurança. Verifique se há arquivos de imagem corrompidos e reinicie o aplicativo.",
     "log_capture_while_monitoring": "Captura solicitada durante o monitoramento. Parando o monitoramento...",
-    "log_capture_proceed_after_stop": "Monitoramento parado. Prosseguindo com o processo de captura."
+    "log_capture_proceed_after_stop": "Monitoramento parado. Prosseguindo com o processo de captura.",
+    "rec_area_dialog_fullscreen_button": "Tela cheia",
+    "log_rec_area_set_fullscreen": "Área de reconhecimento de Tela cheia definida: %s",
+    "log_capture_area_fullscreen_disabled": "O modo Tela cheia não pode ser selecionado durante o registro da imagem.",
+    "warn_capture_fullscreen_title": "Registro não permitido",
+    "warn_capture_fullscreen_text": "O modo \"Tela cheia\" não pode ser usado para registro (captura) de imagens.",
+    "log_error_get_primary_screen_geo": "Falha ao obter a geometria da tela principal: %s"
 }

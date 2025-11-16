@@ -1,6 +1,6 @@
 {
     "language_name": "हिन्दी (भारत)",
-    "window_title": "Imeck15 v1.5.6.2 बहुभाषी संस्करण",
+    "window_title": "Imeck15 v1.5.6.3 बहुभाषी संस्करण",
     "monitor_button_start": "निगरानी शुरू करें",
     "monitor_button_stop": "निगरानी बंद करें",
     "monitor_button_tooltip": "निगरानी शुरू करें।<br>बंद करने के लिए दायाँ डबल-क्लिक, शुरू करने के लिए दायाँ ट्रिपल-क्लिक",
@@ -378,5 +378,11 @@
     "error_title_cache_build_failed": "कैश निर्माण त्रुटि",
     "error_message_cache_build_failed": "छवि कैश के पुनर्निर्माण में विफल। सुरक्षा के लिए यूआई लॉक रहेगा। कृपया दूषित छवि फ़ाइलों की जांच करें और एप्लिकेशन को पुनरारंभ करें।",
     "log_capture_while_monitoring": "मॉनिटरिंग के दौरान कैप्चर का अनुरोध किया गया। मॉनिटरिंग रोकी जा रही है...",
-    "log_capture_proceed_after_stop": "मॉनिटरिंग रोक दी गई। कैप्चर प्रक्रिया जारी है।"
+    "log_capture_proceed_after_stop": "मॉनिटरिंग रोक दी गई। कैप्चर प्रक्रिया जारी है।",
+    "rec_area_dialog_fullscreen_button": "फ़ुलस्क्रीन",
+    "log_rec_area_set_fullscreen": "फ़ुलस्क्रीन पहचान क्षेत्र सेट: %s",
+    "log_capture_area_fullscreen_disabled": "छवि पंजीकरण के दौरान फ़ुलस्क्रीन मोड का चयन नहीं किया जा सकता है।",
+    "warn_capture_fullscreen_title": "पंजीकरण की अनुमति नहीं है",
+    "warn_capture_fullscreen_text": "छवि पंजीकरण (कैप्चर) के लिए \"फ़ुलस्क्रीन\" मोड का उपयोग नहीं किया जा सकता है।",
+    "log_error_get_primary_screen_geo": "प्राथमिक स्क्रीन ज्यामिति प्राप्त करने में विफल: %s"
 }
