@@ -1,6 +1,6 @@
 {
     "language_name": "हिन्दी (भारत)",
-    "window_title": "Imeck15 v1.5.6.3 बहुभाषी संस्करण",
+    "window_title": "Imeck15 v1.6.0.0 बहुभाषी संस्करण",
     "monitor_button_start": "निगरानी शुरू करें",
     "monitor_button_stop": "निगरानी बंद करें",
     "monitor_button_tooltip": "निगरानी शुरू करें।<br>बंद करने के लिए दायाँ डबल-क्लिक, शुरू करने के लिए दायाँ ट्रिपल-क्लिक",
@@ -34,9 +34,9 @@
     "auto_scale_center": "केंद्र:",
     "auto_scale_range": "रेंज (±):",
     "auto_scale_steps": "चरण:",
-    "auto_scale_info_default": "खोज: ---",
-    "auto_scale_info_searching": "खोज: %s ... %s",
-    "auto_scale_info_disabled": "अक्षम",
+    "auto_scale_info_default": "खोज रहा है: ---",
+    "auto_scale_info_searching": "खोज रहा है: %s ... %s",
+    "auto_scale_info_disabled": "निष्क्रिय",
     "auto_scale_best_scale_default": "इष्टतम स्केल: ---",
     "auto_scale_best_scale_found": "इष्टतम स्केल: %sx",
     "auto_scale_window_scale_found": "गणना किया गया स्केल: %sx",
@@ -384,5 +384,11 @@
     "log_capture_area_fullscreen_disabled": "छवि पंजीकरण के दौरान फ़ुलस्क्रीन मोड का चयन नहीं किया जा सकता है।",
     "warn_capture_fullscreen_title": "पंजीकरण की अनुमति नहीं है",
     "warn_capture_fullscreen_text": "छवि पंजीकरण (कैप्चर) के लिए \"फ़ुलस्क्रीन\" मोड का उपयोग नहीं किया जा सकता है।",
-    "log_error_get_primary_screen_geo": "प्राथमिक स्क्रीन ज्यामिति प्राप्त करने में विफल: %s"
+    "log_error_get_primary_screen_geo": "प्राथमिक स्क्रीन ज्यामिति प्राप्त करने में विफल: %s",
+    "folder_dialog_radio_cooldown": "हिट होने पर कूलडाउन",
+    "folder_dialog_group_cooldown": "हिट होने पर कूलडाउन सेटिंग्स",
+    "folder_dialog_cooldown_time": "क्लिक के बाद रुकने का समय:",
+    "folder_dialog_tooltip_cooldown": "<b>हिट होने पर कूलडाउन मोड विवरण:</b><br>यदि इस फ़ोल्डर में <b>किसी भी एक छवि</b> पर क्लिक किया जाता है; तो पूरा फ़ोल्डर निर्धारित समय के लिए <b>खोज से अक्षम (अनदेखा)</b> हो जाएगा।<br>इसका उपयोग तब करें जब एक कार्रवाई के बाद समूह की कुछ समय के लिए आवश्यकता न हो।",
+    "log_folder_cooldown_started": "फ़ोल्डर '%s' के लिए कूलडाउन शुरू हुआ (%s सेकंड)",
+    "auto_scale_search_desc": "<b>स्वचालित बहु-स्केल खोज:</b><br>तब उपयोग करें जब पंजीकृत छवि का आकार वास्तविक लक्ष्य से थोड़ा भिन्न हो (उदाहरण के लिए, फ़ॉन्ट रेंडरिंग अंतर)।<br>\"केंद्र\" स्केल से \"रेंज (±)\" तक की सीमा को \"चरण\" में विभाजित करके खोजता है।<br>*चरणों को बढ़ाने से CPU लोड बढ़ जाएगा।"
 }

@@ -19,18 +19,13 @@ class RecAreaSelectionDialog(QDialog):
         
         self.setWindowTitle(lm("rec_area_dialog_title"))
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Popup)
-        
-        # --- ▼▼▼ 修正箇所 (レイアウトを縦並びに変更) ▼▼▼ ---
-        
-        # 1. サイズを縦長に変更
-        self.setFixedSize(150, 140) # 例: 幅 150, 高さ 140
+        self.setFixedSize(150, 140)
         
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel(lm("rec_area_dialog_prompt")))
         
-        # 2. QHBoxLayout から QVBoxLayout に変更
         button_layout = QVBoxLayout() 
-        button_layout.setSpacing(6) # ボタン間のスペースを適宜設定
+        button_layout.setSpacing(6)
         
         self.rect_button = QPushButton(lm("rec_area_dialog_rect_button"))
         self.rect_button.clicked.connect(lambda: self.on_select("rectangle"))
@@ -43,7 +38,6 @@ class RecAreaSelectionDialog(QDialog):
         self.fullscreen_button = QPushButton(lm("rec_area_dialog_fullscreen_button"))
         self.fullscreen_button.clicked.connect(lambda: self.on_select("fullscreen"))
         button_layout.addWidget(self.fullscreen_button)
-        # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
         layout.addLayout(button_layout)
         
@@ -56,36 +50,56 @@ class RecAreaSelectionDialog(QDialog):
 
 
 class FolderSettingsDialog(QDialog):
-    # ★★★ 3. __init__ に locale_manager を追加 ★★★
-    def __init__(self, folder_name, current_settings, locale_manager, parent=None):
+    def __init__(self, folder_name, current_settings, locale_manager, is_root=True, parent=None):
         super().__init__(parent)
         self.locale_manager = locale_manager
         lm = self.locale_manager.tr
         
-        # ★★★ 4. UI文字列を翻訳キーに置き換え ★★★
         self.setWindowTitle(lm("folder_dialog_title", folder_name))
         self.layout = QVBoxLayout(self)
 
+        # --- モード選択 ---
         mode_box = QGroupBox(lm("folder_dialog_group_mode"))
         mode_layout = QVBoxLayout()
         self.radio_normal = QRadioButton(lm("folder_dialog_radio_normal"))
         self.radio_excluded = QRadioButton(lm("folder_dialog_radio_excluded"))
+        self.radio_cooldown = QRadioButton(lm("folder_dialog_radio_cooldown")) # ★追加
         self.radio_priority_image = QRadioButton(lm("folder_dialog_radio_priority_image"))
         self.radio_priority_timer = QRadioButton(lm("folder_dialog_radio_priority_timer"))
+        
+        # ルートでない場合はタイマー優先を無効化
+        if not is_root:
+            self.radio_priority_timer.setEnabled(False)
+            if current_settings.get('mode') == 'priority_timer':
+                current_settings['mode'] = 'normal'
         
         self.mode_group = QButtonGroup(self)
         self.mode_group.addButton(self.radio_normal, 0)
         self.mode_group.addButton(self.radio_excluded, 1)
-        self.mode_group.addButton(self.radio_priority_image, 2)
-        self.mode_group.addButton(self.radio_priority_timer, 3)
+        self.mode_group.addButton(self.radio_cooldown, 2) # ★ID 2を使用
+        self.mode_group.addButton(self.radio_priority_image, 3)
+        self.mode_group.addButton(self.radio_priority_timer, 4)
         
         mode_layout.addWidget(self.radio_normal)
         mode_layout.addWidget(self.radio_excluded)
+        mode_layout.addWidget(self.radio_cooldown) # ★追加
         mode_layout.addWidget(self.radio_priority_image)
         mode_layout.addWidget(self.radio_priority_timer)
         mode_box.setLayout(mode_layout)
         self.layout.addWidget(mode_box)
         
+        # --- クールダウン設定 (新規) ---
+        self.cooldown_box = QGroupBox(lm("folder_dialog_group_cooldown"))
+        cooldown_layout = QGridLayout()
+        cooldown_layout.addWidget(QLabel(lm("folder_dialog_cooldown_time")), 0, 0)
+        self.cooldown_time_spin = QSpinBox()
+        self.cooldown_time_spin.setRange(1, 3600) # 最大1時間
+        self.cooldown_time_spin.setSuffix(lm("folder_dialog_suffix_seconds"))
+        cooldown_layout.addWidget(self.cooldown_time_spin, 0, 1)
+        self.cooldown_box.setLayout(cooldown_layout)
+        self.layout.addWidget(self.cooldown_box)
+
+        # --- 画像優先設定 ---
         self.image_priority_box = QGroupBox(lm("folder_dialog_group_image"))
         image_priority_layout = QGridLayout()
         image_priority_layout.addWidget(QLabel(lm("folder_dialog_image_timeout")), 0, 0)
@@ -96,6 +110,7 @@ class FolderSettingsDialog(QDialog):
         self.image_priority_box.setLayout(image_priority_layout)
         self.layout.addWidget(self.image_priority_box)
 
+        # --- タイマー優先設定 ---
         self.timer_priority_box = QGroupBox(lm("folder_dialog_group_timer"))
         timer_layout = QGridLayout()
         timer_layout.addWidget(QLabel(lm("folder_dialog_timer_interval")), 0, 0)
@@ -112,9 +127,18 @@ class FolderSettingsDialog(QDialog):
         self.timer_priority_box.setLayout(timer_layout)
         self.layout.addWidget(self.timer_priority_box)
 
+        # --- 表示制御 ---
+        self.radio_cooldown.toggled.connect(self.cooldown_box.setEnabled)
         self.radio_priority_image.toggled.connect(self.image_priority_box.setEnabled)
         self.radio_priority_timer.toggled.connect(self.timer_priority_box.setEnabled)
         
+        # --- ツールチップ ---
+        cooldown_tooltip = lm("folder_dialog_tooltip_cooldown")
+        self.radio_cooldown.setToolTip(cooldown_tooltip)
+        self.cooldown_box.setToolTip(cooldown_tooltip)
+        self.radio_cooldown.setToolTipDuration(-1)
+        self.cooldown_box.setToolTipDuration(-1)
+
         image_tooltip = lm("folder_dialog_tooltip_image")
         self.radio_priority_image.setToolTip(image_tooltip)
         self.image_priority_box.setToolTip(image_tooltip)
@@ -127,7 +151,6 @@ class FolderSettingsDialog(QDialog):
         self.radio_priority_timer.setToolTipDuration(-1)
         self.timer_priority_box.setToolTipDuration(-1)
 
-
         self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         self.buttons.accepted.connect(self.accept)
         self.buttons.rejected.connect(self.reject)
@@ -139,6 +162,8 @@ class FolderSettingsDialog(QDialog):
         mode = settings.get('mode', 'normal')
         if mode == 'excluded':
             self.radio_excluded.setChecked(True)
+        elif mode == 'cooldown': # ★追加
+            self.radio_cooldown.setChecked(True)
         elif mode == 'priority_image':
             self.radio_priority_image.setChecked(True)
         elif mode == 'priority_timer':
@@ -146,10 +171,13 @@ class FolderSettingsDialog(QDialog):
         else:
             self.radio_normal.setChecked(True)
         
+        self.cooldown_time_spin.setValue(settings.get('cooldown_time', 30)) # ★追加
         self.priority_image_timeout_spin.setValue(settings.get('priority_image_timeout', 10))
         self.interval_spin.setValue(settings.get('priority_interval', 10))
         self.timeout_spin.setValue(settings.get('priority_timeout', 5))
         
+        # 初期状態の有効/無効設定
+        self.cooldown_box.setEnabled(mode == 'cooldown')
         self.image_priority_box.setEnabled(mode == 'priority_image')
         self.timer_priority_box.setEnabled(mode == 'priority_timer')
 
@@ -159,12 +187,15 @@ class FolderSettingsDialog(QDialog):
         if mode_id == 1:
             mode = 'excluded'
         elif mode_id == 2:
-            mode = 'priority_image'
+            mode = 'cooldown' # ★追加
         elif mode_id == 3:
+            mode = 'priority_image'
+        elif mode_id == 4:
             mode = 'priority_timer'
             
         return {
             'mode': mode,
+            'cooldown_time': self.cooldown_time_spin.value(), # ★追加
             'priority_image_timeout': self.priority_image_timeout_spin.value(),
             'priority_interval': self.interval_spin.value(),
             'priority_timeout': self.timeout_spin.value()
@@ -172,11 +203,6 @@ class FolderSettingsDialog(QDialog):
 
 
 class InitializationDialog(QDialog):
-    """
-    Linux環境でのUIフリーズ問題を回避するため、起動時に一時的に表示されるモーダルダイアログ。
-    このダイアログの表示中に、UI操作をシミュレートしてOpenCLの再初期化を行う。
-    """
-    # ★★★ 5. __init__ に locale_manager を追加 ★★★
     def __init__(self, core_engine, logger, locale_manager, parent=None):
         super().__init__(parent)
         self.core_engine = core_engine
@@ -184,7 +210,6 @@ class InitializationDialog(QDialog):
         self.locale_manager = locale_manager
         lm = self.locale_manager.tr
         
-        # ★★★ 6. UI文字列を翻訳キーに置き換え ★★★
         self.setWindowTitle(lm("init_dialog_title"))
         self.setModal(True)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Dialog)
@@ -200,9 +225,6 @@ class InitializationDialog(QDialog):
         QTimer.singleShot(50, self.apply_workaround_and_close)
 
     def apply_workaround_and_close(self):
-        """
-        UI上のOpenCLチェックボックスのON/OFFをシミュレートし、ダイアログを閉じる。
-        """
         if sys.platform == 'win32':
             QTimer.singleShot(50, self.accept)
             return
@@ -210,7 +232,6 @@ class InitializationDialog(QDialog):
         try:
             ui_manager = self.parent()
             if not ui_manager:
-                # ★★★ 7. ログを翻訳キーに置き換え ★★★
                 self.logger.log("log_linux_workaround_error_manager")
                 QTimer.singleShot(50, self.accept)
                 return

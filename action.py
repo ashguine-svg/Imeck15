@@ -107,43 +107,47 @@ class ActionManager:
     # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
     # --- ▼▼▼ (改良 1.3) execute_click を修正 ▼▼▼ ---
-    def execute_click(self, match_info, recognition_area, target_hwnd, effective_capture_scale):
+    def execute_click(self, match_info, recognition_area, target_hwnd, effective_capture_scale, window_scale=1.0):
         """
         マッチング情報に基づいてクリックを実行します。
-
-        Args:
-            match_info (dict): _find_best_matchから得られるマッチング結果。
-            recognition_area (tuple): (x1, y1, x2, y2) の形式の認識エリア座標。
-            target_hwnd (int): 操作対象のウィンドウハンドル (Windowsのみ)。
-            effective_capture_scale (float): 軽量化モードなどで適用されているキャプチャのスケール。
-
-        Returns:
-            dict: クリックが成功したかどうかと関連情報を含む辞書。
-                  例: {'success': True, 'path': '/path/to/image.png'}
+        自動マルチスケール探索の倍率は無視し、基本スケール(capture * window)のみを適用します。
+        また、可変ROIの場合も正しいオフセットを取得するように修正されています。
         """
         
-        # ▼▼▼ 変更箇所 ▼▼▼
         is_active = self._activate_window(target_hwnd)
         if not is_active:
-            # アクティブ化に失敗した場合、入力ブロックを解除して即時終了
-            # (block_input(True) の前に呼ばれるため、解除は不要)
             return {'success': False, 'path': match_info.get('path', 'Unknown')}
-        # ▲▲▲ 変更完了 ▲▲▲
 
         block_input(True)
         try:
             settings = match_info['settings']
             match_rect_in_rec_area = match_info['rect']
-            scale = match_info.get('scale', 1.0)
             path = Path(match_info['path'])
+            
+            # --- ▼▼▼ 修正: マルチスケール倍率を無視し、基本スケールを使用する ▼▼▼ ---
+            # match_info['scale'] には探索時の倍率が含まれているため、
+            # クリック位置の補正計算には「基本スケール（キャプチャ倍率×ウィンドウ倍率）」を使用します。
+            base_scale = effective_capture_scale * (window_scale if window_scale else 1.0)
+            scale = base_scale 
+            # --- ▲▲▲ 修正完了 ▲▲▲ ---
             
             rec_area_offset_x, rec_area_offset_y = (recognition_area[0], recognition_area[1]) if recognition_area else (0, 0)
             
+            # --- ▼▼▼ 修正: 可変ROI/固定ROIの両方に対応したオフセット取得 ▼▼▼ ---
             roi_offset_x, roi_offset_y = 0, 0
-            if settings.get('roi_enabled') and settings.get('roi_rect'):
-                roi_rect = settings['roi_rect']
-                roi_offset_x = max(0, roi_rect[0])
-                roi_offset_y = max(0, roi_rect[1])
+            if settings.get('roi_enabled'):
+                roi_mode = settings.get('roi_mode', 'fixed')
+                roi_rect = None
+                
+                if roi_mode == 'variable':
+                    roi_rect = settings.get('roi_rect_variable')
+                else:
+                    roi_rect = settings.get('roi_rect')
+                
+                if roi_rect:
+                    roi_offset_x = max(0, roi_rect[0])
+                    roi_offset_y = max(0, roi_rect[1])
+            # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
             click_offset_x_scaled = 0.0
             click_offset_y_scaled = 0.0
@@ -187,26 +191,17 @@ class ActionManager:
             final_click_y = int(click_y_float)
             
             if not (1 <= final_click_x < screen_width - 1 and 1 <= final_click_y < screen_height - 1):
-                # ★★★ 6. self.logger.log に変更 (翻訳キー使用) ★★★
                 self.logger.log("log_warn_click_out_of_bounds", final_click_x, final_click_y)
                 return {'success': False, 'path': str(path)}
             
             try:
                 pyautogui.click(final_click_x, final_click_y)
                 
-                # ★★★ 7. self.logger.log に変更 (翻訳キー使用) - 最終修正案 ★★★
-                
-                # 1. log_click_success_scale の翻訳文字列を取得
-                # JSONファイルに手を加えないため、この時点で完全な文字列に組み立てる。
                 scale_suffix = self.logger.locale_manager.tr(
                     "log_click_success_scale", 
                     f"{match_info.get('scale', 1.0):.3f}"
                 )
                 
-                # 2. log_click_success_full (または log_click_success) の翻訳結果を取得し、スケール情報を結合する
-                # log_click_success_full が5つの %s を持つという既存の仮定を基に、引数を渡す。
-                
-                # まず、基本のメッセージ（スケールなし）を log_click_success を使って生成（4つの引数）
                 base_message_part = self.logger.locale_manager.tr(
                     "log_click_success",
                     path.name,
@@ -215,10 +210,6 @@ class ActionManager:
                     f"{match_info['confidence']:.2f}"
                 )
                 
-                # 3. 完成した文字列を Logger に渡す（引数なし）
-                # base_message_part が既に完全な文字列（スケールなし）であることを利用し、
-                # それにスケール情報を直接結合して Logger に渡す。
-                
                 final_message = base_message_part + scale_suffix
                 
                 self.logger.log(final_message)
@@ -226,14 +217,11 @@ class ActionManager:
                 return {'success': True, 'path': str(path)}
 
             except pyautogui.FailSafeException:
-                # ★★★ 8. self.logger.log に変更 (翻訳キー使用) ★★★
                 self.logger.log("log_pyautogui_failsafe")
                 return {'success': False, 'path': str(path)}
 
         except Exception as e:
-            # ★★★ 9. self.logger.log に変更 (翻訳キー使用) ★★★
             self.logger.log("log_click_error", str(e))
             return {'success': False, 'path': match_info.get('path', 'Unknown')}
         finally:
             block_input(False)
-    # --- ▲▲▲ 修正完了 ▲▲▲ ---

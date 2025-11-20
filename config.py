@@ -1,13 +1,13 @@
 # config.py
+# ★★★ (修正) _get_recursive_list で順序リストのパスとファイル名の照合不一致を修正 ★★★
 
 import json
 import shutil
 from pathlib import Path
 import os
-import threading # ★ 1. threading をインポート
+import threading
 
 class ConfigManager:
-    # ★★★ 1. __init__ で logger を受け取る ★★★
     def __init__(self, logger, base_dir_name: str = "click_pic"):
         self.logger = logger # Loggerインスタンスを保持
         self.base_dir = Path.home() / base_dir_name
@@ -18,7 +18,7 @@ class ConfigManager:
         self.app_config_path = self.base_dir / "app_config.json"
         self.window_scales_path = self.base_dir / "window_scales.json"
 
-        # ★ 2. ロック機構の初期化
+        # ロック機構の初期化
         # JSONファイルごとの書き込み競合を防ぐためのロック辞書
         self.item_json_locks = {}
         # ロック辞書にアクセスするための共通ロック
@@ -40,7 +40,6 @@ class ConfigManager:
         
         image_extensions = ['.png', '.jpg', '.jpeg', '.bmp']
 
-        # ★★★ 2. print を self.logger.log に変更 (翻訳キー使用) ★★★
         self.logger.log("log_cleanup_start")
         cleaned_count = 0
         try:
@@ -77,31 +76,25 @@ class ConfigManager:
     def load_app_config(self) -> dict:
         default_config = {
             "auto_scale": {
-                # --- ▼▼▼ 修正箇所 (4行削除) ▼▼▼ ---
-                # "enabled": False,
-                # "center": 1.0,
-                # "range": 0.2,
-                # "steps": 5,
-                # --- ▲▲▲ 修正完了 ▲▲▲ ---
                 "use_window_scale": True,
+                "enabled": False,
+                "center": 1.0,
+                "range": 0.2,
+                "steps": 5
             },
             "capture_method": "mss",
             "frame_skip_rate": 2,
             "grayscale_matching": False,
             "strict_color_matching": False, 
-            # --- ▼▼▼ 修正箇所 1/2 ▼▼▼ ---
-            "use_opencl": False, # ★ ご要望に基づき False に変更
-            # --- ▲▲▲ 修正完了 ▲▲▲ ---
+            "use_opencl": False, 
             "lightweight_mode": {
                 "enabled": True,
                 "preset": "標準"
             },
-            # --- ▼▼▼ 修正箇所 2/2 ▼▼▼ ---
             "screen_stability_check": {
-                "enabled": False, # ★ ご要望に基づき False に変更
+                "enabled": False,
                 "threshold": 8
             },
-            # --- ▲▲▲ 修正完了 ▲▲▲ ---
             "eco_mode": {
                 "enabled": True
             },
@@ -123,7 +116,6 @@ class ConfigManager:
                                    config[key][sub_key] = sub_value
                 return config
         except (json.JSONDecodeError, Exception) as e:
-            # ★★★ 4. print を self.logger.log に変更 (翻訳キー使用) ★★★
             self.logger.log("log_app_config_load_error", str(e))
             return default_config
 
@@ -132,7 +124,6 @@ class ConfigManager:
             with open(self.app_config_path, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            # ★★★ 5. print を self.logger.log に変更 (翻訳キー使用) ★★★
             self.logger.log("log_app_config_save_error", str(e))
 
     def load_window_scales(self) -> dict:
@@ -142,7 +133,6 @@ class ConfigManager:
             with open(self.window_scales_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except (json.JSONDecodeError, Exception) as e:
-            # ★★★ 6. print を self.logger.log に変更 (翻訳キー使用) ★★★
             self.logger.log("log_window_scales_load_error", str(e))
             return {}
 
@@ -151,34 +141,22 @@ class ConfigManager:
             with open(self.window_scales_path, 'w', encoding='utf-8') as f:
                 json.dump(scales_data, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            # ★★★ 7. print を self.logger.log に変更 (翻訳キー使用) ★★★
             self.logger.log("log_window_scales_save_error", str(e))
 
-    # ★ 3. ロック取得用ヘルパーメソッド (RLock に修正)
     def _get_item_json_lock(self, json_path: Path) -> threading.Lock:
         """指定されたJSONパスに対応するロックを取得または生成します。"""
         with self.item_json_locks_lock:
-            # str(json_path) をキーにすることで、異なるPathオブジェクトでも
-            # 同じファイルパスなら同じロックを共有できるようにする
             path_key = str(json_path)
             if path_key not in self.item_json_locks:
-                # ★★★ 修正: Lock から RLock (再入可能ロック) に変更 ★★★
                 self.item_json_locks[path_key] = threading.RLock()
             return self.item_json_locks[path_key]
 
-    # --- ▼▼▼ (新規追加) フィルタリング用ヘルパーメソッド ▼▼▼ ---
     def _filter_item_by_app(self, item_settings: dict, current_app_name: str) -> bool:
-        """
-        (新規) アイテムの設定と現在のアプリ名に基づき、
-        そのアイテムを採用するかどうかを決定します。
-        """
-        # アプリ名が指定されていない場合 (全表示モード) は常に採用
         if not current_app_name:
             return True
 
         env_list = item_settings.get("environment_info", [])
 
-        # 1. 環境情報が記録されていない場合は「共通」とみなし採用
         if not env_list:
             return True
 
@@ -191,32 +169,26 @@ class ConfigManager:
                 has_any_app_name = True
                 if app_name == current_app_name:
                     has_matching_app = True
-                    break # 一致するものを発見
+                    break 
         
-        # 2. 一致するアプリ名が見つかった場合は採用
         if has_matching_app:
             return True
         
-        # 3. アプリ名が記録されているが、一致するものがない場合は不採用
         if has_any_app_name and not has_matching_app:
             return False
 
-        # 4. アプリ名が一切記録されていない (app_name: None や 解像度のみ) 場合は採用
         return True
-    # --- ▲▲▲ (新規追加) フィルタリング用ヘルパーメソッド ▲▲▲ ---
 
     def _get_setting_path(self, item_path: Path) -> Path:
         if item_path.is_dir():
             return item_path / self.folder_config_filename
         return item_path.with_suffix('.json')
 
-    # ★ 4. load_item_setting にロックを追加
     def load_item_setting(self, item_path: Path) -> dict:
         setting_path = self._get_setting_path(item_path)
-        # 対応するファイルロックを取得
         file_lock = self._get_item_json_lock(setting_path)
 
-        with file_lock: # ロックを取得してファイル操作
+        with file_lock: 
             if item_path.is_dir():
                 default_setting = {
                     'mode': 'normal',
@@ -265,22 +237,18 @@ class ConfigManager:
                     setting.setdefault(key, value)
                 return setting
             except (json.JSONDecodeError, Exception) as e:
-                # ★★★ 8. print を self.logger.log に変更 (翻訳キー使用) ★★★
                 self.logger.log("log_item_setting_load_error", str(setting_path), str(e))
                 return default_setting
 
-    # ★ 5. save_item_setting にロックを追加
     def save_item_setting(self, item_path: Path, setting: dict):
         setting_path = self._get_setting_path(item_path)
-        # 対応するファイルロックを取得
         file_lock = self._get_item_json_lock(setting_path)
 
-        with file_lock: # ロックを取得してファイル操作
+        with file_lock:
             try:
                 with open(setting_path, 'w', encoding='utf-8') as f:
                     json.dump(setting, f, indent=2, ensure_ascii=False)
             except Exception as e:
-                # ★★★ 9. print を self.logger.log に変更 (翻訳キー使用) ★★★
                 self.logger.log("log_item_setting_save_error", str(setting_path), str(e))
 
     def load_image_order(self, folder_path=None) -> list:
@@ -302,20 +270,16 @@ class ConfigManager:
         (ワーカースレッド) UIスレッドから渡された順序データでJSONファイルを上書きします。
         """
         try:
-            # 1. トップレベルの順序を保存
             top_level_order = data_to_save.get('top_level', [])
             self.save_image_order(top_level_order, folder_path=None)
             
-            # 2. 各フォルダの順序を保存
             folder_data_map = data_to_save.get('folders', {})
             for folder_path_str, child_order_filenames in folder_data_map.items():
                 self.save_image_order(child_order_filenames, folder_path_str)
         
         except Exception as e:
-            # このログは core.py の _save_order_and_rebuild_async の
-            # except ブロックでキャッチされます。
             self.logger.log("log_error_save_order_data", str(e))
-            raise # エラーを呼び出し元に伝播させます
+            raise
 
     def add_item(self, item_path: Path):
         target_path = self.base_dir / item_path.name
@@ -356,53 +320,37 @@ class ConfigManager:
                 self.save_image_order(order, order_file_owner)
 
         except Exception as e:
-            # ★★★ 10. print を self.logger.log に変更 (翻訳キー使用) ★★★
             self.logger.log("log_item_delete_error", str(e))
             raise
 
-    # --- 修正箇所A (rename_item メソッドの翻訳キーを修正) ---
     def rename_item(self, item_path_str: str, new_name: str):
-        """
-        ファイルまたはフォルダの名前を変更し、関連する設定ファイルと順序リストも更新します。
-        (クロスプラットフォーム対応)
-        """
         try:
-            # 1. パスの検証と準備
             if not item_path_str or not new_name:
-                # ★ 修正: log_rename_item_error_empty -> log_rename_error_empty
                 return False, self.logger.locale_manager.tr("log_rename_error_empty")
             
-            # OS依存の禁止文字チェック (簡易版)
             if any(char in new_name for char in '/\\:*?"<>|'):
-                 # ★ 修正: log_rename_item_error_invalid_chars -> log_rename_error_general (汎用キー)
                  return False, self.logger.locale_manager.tr("log_rename_error_general", "Invalid characters in name")
 
             source_path = Path(item_path_str)
             if not source_path.exists():
                 return False, self.logger.locale_manager.tr("log_move_item_error_not_exists")
 
-            # 2. 新しいパスの決定と衝突確認
             dest_path = source_path.with_name(new_name)
             if dest_path.exists():
-                # ★ 修正: log_move_item_error_exists -> log_rename_error_exists (JSONに合わせる)
                 return False, self.logger.locale_manager.tr("log_rename_error_exists", new_name)
 
             source_json_path = self._get_setting_path(source_path)
             dest_json_path = self._get_setting_path(dest_path)
 
-            # 3. 物理ファイル/フォルダのリネーム
             source_path.rename(dest_path)
 
-            # 4. JSON設定のリネーム (存在する場合)
             if source_json_path.exists():
                 source_json_path.rename(dest_json_path)
 
-            # 5. 親の順序リストを更新
             parent_dir = source_path.parent
             order_file_owner = parent_dir if parent_dir != self.base_dir else None
             order = self.load_image_order(order_file_owner)
 
-            # 順序リスト内のキー (トップレベルはフルパス、フォルダ内はファイル名)
             item_key_source = str(source_path) if order_file_owner is None else source_path.name
             item_key_dest = str(dest_path) if order_file_owner is None else dest_path.name
 
@@ -411,60 +359,42 @@ class ConfigManager:
                 order[index] = item_key_dest
                 self.save_image_order(order, order_file_owner)
             
-            # ★ 修正: log_rename_item_success -> log_rename_success
             return True, self.logger.locale_manager.tr("log_rename_success", source_path.name, dest_path.name)
         
         except Exception as e:
-            # ★ 修正: log_rename_item_error_general -> log_rename_error_general
             return False, self.logger.locale_manager.tr("log_rename_error_general", str(e))
     
-    # ★ 6. 環境情報更新メソッド (RLock で保護するよう修正)
     def update_environment_info(self, item_path_str: str, env_data: dict):
-        """
-        (ワーカースレッドから実行)
-        指定されたアイテムのJSONを安全に読み込み、
-        新しい環境情報 (env_data) が既存でなければ追加して保存します。
-        """
         if not item_path_str:
             return
             
         try:
             item_path = Path(item_path_str)
             
-            # ★★★ 修正箇所 1/2: 先にロックを取得する ★★★
             setting_path = self._get_setting_path(item_path)
             file_lock = self._get_item_json_lock(setting_path)
 
-            with file_lock: # ★★★ 修正箇所 2/2: メソッド全体をロックする ★★★
-                # 1. 既存の設定を安全に読み込む (RLockなのでデッドロックしない)
+            with file_lock:
                 current_settings = self.load_item_setting(item_path)
                 
-                # 2. environment_info リストを取得 (なければ新規作成)
                 env_list = current_settings.get("environment_info", [])
                 
-                # 3. 重複チェック
                 is_duplicate = False
                 for existing_env in env_list:
-                    # env_data の内容が完全に一致するかチェック
                     if existing_env == env_data:
                         is_duplicate = True
                         break
                 
-                # 4. 重複がなければ追加
                 if not is_duplicate:
                     env_list.append(env_data)
                     current_settings["environment_info"] = env_list
                     
-                    # 5. 設定を安全に保存する (RLockなのでデッドロックしない)
                     self.save_item_setting(item_path, current_settings)
                     self.logger.log("[DEBUG] Environment info updated for %s", item_path.name)
-                # else:
-                    # self.logger.log("[DEBUG] Environment info already exists for %s", item_path.name)
 
         except Exception as e:
             self.logger.log("[ERROR] Failed to update environment info for %s: %s", item_path_str, str(e))
 
-    # --- 修正箇所B (get_ordered_item_list を完全なコードに置き換え) ---
     def get_ordered_item_list(self) -> list:
         ordered_paths_str = self.load_image_order()
         try:
@@ -482,98 +412,99 @@ class ConfigManager:
         if final_order != ordered_paths_str:
             self.save_image_order(final_order)
         
-        # ★★★ 'None' ではなく、必ずリスト [Path(p)] を返すようにします ★★★
         return [Path(p) for p in final_order]
-    # --- 修正完了 ---
 
-    # --- ▼▼▼ (修正) フィルタリング対応の get_hierarchical_list ▼▼▼ ---
-    def get_hierarchical_list(self, current_app_name: str = None):
+    # --- ▼▼▼ 修正: 再帰的なリスト取得メソッドのバグ修正 ▼▼▼ ---
+    def _get_recursive_list(self, current_dir: Path, current_app_name: str = None):
+        """
+        指定されたディレクトリ以下のアイテムを再帰的に取得して
+        階層構造のリストを作成するヘルパーメソッド。
+        ★ 修正: ordered_names がフルパス(str)の場合とファイル名(str)の場合の両方に対応。
+        """
         structured_list = []
         
-        # get_ordered_item_list は変更不要 (ソートされた全パスを取得)
-        for item_path in self.get_ordered_item_list(): 
+        # 1. 現在のディレクトリ内の順序を読み込む
+        order_file_arg = current_dir if current_dir != self.base_dir else None
+        ordered_names = self.load_image_order(order_file_arg)
+        
+        # 2. 現在のディレクトリ内の実際のファイル・フォルダ一覧を取得
+        try:
+            all_items_on_disk = {
+                p for p in current_dir.iterdir() 
+                if p.is_dir() or (p.is_file() and p.suffix.lower() in ('.png', '.jpg', '.jpeg', '.bmp'))
+            }
+        except FileNotFoundError:
+            all_items_on_disk = set()
+
+        all_names_on_disk = {p.name for p in all_items_on_disk}
+        
+        final_order_names = []
+        
+        # 3. 順序リストに従って並べ替え (★ ここを修正)
+        for raw_name in ordered_names:
+            # JSONに記録されているのがフルパスの場合でもファイル名を取り出す
+            name = Path(raw_name).name
             
-            # ★ フィルタリングのために設定を先に読み込む
+            if name in all_names_on_disk:
+                final_order_names.append(name)
+                all_names_on_disk.remove(name)
+        
+        # 4. 順序リストにないアイテム（新規追加など）を末尾に追加
+        if all_names_on_disk:
+            new_names_sorted = sorted(list(all_names_on_disk))
+            final_order_names.extend(new_names_sorted)
+            
+            # 順序ファイル (_sub_order.json / image_order.json) を更新
+            # (既存の形式を尊重したいが、ここではシンプルに名前リストとして保存する形になるかもしれない)
+            # ただし、ルートの場合はフルパス保存が基本だが、このメソッドは読み込み用なので
+            # 保存は UI の save_tree_order 側に任せるのが安全。
+            # ここでの保存は「未知のファイルがあった場合の補完」という意味合い。
+            self.save_image_order(final_order_names, order_file_arg)
+            
+        # 5. 各アイテムを処理
+        for name in final_order_names:
+            item_path = current_dir / name
+            
+            # 設定を読み込む
             item_settings = self.load_item_setting(item_path)
             
-            # ★ フィルタリングロジックの呼び出し
+            # アプリコンテキストによるフィルタリング
             if not self._filter_item_by_app(item_settings, current_app_name):
-                continue # 不採用の場合はスキップ
-
-            # --- (以下、採用されたアイテムのみ処理) ---
+                continue
             
             if item_path.is_file():
+                # 画像ファイルの場合
                 structured_list.append({
                     'type': 'image', 
                     'path': str(item_path), 
                     'name': item_path.name,
-                    'settings': item_settings # ★ 読み込んだ設定を渡す
+                    'settings': item_settings
                 })
             elif item_path.is_dir():
-                folder_settings = item_settings # フォルダ設定として使用
+                # フォルダの場合、再帰呼び出しを行う
+                children = self._get_recursive_list(item_path, current_app_name)
+                
                 folder_item = {
                     'type': 'folder', 
                     'path': str(item_path), 
                     'name': item_path.name, 
-                    'children': [], 
-                    'settings': folder_settings
+                    'children': children, 
+                    'settings': item_settings
                 }
-                
-                # --- ▼▼▼ 修正箇所 (get_ordered_item_list と同じロジックを適用) ▼▼▼
-                
-                # 1. フォルダ内の順序 (e.g., _sub_order.json) を読み込む
-                ordered_child_names = self.load_image_order(item_path)
-                
-                # 2. フォルダ内のディスクをスキャン
-                try:
-                    all_child_images_on_disk = {p for p in item_path.iterdir() if p.is_file() and p.suffix.lower() in ('.png', '.jpg', '.jpeg', '.bmp')}
-                except FileNotFoundError:
-                    all_child_images_on_disk = set()
-
-                all_child_names_on_disk = {p.name for p in all_child_images_on_disk}
-                
-                final_child_order_names = []
-                
-                # 3. 順序リストを走査し、ディスクに存在するアイテムだけを追加
-                #    (JSONを「正」とし、ディスクスキャンの結果でフィルタリングする)
-                for name in ordered_child_names:
-                    if name in all_child_names_on_disk:
-                        final_child_order_names.append(name)
-                        # 処理済みのアイテムをディスクリストから削除
-                        all_child_names_on_disk.remove(name)
-                        
-                # 4. (フォールバック) 順序リストになかったがディスクにあったアイテム
-                #    (D&D操作とは関係ない、手動でのファイル追加などに対応)
-                if all_child_names_on_disk:
-                    new_child_names_sorted = sorted(list(all_child_names_on_disk))
-                    final_child_order_names.extend(new_child_names_sorted)
-                    
-                    # ディスク上に新しいアイテムがあった場合のみ、
-                    # 順序ファイル (_sub_order.json) を更新する
-                    self.save_image_order(final_child_order_names, item_path)
-                
-                # --- ▲▲▲ 修正完了 ▲▲▲ ---
-                
-                for child_name in final_child_order_names:
-                    child_path = item_path / child_name
-                    
-                    # ★ フォルダ内の子画像もフィルタリングする
-                    child_settings = self.load_item_setting(child_path)
-                    if self._filter_item_by_app(child_settings, current_app_name):
-                        folder_item['children'].append({
-                            'type': 'image', 
-                            'path': str(child_path), 
-                            'name': child_path.name,
-                            'settings': child_settings # ★ 読み込んだ設定を渡す
-                        })
-                        
                 structured_list.append(folder_item)
+                
         return structured_list
-    # --- ▲▲▲ (修正) フィルタリング対応完了 ▲▲▲ ---
+    # --- ▲▲▲ 修正完了 ▲▲▲ ---
+
+    def get_hierarchical_list(self, current_app_name: str = None):
+        """
+        ルートディレクトリから始まる階層リストを取得します。
+        再帰メソッド _get_recursive_list を使用して、多階層構造に対応しています。
+        """
+        return self._get_recursive_list(self.base_dir, current_app_name)
 
     def create_folder(self, folder_name: str):
         if not folder_name:
-            # ★★★ 11. 修正 ★★★
             return False, self.logger.locale_manager.tr("log_create_folder_error_empty")
         try:
             folder_path = self.base_dir / folder_name
@@ -593,7 +524,6 @@ class ConfigManager:
             dest_folder_path = Path(dest_folder_path_str)
             
             if not source_path.exists() or not dest_folder_path.is_dir():
-                # ★★★ 12. 修正 ★★★
                 return False, self.logger.locale_manager.tr("log_move_item_error_not_exists")
 
             dest_path = dest_folder_path / source_path.name

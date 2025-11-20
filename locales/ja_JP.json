@@ -1,5 +1,5 @@
 {
-    "window_title": "Imeck15 v1.5.6.3 多言語版",
+    "window_title": "Imeck15 v1.6.0.0 多言語版",
     "monitor_button_start": "監視開始",
     "monitor_button_stop": "監視停止",
     "monitor_button_tooltip": "監視を開始します。<br>右ダブルクリックで停止<br>右トリプルクリックで開始",
@@ -407,5 +407,11 @@
     "log_capture_area_fullscreen_disabled": "画像登録時に全画面モードは選択できません。",
     "warn_capture_fullscreen_title": "登録不可",
     "warn_capture_fullscreen_text": "画像登録（キャプチャ）に「全画面」モードは使用できません。",
-    "log_error_get_primary_screen_geo": "プライマリ画面の座標取得に失敗しました: %s"
+    "log_error_get_primary_screen_geo": "プライマリ画面の座標取得に失敗しました: %s",
+    "folder_dialog_radio_cooldown": "ヒット時クールダウン",
+    "folder_dialog_group_cooldown": "ヒット時クールダウン の詳細設定",
+    "folder_dialog_cooldown_time": "クリック後の停止時間:",
+    "folder_dialog_tooltip_cooldown": "<b>ヒット時クールダウンモードの詳細:</b><br>このフォルダ内の画像が<b>1つでもクリックされる</b>と、フォルダ全体が指定した時間だけ<b>検索停止（無視）</b>になります。<br>「どれか1つ実行したら、しばらくこのグループは用済み」という場合に使用します。",
+    "log_folder_cooldown_started": "フォルダ '%s' のクールダウンを開始しました (%s秒)",
+    "auto_scale_search_desc": "<b>自動マルチスケール探索:</b><br>登録画像と実際の対象物のサイズが微妙に異なる場合（例：文字のレンダリング差異）に使用します。<br>「中心」倍率から「範囲(±)」の分だけ、「ステップ数」で分割して探索します。<br>※ステップ数を増やすと負荷が高くなります。"
 }

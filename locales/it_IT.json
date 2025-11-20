@@ -1,6 +1,6 @@
 {
     "language_name": "Italiano",
-    "window_title": "Imeck15 v1.5.6.3 Edizione multilingue",
+    "window_title": "Imeck15 v1.6.0.0 Edizione multilingue",
     "monitor_button_start": "Avvia Monitoraggio",
     "monitor_button_stop": "Ferma Monitoraggio",
     "monitor_button_tooltip": "Avvia il monitoraggio.<br>Doppio clic destro per fermare, triplo clic destro per avviare",
@@ -30,10 +30,10 @@
     "tab_auto_scale": "Scala Automatica",
     "auto_scale_use_window": "Usa Base Scala Finestra",
     "auto_scale_use_window_tooltip": "ON: Applica la scala ottimale ottenuta dalla finestra o dalla ricerca al modello.<br>OFF: Disabilita la correzione della scala e tenta sempre il riconoscimento con la dimensione originale dell'immagine (1.0x).",
-    "auto_scale_enable_search": "Abilita Ricerca Scala",
+    "auto_scale_enable_search": "Abilita ricerca scala",
     "auto_scale_center": "Centro:",
     "auto_scale_range": "Intervallo (±):",
-    "auto_scale_steps": "Passi:",
+    "auto_scale_steps": "Passaggi:",
     "auto_scale_info_default": "Ricerca: ---",
     "auto_scale_info_searching": "Ricerca: %s ... %s",
     "auto_scale_info_disabled": "Disabilitato",
@@ -327,7 +327,7 @@
     "log_dxcam_critical_error_switching": "[WARN] DXCam ha riscontrato un errore critico. Passaggio a MSS per questa sessione.",
     "log_dxcam_cleanup": "[INFO] Risorse DXCam rilasciate.",
     "log_dxcam_cleanup_error": "[WARN] Errore nel rilascio delle risorse DXCam: %s",
-    "log_scale_search_enabled": "Ricerca scala abilitata: Ricerca in %s passi (Centro: %s).",
+    "log_scale_search_enabled": "Ricerca scala abilitata: ricerca in %s passaggi (centro: %s).",
     "log_capture_scale_applied": "Applicazione scala di cattura globale (Modalità Leggera) %s.",
     "log_final_scales": "Scale finali di ricerca modello: [%s]",
     "log_cache_build_complete": "Costruzione cache modello completata. Normale: %s elementi, Backup: %s elementi",
@@ -385,5 +385,11 @@
     "log_capture_area_fullscreen_disabled": "La modalità Schermo intero non può essere selezionata durante la registrazione dell'immagine.",
     "warn_capture_fullscreen_title": "Registrazione non consentita",
     "warn_capture_fullscreen_text": "La modalità \"Schermo intero\" non può essere utilizzata per la registrazione dell'immagine (acquisizione).",
-    "log_error_get_primary_screen_geo": "Impossibile ottenere la geometria dello schermo primario: %s"
+    "log_error_get_primary_screen_geo": "Impossibile ottenere la geometria dello schermo primario: %s",
+    "folder_dialog_radio_cooldown": "Raffreddamento al clic",
+    "folder_dialog_group_cooldown": "Impostazioni raffreddamento al clic",
+    "folder_dialog_cooldown_time": "Tempo di arresto dopo il clic:",
+    "folder_dialog_tooltip_cooldown": "<b>Dettagli modalità Raffreddamento al clic:</b><br>Se viene cliccata <b>una qualsiasi immagine</b> in questa cartella; l'intera cartella viene <b>disabilitata (ignorata)</b> per il tempo specificato.<br>Usare questa opzione se il gruppo non è necessario per un po' dopo un'azione.",
+    "log_folder_cooldown_started": "Raffreddamento avviato per la cartella '%s' (%s secondi)",
+    "auto_scale_search_desc": "<b>Ricerca multi-scala automatica:</b><br>Utilizzare quando la dimensione dell'immagine registrata differisce leggermente dall'obiettivo reale (ad es. differenze di rendering dei caratteri).<br>Cerca dividendo l'intervallo dalla scala \"Centro\" per l'\"Intervallo (±)\" in \"Passaggi\".<br>*L'aumento dei passaggi aumenterà il carico della CPU."
 }

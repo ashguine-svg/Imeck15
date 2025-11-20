@@ -1,6 +1,6 @@
 {
     "language_name": "Nederlands",
-    "window_title": "Imeck15 v1.5.6.3 Meertalige editie",
+    "window_title": "Imeck15 v1.6.0.0 Meertalige editie",
     "monitor_button_start": "Start Monitoring",
     "monitor_button_stop": "Stop Monitoring",
     "monitor_button_tooltip": "Start monitoring.<br>Rechter dubbelklik om te stoppen, rechter driedubbelklik om te starten",
@@ -30,8 +30,8 @@
     "tab_auto_scale": "Automatische Schaal",
     "auto_scale_use_window": "Gebruik Venster Schaal Basis",
     "auto_scale_use_window_tooltip": "AAN: Past de optimale schaal, verkregen uit venster of zoekopdracht, toe op het sjabloon.<br>UIT: Schakelt schaalcorrectie uit en probeert altijd herkenning met de originele afbeeldingsgrootte (1.0x).",
-    "auto_scale_enable_search": "Schakel Schaal Zoeken in",
-    "auto_scale_center": "Centrum:",
+    "auto_scale_enable_search": "Schaal zoeken inschakelen",
+    "auto_scale_center": "Midden:",
     "auto_scale_range": "Bereik (±):",
     "auto_scale_steps": "Stappen:",
     "auto_scale_info_default": "Zoeken: ---",
@@ -327,7 +327,7 @@
     "log_dxcam_critical_error_switching": "[WAARSCHUWING] DXCam ondervond een kritieke fout. Overstappen op MSS voor deze sessie.",
     "log_dxcam_cleanup": "[INFO] DXCam-bronnen vrijgegeven.",
     "log_dxcam_cleanup_error": "[WAARSCHUWING] Fout bij vrijgeven DXCam-bronnen: %s",
-    "log_scale_search_enabled": "Schaal zoeken ingeschakeld: Zoeken in %s stappen (Centrum: %s).",
+    "log_scale_search_enabled": "Schaal zoeken ingeschakeld: zoeken in %s stappen (midden: %s).",
     "log_capture_scale_applied": "Globale vastlegschaal (Lichtgewicht modus) %s toepassen.",
     "log_final_scales": "Definitieve sjabloonzoekschalen: [%s]",
     "log_cache_build_complete": "Sjablooncaching voltooid. Normaal: %s items, Back-up: %s items",
@@ -385,5 +385,11 @@
     "log_capture_area_fullscreen_disabled": "Volledig scherm-modus kan niet worden geselecteerd tijdens beeldregistratie.",
     "warn_capture_fullscreen_title": "Registratie niet toegestaan",
     "warn_capture_fullscreen_text": "De \"Volledig scherm\"-modus kan niet worden gebruikt voor beeldregistratie (opname).",
-    "log_error_get_primary_screen_geo": "Ophalen van primaire schermgeometrie mislukt: %s"
+    "log_error_get_primary_screen_geo": "Ophalen van primaire schermgeometrie mislukt: %s",
+    "folder_dialog_radio_cooldown": "Afkoeling bij treffer",
+    "folder_dialog_group_cooldown": "Instellingen afkoeling bij treffer",
+    "folder_dialog_cooldown_time": "Stoptijd na klik:",
+    "folder_dialog_tooltip_cooldown": "<b>Details modus Afkoeling bij treffer:</b><br>Als op <b>één afbeelding</b> in deze map wordt geklikt; wordt het zoeken in de hele map <b>uitgeschakeld (genegeerd)</b> gedurende de opgegeven tijd.<br>Gebruik dit wanneer de groep even niet nodig is nadat een actie is uitgevoerd.",
+    "log_folder_cooldown_started": "Afkoeling gestart voor map '%s' (%s seconden)",
+    "auto_scale_search_desc": "<b>Automatisch zoeken op meerdere schalen:</b><br>Gebruik wanneer de grootte van de geregistreerde afbeelding enigszins afwijkt van het werkelijke doel (bijv. verschillen in lettertypeweergave).<br>Zoekt door het bereik van de schaal \"Midden\" door het \"Bereik (±)\" te verdelen in \"Stappen\".<br>*Het verhogen van stappen verhoogt de CPU-belasting."
 }

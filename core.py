@@ -1,8 +1,4 @@
-# core.py (Linuxキャプチャロジック 最終修正版)
-# ★★★ (根本修正) 解像度変更検知時に、アプリを再起動する ★★★
-# ★★★ (改良 1.1) 連続キャプチャ失敗時に自動停止するロジックを追加 ★★★
-# ★★★ (改良 1.2) cacheBuildFinished シグナルに成功フラグ(bool)を追加 ★★★
-# ★★★ 修正: キャプチャ時のUI表示ロジックを削除し、シグナル発行に変更 ★★★
+# core.py (解像度変更時の強制再起動 & 監視停止UI修正版)
 
 import sys
 import threading
@@ -10,11 +6,9 @@ import time
 import cv2
 import numpy as np
 import os
-import psutil # ★★★ この行を追加 ★★★
-# --- ▼▼▼ 修正箇所 1/6: np.ndarray をインポート (シグナル用) ▼▼▼ ---
+import psutil
 from PySide6.QtCore import QObject, Signal, QThread, QPoint, QRect, Qt, QTimer, Slot
 from PySide6.QtGui import QMouseEvent, QPainter, QPen, QColor, QBrush, QPainterPath, QKeyEvent
-# --- ▲▲▲ 修正完了 ▲▲▲ ---
 from PySide6.QtWidgets import QDialog, QWidget, QLabel, QVBoxLayout, QMessageBox, QApplication, QInputDialog, QFileDialog
 from pathlib import Path
 from pynput import mouse, keyboard
@@ -78,10 +72,8 @@ class CoreEngine(QObject):
     
     restartApplicationRequested = Signal()
     
-    # --- ▼▼▼ 修正箇所 2/6: 新しいシグナルを追加 ▼▼▼ ---
     capturedImageReadyForPreview = Signal(np.ndarray)
     captureFailedSignal = Signal()
-    # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
     def __init__(self, ui_manager, capture_manager, config_manager, logger, locale_manager):
         super().__init__()
@@ -94,17 +86,13 @@ class CoreEngine(QObject):
         self.action_manager = ActionManager(self.logger)
         self.template_manager = TemplateManager(self.config_manager, self.logger)
         
-        # --- ▼▼▼ 修正箇所 (psutil の初期化) ▼▼▼ ---
-        self.performance_monitor = None # 関連コード削除
+        self.performance_monitor = None
         try:
-            # psutil プロセスを初期化
             self.process = psutil.Process()
-            # 最初の呼び出しでインターバルなしで初期化
             self.process.cpu_percent(interval=None) 
         except Exception as e:
             self.logger.log(f"log_error_psutil_init: {e}")
             self.process = None
-        # --- ▲▲▲ 修正完了 ▲▲▲ ---
         
         self.environment_tracker = EnvironmentTracker(self, self.config_manager, self.logger)
         self.logger.log(OPENCL_STATUS_MESSAGE)
@@ -119,6 +107,8 @@ class CoreEngine(QObject):
 
         self.normal_template_cache = {}
         self.backup_template_cache = {}
+        
+        self.folder_cooldowns = {}
 
         self.state = None
         self.state_lock = threading.RLock()
@@ -140,9 +130,7 @@ class CoreEngine(QObject):
         self.folder_children_map = {}
         
         cpu_cores = os.cpu_count() or 8
-        
         max_thread_limit = 4 
-        
         worker_threads = min(max(1, cpu_cores // 4), max_thread_limit)
         self.worker_threads = worker_threads
         self.logger.log("log_info_cores", cpu_cores, self.worker_threads, max_thread_limit)
@@ -196,7 +184,6 @@ class CoreEngine(QObject):
         
         self._is_reinitializing_display = False 
 
-    # ... (transition_to から _save_captured_image まで変更なし) ...
     def transition_to(self, new_state):
         with self.state_lock:
             self.state = new_state
@@ -312,13 +299,10 @@ class CoreEngine(QObject):
 
     def _on_global_click(self, x, y, button, pressed):
         if button == mouse.Button.right and pressed:
-            
             click_pos = QPoint(x, y)
-            
             if self.ui_manager and self.ui_manager.isVisible() and not self.ui_manager.isMinimized():
                 if self.ui_manager.geometry().contains(click_pos):
                     return 
-
             if self.ui_manager and self.ui_manager.is_minimal_mode and self.ui_manager.floating_window and self.ui_manager.floating_window.isVisible():
                 if self.ui_manager.floating_window.geometry().contains(click_pos):
                     return 
@@ -617,6 +601,9 @@ class CoreEngine(QObject):
             self.consecutive_capture_failures = 0 
             self.is_monitoring = True; self.transition_to(IdleState(self)); self._click_count = 0; self._cooldown_until = 0; self._last_clicked_path = None; self.screen_stability_hashes.clear(); self.last_successful_click_time = 0; self.is_eco_cooldown_active = False; self._last_eco_check_time = time.time(); self.match_detected_at.clear()
             self.ui_manager.set_tree_enabled(False)
+            
+            self.folder_cooldowns.clear()
+            
             if self.thread_pool:
                 self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
                 self._monitor_thread = threading.Thread(target=self._monitoring_loop, daemon=True); self._monitor_thread.start(); self.updateStatus.emit("monitoring", "blue"); self.logger.log("log_monitoring_started")
@@ -634,9 +621,11 @@ class CoreEngine(QObject):
                     for item in cache.values(): item['best_scale'] = None
             self.match_detected_at.clear()
             self.priority_timers.clear()
+            self.folder_cooldowns.clear() 
             
-            if self.consecutive_capture_failures == 0:
-                 self.updateStatus.emit("idle", "green")
+            # --- ▼▼▼ 修正: 条件判定を削除し、必ずIdle状態に戻す ▼▼▼ ---
+            self.updateStatus.emit("idle", "green")
+            # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
 
     def _monitoring_loop(self):
@@ -648,6 +637,11 @@ class CoreEngine(QObject):
                 else: self.logger.log("[WARN] Monitoring is active but state is None. Re-initializing to IdleState."); self.transition_to(IdleState(self)); continue
             try:
                 current_time = time.time()
+                
+                expired_cooldowns = [p for p, end_time in self.folder_cooldowns.items() if current_time >= end_time]
+                for p in expired_cooldowns:
+                    del self.folder_cooldowns[p]
+                
                 if self._cooldown_until > current_time: time.sleep(min(self._cooldown_until - current_time, 0.1)); continue
                 
                 if self._is_reinitializing_display:
@@ -747,15 +741,12 @@ class CoreEngine(QObject):
                             remaining_sec = self.priority_timers[active_timer_path] - current_time
                             timer_data['priority'] = max(0, remaining_sec / 60.0) 
                     
-                    # --- ▼▼▼ 修正箇所 (CPU使用率の計算) ▼▼▼ ---
                     cpu_percent = 0.0
                     if self.process:
                         try:
-                            # interval=None で、前回呼び出し時からの平均CPU使用率を取得
                             cpu_percent = self.process.cpu_percent(interval=None)
                         except Exception:
-                            cpu_percent = 0.0 # エラー時は 0.0
-                    # --- ▲▲▲ 修正完了 ▲▲▲ ---
+                            cpu_percent = 0.0 
                     
                     fps_value = self.current_fps
                     
@@ -763,7 +754,6 @@ class CoreEngine(QObject):
                 
                 time.sleep(0.01)
     
-    # ... (_find_matches_for_eco_check から _save_captured_image まで変更なし) ...
     def _find_matches_for_eco_check(self, screen_data, current_state):
         def filter_cache_for_eco(cache): return {p: d for p, d in cache.items() if d.get('folder_mode') not in ['excluded', 'priority_timer']}
         active_normal_cache = filter_cache_for_eco(self.normal_template_cache); normal_matches = self._find_best_match(*screen_data, active_normal_cache)
@@ -802,6 +792,15 @@ class CoreEngine(QObject):
 
         for m in all_matches:
             path = m['path']
+            
+            cache_item = self.normal_template_cache.get(path) or self.backup_template_cache.get(path)
+            if cache_item:
+                folder_path = cache_item.get('folder_path')
+                if folder_path and folder_path in self.folder_cooldowns:
+                    if path in self.match_detected_at:
+                        del self.match_detected_at[path]
+                    continue
+
             settings = m['settings']
             interval = settings.get('interval_time', 1.5)
             debounce = settings.get('debounce_time', 0.0)
@@ -905,6 +904,8 @@ class CoreEngine(QObject):
     def _find_best_match(self, s_bgr, s_gray, s_bgr_umat, s_gray_umat, cache):
         results = []
         futures = []
+        
+        current_time = time.time()
 
         with self.cache_lock:
             if not cache:
@@ -927,6 +928,10 @@ class CoreEngine(QObject):
             s_shape = screen_image.get().shape[:2] if use_cl and isinstance(screen_image, cv2.UMat) else screen_image.shape[:2]
 
             for path, data in cache.items():
+                folder_path = data.get('folder_path')
+                if folder_path and folder_path in self.folder_cooldowns:
+                    if current_time < self.folder_cooldowns[folder_path]:
+                        continue
                 
                 templates_to_check = data['scaled_templates']
 
@@ -969,8 +974,40 @@ class CoreEngine(QObject):
         except Exception as e:
             self.logger.log(f"[ERROR] Failed during environment tracking pre-click: {e}")
 
-        result = self.action_manager.execute_click(match_info, self.recognition_area, self.target_hwnd, self.effective_capture_scale)
-        if result and result.get('success'): self._click_count += 1; self._last_clicked_path = result.get('path'); self.last_successful_click_time = time.time(); self.clickCountUpdated.emit(self._click_count)
+        result = self.action_manager.execute_click(
+            match_info, 
+            self.recognition_area, 
+            self.target_hwnd, 
+            self.effective_capture_scale,
+            self.current_window_scale
+        )
+        
+        if result and result.get('success'): 
+            self._click_count += 1
+            self._last_clicked_path = result.get('path')
+            self.last_successful_click_time = time.time()
+            self.clickCountUpdated.emit(self._click_count)
+            
+            path = match_info['path']
+            cache_item = self.normal_template_cache.get(path) or self.backup_template_cache.get(path)
+            if cache_item:
+                folder_mode = cache_item.get('folder_mode')
+                if folder_mode == 'cooldown':
+                    folder_path = cache_item.get('folder_path')
+                    cooldown_duration = cache_item.get('cooldown_time', 30)
+                    
+                    self.folder_cooldowns[folder_path] = time.time() + cooldown_duration
+                    self.logger.log("log_folder_cooldown_started", Path(folder_path).name, str(cooldown_duration))
+
+                    keys_to_remove = []
+                    for cache in [self.normal_template_cache, self.backup_template_cache]:
+                        for cached_path, item in cache.items():
+                            if item.get('folder_path') == folder_path and cached_path in self.match_detected_at:
+                                keys_to_remove.append(cached_path)
+                    
+                    for p in keys_to_remove:
+                        if p in self.match_detected_at:
+                            del self.match_detected_at[p]
 
     def set_recognition_area(self, method: str):
         if self._is_reinitializing_display:
@@ -981,14 +1018,6 @@ class CoreEngine(QObject):
                 self.logger.log("log_error_reinitialize_capture", str(e))
             finally:
                 self._is_reinitializing_display = False
-        
-        # --- ▼▼▼ 修正箇所 (前回追加した冒頭の fullscreen チェックを削除) ▼▼▼ ---
-        # (このブロック全体を削除)
-        # fullscreen_rect = None
-        # if method == "fullscreen":
-        # ...
-        # --- ▲▲▲ 修正完了 ▲▲▲ ---
-
 
         self.selectionProcessStarted.emit(); self.ui_manager.hide();
         
@@ -1046,21 +1075,18 @@ class CoreEngine(QObject):
             self.keyboard_selection_listener = keyboard.Listener(on_press=self._on_key_press_for_selection)
             self.keyboard_selection_listener.start()
 
-        # --- ▼▼▼ 修正箇所 (fullscreen の処理を "正しい手順" に修正) ▼▼▼ ---
         elif method == "fullscreen":
             if self._is_capturing_for_registration:
-                # 「画像登録」時に「全画面」は選択できない (UIを復帰させる)
                 self.logger.log("log_capture_area_fullscreen_disabled") 
-                self._on_selection_cancelled() # UI復帰とリスナー再起動
+                self._on_selection_cancelled() 
                 QMessageBox.warning(
                     self.ui_manager, 
                     self.locale_manager.tr("warn_capture_fullscreen_title"), 
                     self.locale_manager.tr("warn_capture_fullscreen_text")
                 )
-                return # 処理を終了
+                return
             
             try:
-                # プライマリモニターの座標を取得
                 screen = QApplication.primaryScreen()
                 if not screen:
                     raise Exception("QApplication.primaryScreen() returned None")
@@ -1068,24 +1094,19 @@ class CoreEngine(QObject):
                 geo = screen.geometry()
                 fullscreen_rect = (geo.left(), geo.top(), geo.right() + 1, geo.bottom() + 1)
                 
-                # ログと環境トラッカーの設定 (windowモードと同様に)
-                self.logger.log("log_rec_area_set_fullscreen_internal") # 内部ログ (翻訳キー不要)
+                self.logger.log("log_rec_area_set_fullscreen_internal")
                 self.target_hwnd = None
                 self.current_window_scale = None
                 self.windowScaleCalculated.emit(0.0)
                 self.environment_tracker.on_rec_area_set("fullscreen")
                 self.appContextChanged.emit(None)
                 
-                # ★★★ 重要 ★★★
-                # 座標を直接セットするのではなく、
-                # 選択完了シグナルを発行して handle_area_selection を呼び出す
                 self._areaSelectedForProcessing.emit(fullscreen_rect)
             
             except Exception as e:
                 self.logger.log("log_error_get_primary_screen_geo", str(e))
-                self._on_selection_cancelled() # 失敗したらUI復帰
+                self._on_selection_cancelled()
                 return
-        # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
     def _on_selection_cancelled(self):
         self.logger.log("log_selection_cancelled"); self._is_capturing_for_registration = False
@@ -1247,29 +1268,14 @@ class CoreEngine(QObject):
         if hasattr(self, 'selection_overlay'): self.selection_overlay = None
         self.logger.log("[DEBUG] Scheduling listener restart after selection completion (150ms delay)..."); QTimer.singleShot(150, self._start_global_mouse_listener)
 
-    # --- ▼▼▼ 修正箇所 (削除) ▼▼▼ ---
-    # def _get_filename_from_user(self):
-    #     lm = self.locale_manager.tr; return QInputDialog.getText(self.ui_manager, lm("dialog_filename_prompt_title"), lm("dialog_filename_prompt_text"))
-    # --- ▲▲▲ 修正完了 ▲▲▲ ---
-    
     def _save_captured_image(self, region_coords):
         try: 
-            # --- ▼▼▼ 修正箇所 (変更) ▼▼▼ ---
-            # UI非表示は selectionProcessStarted シグナルに任せる
-            # self.ui_manager.hide(); # 削除
-            
-            # _do_capture_and_emit を呼び出す
             QTimer.singleShot(100, lambda: self._do_capture_and_emit(region_coords)) 
-            # --- ▲▲▲ 修正完了 ▲▲▲ ---
         except Exception as e: 
-            # --- ▼▼▼ 修正箇所 (変更) ▼▼▼ ---
-            # UI復帰は selectionProcessFinished シグナルに任せる
-            self.logger.log("error_message_capture_prepare_failed", str(e)) # ログのみに変更
+            self.logger.log("error_message_capture_prepare_failed", str(e)) 
             self.selectionProcessFinished.emit() 
             self.pre_captured_image_for_registration = None
-            # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
-    # --- ▼▼▼ 修正箇所 4/6: _capture_and_prompt_for_save を _do_capture_and_emit にリファクタリング ▼▼▼ ---
     def _do_capture_and_emit(self, region_coords):
         """
         (Coreスレッド/タイマー)
@@ -1295,30 +1301,20 @@ class CoreEngine(QObject):
                 captured_image = self.capture_manager.capture_frame(region=region_coords)
 
             if captured_image is None or captured_image.size == 0: 
-                # キャプチャ失敗
-                self.logger.log("warn_message_capture_failed") # ログに変更
-                self.captureFailedSignal.emit() # UIスレッドにQMessageBoxを表示させる
-                self.selectionProcessFinished.emit() # UIを復帰させる
+                self.logger.log("warn_message_capture_failed") 
+                self.captureFailedSignal.emit()
+                self.selectionProcessFinished.emit()
                 return
                 
-            # キャプチャ成功
-            # UIスレッドに画像を送り、プレビュー表示と保存ダイアログの表示を依頼する
             self.capturedImageReadyForPreview.emit(captured_image)
                 
         except Exception as e: 
-            # 予期せぬエラー
             self.logger.log("error_message_capture_save_failed", str(e))
-            self.captureFailedSignal.emit() # UIスレッドにQMessageBoxを表示させる
+            self.captureFailedSignal.emit() 
             self.selectionProcessFinished.emit()
         finally:
              self.pre_captured_image_for_registration = None
              
-    # --- ▼▼▼ 修正箇所 (削除) ▼▼▼ ---
-    # @Slot(np.ndarray)
-    # def prompt_and_save_image_task(self, captured_image):
-    #     ... (このメソッド全体を削除) ...
-    # --- ▲▲▲ 修正完了 ▲▲▲ --
-    
     def _save_image_task(self, image, save_path, env_data: dict):
         try:
             is_success, buffer = cv2.imencode('.png', image);
@@ -1334,8 +1330,6 @@ class CoreEngine(QObject):
             self.config_manager.add_item(save_path)
             return True, self.locale_manager.tr("log_image_saved", str(save_path.name))
         except Exception as e: return False, self.locale_manager.tr("log_image_save_failed", str(e))
-
-    # --- ▼▼▼ 修正箇所 6/6: _on_save_image_done を修正 ▼▼▼ ---
     
     @Slot(str, np.ndarray)
     def handle_save_captured_image(self, file_name: str, captured_image: np.ndarray):
@@ -1352,7 +1346,6 @@ class CoreEngine(QObject):
             self.ui_manager.set_tree_enabled(False)
             save_path = self.config_manager.base_dir / f"{file_name}.png"
             
-            # ★ 既存のファイル名チェック (ui.py から移動)
             if save_path.exists():
                 lm = self.locale_manager.tr
                 reply = QMessageBox.question(self.ui_manager, lm("confirm_overwrite_title"), 
@@ -1371,12 +1364,11 @@ class CoreEngine(QObject):
             else: 
                 self._on_save_image_done(None, success=False, message=self.locale_manager.tr("Error: Thread pool unavailable for saving."))
                 self.ui_manager.set_tree_enabled(True)
-                self.selectionProcessFinished.emit() # UI復帰
+                self.selectionProcessFinished.emit() 
         
         except Exception as e:
             QMessageBox.critical(self.ui_manager, self.locale_manager.tr("error_title_capture_save_failed"), self.locale_manager.tr("error_message_capture_save_failed", str(e)))
-            self.selectionProcessFinished.emit() # UI復帰
-    # --- ▲▲▲ 修正完了 ▲▲▲ ---
+            self.selectionProcessFinished.emit() 
     
     def _on_save_image_done(self, future, success=None, message=None):
         """
@@ -1402,9 +1394,7 @@ class CoreEngine(QObject):
             self.ui_manager.set_tree_enabled(True)
         
         finally:
-            # ★ 成功・失敗・例外に関わらず、必ずUI復帰シグナルを発行する
             self.selectionProcessFinished.emit()
-    # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
     def clear_recognition_area(self):
         self.recognition_area = None; self.current_window_scale = None; self.target_hwnd = None; self.windowScaleCalculated.emit(0.0)
@@ -1435,15 +1425,17 @@ class CoreEngine(QObject):
         if self._is_reinitializing_display:
             return
             
-        if self.recognition_area or self.is_monitoring:
-            self._is_reinitializing_display = True 
-            self.logger.log("log_screen_resolution_changed")
-            
-            if self.is_monitoring:
-                self.stop_monitoring()
+        # --- ▼▼▼ 修正: 条件判定を削除し、無条件で再起動する ▼▼▼ ---
+        # 監視停止中や範囲未設定であっても、DXCamの不整合を防ぐために再起動プロセスへ移行する
+        self._is_reinitializing_display = True 
+        self.logger.log("log_screen_resolution_changed")
+        
+        if self.is_monitoring:
+            self.stop_monitoring()
 
-            if self.recognition_area:
-                self.clear_recognition_area()
-            
-            self.logger.log("log_lazy_reinitialize_scheduled")
-            self.restartApplicationRequested.emit()
+        if self.recognition_area:
+            self.clear_recognition_area()
+        
+        self.logger.log("log_lazy_reinitialize_scheduled")
+        self.restartApplicationRequested.emit()
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---

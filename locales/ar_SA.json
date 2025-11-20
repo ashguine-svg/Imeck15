@@ -1,6 +1,6 @@
 {
     "language_name": "العربية (السعودية)",
-    "window_title": "Imeck15 v1.5.6.3 إصدار متعدد اللغات",
+    "window_title": "Imeck15 v1.6.0.0 إصدار متعدد اللغات",
     "monitor_button_start": "بدء المراقبة",
     "monitor_button_stop": "إيقاف المراقبة",
     "monitor_button_tooltip": "بدء المراقبة.<br>انقر بزر الماوس الأيمن مرتين للإيقاف، وثلاث مرات للبدء",
@@ -34,8 +34,8 @@
     "auto_scale_center": "المركز:",
     "auto_scale_range": "النطاق (±):",
     "auto_scale_steps": "الخطوات:",
-    "auto_scale_info_default": "البحث: ---",
-    "auto_scale_info_searching": "البحث: %s ... %s",
+    "auto_scale_info_default": "بحث: ---",
+    "auto_scale_info_searching": "بحث: %s ... %s",
     "auto_scale_info_disabled": "معطل",
     "auto_scale_best_scale_default": "المقياس الأمثل: ---",
     "auto_scale_best_scale_found": "المقياس الأمثل: %sx",
@@ -327,7 +327,7 @@
     "log_dxcam_critical_error_switching": "[تحذير] واجه DXCam خطأ فادحًا. جاري التبديل إلى MSS لهذه الجلسة.",
     "log_dxcam_cleanup": "[معلومات] تم تحرير موارد DXCam.",
     "log_dxcam_cleanup_error": "[تحذير] خطأ في تحرير موارد DXCam: %s",
-    "log_scale_search_enabled": "تم تمكين البحث عن المقياس: جاري البحث في %s خطوة (المركز: %s).",
+    "log_scale_search_enabled": "تم تمكين البحث عن المقياس: البحث في %s خطوات (المركز: %s).",
     "log_capture_scale_applied": "تطبيق مقياس الالتقاط العام (الوضع الخفيف) %s.",
     "log_final_scales": "مقاييس البحث عن القالب النهائية: [%s]",
     "log_cache_build_complete": "اكتمل إنشاء ذاكرة التخزين المؤقت للقالب. عادي: %s عناصر، احتياطي: %s عناصر",
@@ -385,5 +385,11 @@
     "log_capture_area_fullscreen_disabled": "لا يمكن تحديد وضع ملء الشاشة أثناء تسجيل الصورة.",
     "warn_capture_fullscreen_title": "التسجيل غير مسموح به",
     "warn_capture_fullscreen_text": "لا يمكن استخدام وضع \"ملء الشاشة\" لتسجيل الصورة (الالتقاط).",
-    "log_error_get_primary_screen_geo": "فشل في الحصول على هندسة الشاشة الأساسية: %s"
+    "log_error_get_primary_screen_geo": "فشل في الحصول على هندسة الشاشة الأساسية: %s",
+    "folder_dialog_radio_cooldown": "التهدئة عند النقر",
+    "folder_dialog_group_cooldown": "إعدادات التهدئة عند النقر",
+    "folder_dialog_cooldown_time": "وقت التوقف بعد النقر:",
+    "folder_dialog_tooltip_cooldown": "<b>تفاصيل وضع التهدئة عند النقر:</b><br>إذا تم النقر فوق <b>أي صورة واحدة</b> في هذا المجلد، فسيتم <b>تعطيل البحث (تجاهل)</b> للمجلد بالكامل للوقت المحدد.<br>استخدم هذا عندما لا تكون المجموعة مطلوبة لفترة من الوقت بعد تنفيذ إجراء واحد.",
+    "log_folder_cooldown_started": "بدأ التهدئة للمجلد '%s' (%s ثانية)",
+    "auto_scale_search_desc": "<b>بحث تلقائي متعدد المقاييس:</b><br>استخدمه عندما يختلف حجم الصورة المسجلة قليلاً عن الهدف الفعلي (على سبيل المثال، اختلافات عرض الخطوط).<br>يبحث عن طريق تقسيم النطاق من مقياس \"المركز\" بمقدار \"النطاق (±)\" إلى \"خطوات\".<br>*زيادة الخطوات ستزيد من حمل وحدة المعالجة المركزية."
 }

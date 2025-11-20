@@ -63,34 +63,18 @@ class DraggableTreeWidget(QTreeWidget):
         target_item = self.itemAt(event.position().toPoint())
         pos = self.dropIndicatorPosition()
         
-        # 1. ドラッグ中のアイテムにフォルダが含まれているかチェック
-        dragged_items = self.selectedItems()
-        is_dragging_folder = False
-        if dragged_items:
-            for item in dragged_items:
-                dragged_path_str = item.data(0, Qt.UserRole)
-                if dragged_path_str and Path(dragged_path_str).is_dir():
-                    is_dragging_folder = True
-                    break
-        
-        # 2. ターゲットがフォルダかどうかをチェック
+        # ターゲットがフォルダかどうかをチェック
         target_is_folder = False
         if target_item:
             path_str = target_item.data(0, Qt.UserRole)
             if path_str and Path(path_str).is_dir():
                 target_is_folder = True
 
-        # 3. ターゲットがフォルダで、かつ「上 (OnItem)」にドロップしようとした場合
+        # ターゲットがフォルダで、かつ「上 (OnItem)」にドロップしようとした場合
         if pos == self.DropIndicatorPosition.OnItem and target_is_folder:
-            
-            # 4. もしドラッグ中のアイテムに *フォルダ* が含まれていたら
-            if is_dragging_folder:
-                # フォルダ ON フォルダ (ネスト) は禁止 -> 「下」にドロップとして扱う
-                pos = self.DropIndicatorPosition.BelowItem
-            else:
-                # 画像 ON フォルダ は許可 -> ハイライトする
-                target_item.setBackground(0, self.highlight_color)
-                self.last_highlighted_item = target_item
+            # ハイライトする (フォルダの中にフォルダを入れるのを許可する)
+            target_item.setBackground(0, self.highlight_color)
+            self.last_highlighted_item = target_item
 
         # (残りのロジックは、OnItem 且つ target_is_folder 以外の場合)
         if not (pos == self.DropIndicatorPosition.OnItem and target_is_folder):
@@ -116,7 +100,6 @@ class DraggableTreeWidget(QTreeWidget):
 
             elif pos == self.DropIndicatorPosition.OnViewport:
                  self.insertTopLevelItem(self.topLevelItemCount(), self.dummy_indicator_item)
-
     def dragLeaveEvent(self, event):
         if self.last_highlighted_item:
             self.last_highlighted_item.setBackground(0, QBrush(Qt.transparent))
@@ -145,31 +128,12 @@ class DraggableTreeWidget(QTreeWidget):
         source_parent = dragged_items[0].parent()
         pos = self.dropIndicatorPosition()
         
-        # 1. ドラッグ中のアイテムにフォルダが含まれているかチェック
-        is_dragging_folder = False
-        if dragged_items:
-            for item in dragged_items:
-                dragged_path_str = item.data(0, Qt.UserRole)
-                if dragged_path_str and Path(dragged_path_str).is_dir():
-                    is_dragging_folder = True
-                    break
-
-        # 2. ターゲットがフォルダかどうかをチェック
+        # ターゲットがフォルダかどうかをチェック
         target_is_folder = False
         if target_item:
             path_str = target_item.data(0, Qt.UserRole)
             if path_str and Path(path_str).is_dir():
                 target_is_folder = True
-
-        # 3. ターゲットがフォルダで、「上 (OnItem)」ドロップの場合
-        if pos == self.DropIndicatorPosition.OnItem and target_is_folder:
-            
-            # 4. もしドラッグ中のアイテムに *フォルダ* が含まれていたら
-            if is_dragging_folder:
-                # フォルダ ON フォルダ (ネスト) は禁止 -> 「下」にドロップとして扱う
-                pos = self.DropIndicatorPosition.BelowItem
-            # else:
-                # 画像 ON フォルダ は許可 -> pos は OnItem のまま変更しない
 
         cloned_items_data = [(item.clone(), item.data(0, Qt.UserRole)) for item in dragged_items]
 
@@ -184,20 +148,19 @@ class DraggableTreeWidget(QTreeWidget):
         insert_index = -1
 
         if pos == self.DropIndicatorPosition.OnItem and target_item:
-            
-            # ターゲットがフォルダ (画像 ON フォルダ の場合)
+            # ターゲットがフォルダ (画像 ON フォルダ、または フォルダ ON フォルダ)
             if target_is_folder:
                 dest_parent = target_item
                 insert_index = 0 # フォルダの先頭に追加
             else:
-                # ターゲットが画像 (画像 ON 画像 の場合) -> 「下」にドロップ (親は同じ)
+                # ターゲットが画像 -> 「下」にドロップ (親は同じ)
                 dest_parent = target_item.parent()
                 if dest_parent:
                     insert_index = dest_parent.indexOfChild(target_item) + 1
                 else:
                     insert_index = self.indexOfTopLevelItem(target_item) + 1
         elif target_item:
-            # (元のロジック) アイテムの上または下にドロップ
+            # アイテムの上または下にドロップ
             dest_parent = target_item.parent()
             if dest_parent:
                 insert_index = dest_parent.indexOfChild(target_item)
