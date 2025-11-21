@@ -1,9 +1,10 @@
 # matcher.py
-# ★★★ 色調厳格モードを (平均値) から (最小値) に戻す ★★★
+# ★★★ (最適化版) 無駄なGPU転送を排除し、型不一致対策とMinロジックを搭載 ★★★
 
 import cv2
 from PIL import Image
 import imagehash
+import numpy as np
 
 def calculate_phash(image):
     """
@@ -26,14 +27,14 @@ def calculate_phash(image):
         # 変換やハッシュ計算に失敗した場合
         return None
 
-# --- ▼▼▼ 修正箇所 (5.4) ▼▼▼ ---
 def _match_template_task(screen_image, template_image, template_data, screen_shape, template_shape, effective_strict_color: bool):
     """
     画面イメージとテンプレートイメージのマッチングを行うタスク。
-    (色調厳格モード対応)
+    (色調厳格モード対応・パフォーマンス最適化済み)
+    
     Args:
         screen_image: 検索対象の画面イメージ (BGR or Gray, UMat or Numpy)。
-        template_image: テンプレートイメージ (BGR or Gray, UMat or Numpy)。(core.pyから渡されるが、下位互換性/仕様書のため template_data から再取得)
+        template_image: テンプレートイメージ (BGR or Gray, UMat or Numpy)。
         template_data: テンプレート画像と設定情報を含む辞書。
         screen_shape: 画面イメージの高さと幅 (h, w)。
         template_shape: テンプレートイメージの高さと幅 (h, w)。
@@ -49,11 +50,6 @@ def _match_template_task(screen_image, template_image, template_data, screen_sha
     
     threshold = settings.get('threshold', 0.8)
 
-    # --- ▼▼▼ 修正箇所 (閾値調整を削除) ▼▼▼ ---
-    # if effective_strict_color:
-    #     threshold = threshold * 0.9
-    # --- ▲▲▲ 修正完了 ▲▲▲ ---
-
     s_h, s_w = screen_shape
     t_h, t_w = template_shape
 
@@ -65,13 +61,19 @@ def _match_template_task(screen_image, template_image, template_data, screen_sha
     max_loc = (-1, -1)
 
     try:
-        # UMat/Numpy両対応のため .get() を使う (core側でuse_cl=Falseにしたので安全だが念のため)
-        # (Numpy配列を取得)
-        screen_np = screen_image.get() if hasattr(screen_image, 'get') else screen_image
-        template_np = template_image_data.get() if hasattr(template_image_data, 'get') else template_image_data
-
         if effective_strict_color:
             # --- 色調厳格モード (BGRが前提) ---
+            # ★ パフォーマンス修正: 必要な場合のみGPUからCPUへ転送する
+            screen_np = screen_image.get() if hasattr(screen_image, 'get') else screen_image
+            template_np = template_image_data.get() if hasattr(template_image_data, 'get') else template_image_data
+            
+            # 安全性チェック: データがNone、または3チャンネル(カラー)でない場合は実行不可
+            if screen_np is None or template_np is None:
+                return None
+            if len(screen_np.shape) < 3 or screen_np.shape[2] != 3:
+                # グレースケール画像などが渡された場合は厳格モード不可
+                return None
+
             # チャンネル分離
             s_b, s_g, s_r = cv2.split(screen_np)
             t_b, t_g, t_r = cv2.split(template_np)
@@ -81,40 +83,41 @@ def _match_template_task(screen_image, template_image, template_data, screen_sha
             result_g = cv2.matchTemplate(s_g, t_g, cv2.TM_CCOEFF_NORMED)
             result_r = cv2.matchTemplate(s_r, t_r, cv2.TM_CCOEFF_NORMED)
             
-            # --- ▼▼▼ 修正箇所 (判定を「平均値」から「最小値」に変更) ▼▼▼ ---
-            
-            # (旧: 平均値マップ) 
-            # result_avg = (result_b + result_g + result_r) / 3.0
-            # _, max_val, _, max_loc = cv2.minMaxLoc(result_avg)
-
-            # (新: 最小値マップ) 
-            # 3つの結果マップのうち、すべてのチャンネルでスコアが高い場所を探す
+            # --- 最小値(Min)ロジック ---
+            # 全てのチャンネルで一致度が高い場所のみを採用する（厳しい判定）
+            # ノイズに弱くなるため、閾値を少し下げる運用が推奨される
             result_min = cv2.min(result_b, cv2.min(result_g, result_r))
             
             # 最小値マップから最大スコアを探す
             _, max_val, _, max_loc = cv2.minMaxLoc(result_min)
-            # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
         else:
             # --- 通常モード (BGR または グレースケール) ---
-            # (※ effective_strict_color=True の場合、core.py側で use_cl=False にセットされるため、
-            #    ここでは screen_image, template_image_data が Numpy であることが期待される)
-            result = cv2.matchTemplate(screen_image, template_image_data, cv2.TM_CCOEFF_NORMED) #
-            _, max_val, _, max_loc = cv2.minMaxLoc(result) #
+            
+            # ★ 安全性修正: 型不一致 (UMat vs Numpy) によるエラーを防ぐ
+            is_screen_umat = isinstance(screen_image, cv2.UMat)
+            is_template_umat = isinstance(template_image_data, cv2.UMat)
+
+            if is_screen_umat and not is_template_umat:
+                # スクリーンがUMatでテンプレートがNumpyなら、スクリーンをNumpy化して合わせる
+                screen_image = screen_image.get()
+            elif not is_screen_umat and is_template_umat:
+                # その逆ならテンプレートをNumpy化して合わせる
+                template_image_data = template_image_data.get()
+
+            # 通常のマッチング実行
+            result = cv2.matchTemplate(screen_image, template_image_data, cv2.TM_CCOEFF_NORMED)
+            _, max_val, _, max_loc = cv2.minMaxLoc(result)
 
     except cv2.error as e:
         # cv2.split がグレースケール画像で呼ばれた場合や、
-        # UMat/Numpyの型不一致などでエラーになった場合
-        # [エラーログをLogger経由で出すのは困難なため、ここではNoneを返す]
-        # print(f"[MatcherTask ERROR] Path: {path}, Error: {e}")
-        return None #
+        # 型不一致などでエラーになった場合の安全策
+        return None
     except Exception as e:
-        # print(f"[MatcherTask FATAL] Path: {path}, Error: {e}")
-        return None #
-    # --- ▲▲▲ 修正完了 ▲▲▲ ---
+        return None
 
     # 一致度が閾値以上であれば、結果を辞書として返す
-    if max_val >= threshold: #
+    if max_val >= threshold:
         return {
             'path': path,
             'settings': settings,
@@ -125,4 +128,4 @@ def _match_template_task(screen_image, template_image, template_data, screen_sha
         }
     
     # 閾値未満ならNoneを返す
-    return None #
+    return None

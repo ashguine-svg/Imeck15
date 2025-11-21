@@ -202,7 +202,21 @@ class UIManager(QMainWindow):
         self.image_tree.setAcceptDrops(True)
         self.image_tree.setDropIndicatorShown(False)
         self.image_tree.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.image_tree.setStyleSheet("QTreeWidget { border: 1px solid darkgray; border-radius: 0px; }")
+        self.image_tree.setStyleSheet("""
+            QTreeWidget {
+                background-color: palette(base);
+                color: palette(text);
+                border: 1px solid darkgray;
+                border-radius: 0px;
+            }
+            QTreeWidget::item {
+                color: palette(text);
+            }
+            QTreeWidget::item:selected {
+                background-color: palette(highlight);
+                color: palette(highlightedText);
+            }
+        """)
         self.image_tree.setHeaderHidden(True)
         left_layout.addWidget(self.image_tree)
         
@@ -467,6 +481,20 @@ class UIManager(QMainWindow):
         content_layout.addWidget(right_frame, 2)
         main_layout.addWidget(content_frame)
 
+    def changeEvent(self, event):
+        """
+        OSのテーマやパレットが変更された場合（ライト/ダークモード切り替えなど）、
+        スタイルシートを再適用して表示を更新します。
+        """
+        if event.type() == QEvent.PaletteChange or event.type() == QEvent.ThemeChange:
+            # スタイルを一度解除(unpolish)して再適用(polish)することで、
+            # palette(base) などの値を現在のOS設定に合わせて再計算させます。
+            if hasattr(self, 'image_tree'):
+                self.image_tree.style().unpolish(self.image_tree)
+                self.image_tree.style().polish(self.image_tree)
+        
+        super().changeEvent(event)
+    
     def connect_signals(self):
         """Connects signals from UI widgets to appropriate slots."""
         if hasattr(self, '_signals_connected') and self._signals_connected:
