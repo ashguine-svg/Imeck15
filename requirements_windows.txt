@@ -1,0 +1,11 @@
+PySide6
+opencv-python
+numpy
+Pillow
+imagehash
+psutil
+mss
+pynput
+pyautogui
+pywin32
+dxcam
