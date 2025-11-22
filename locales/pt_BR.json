@@ -1,6 +1,6 @@
 {
     "language_name": "Português (Brasil)",
-    "window_title": "Imeck15 v1.6.1.0 Edição Multilíngue",
+    "window_title": "Imeck15 v1.6.2.0 Edição Multilíngue",
     "monitor_button_start": "Iniciar Monitoramento",
     "monitor_button_stop": "Parar Monitoramento",
     "monitor_button_tooltip": "Iniciar monitoramento.<br>Clique duplo direito para parar, clique triplo direito para iniciar",
@@ -30,7 +30,7 @@
     "tab_auto_scale": "Auto Escala",
     "auto_scale_use_window": "Usar Base de Escala da Janela",
     "auto_scale_use_window_tooltip": "LIGADO: Aplica a escala ideal obtida da janela ou busca ao modelo.<br>DESLIGADO: Desabilita a correção de escala e sempre tenta o reconhecimento com o tamanho original da imagem (1.0x).",
-    "auto_scale_enable_search": "Habilitar busca de escala",
+    "auto_scale_enable_search": "Ativar busca automática em múltiplas escalas",
     "auto_scale_center": "Centro:",
     "auto_scale_range": "Intervalo (±):",
     "auto_scale_steps": "Passos:",
@@ -391,5 +391,12 @@
     "folder_dialog_cooldown_time": "Tempo de parada após clique:",
     "folder_dialog_tooltip_cooldown": "<b>Detalhes do modo Resfriamento ao acertar:</b><br>Se <b>qualquer imagem</b> nesta pasta for clicada; a pasta inteira terá a <b>busca desativada (ignorada)</b> pelo tempo especificado.<br>Use isso quando o grupo não for necessário por um tempo após uma ação.",
     "log_folder_cooldown_started": "Resfriamento iniciado para a pasta '%s' (%s segundos)",
-    "auto_scale_search_desc": "<b>Busca Automática em Múltiplas Escalas:</b><br>Use quando o tamanho da imagem registrada diferir ligeiramente do alvo real (por exemplo, diferenças de renderização de fonte).<br>Pesquisa dividindo o intervalo da escala \"Centro\" pelo \"Intervalo (±)\" em \"Passos\".<br>*Aumentar os passos aumentará a carga da CPU."
+    "auto_scale_search_desc": "<b>Busca Automática em Múltiplas Escalas:</b><br>Use quando o tamanho da imagem registrada diferir ligeiramente do alvo real (por exemplo, diferenças de renderização de fonte).<br>Pesquisa dividindo o intervalo da escala \"Centro\" pelo \"Intervalo (±)\" em \"Passos\".<br>*Aumentar os passos aumentará a carga da CPU.",
+    "folder_dialog_radio_priority_sequence": "Prioridade Sequencial",
+    "folder_dialog_group_sequence": "Configurações de Prioridade Sequencial",
+    "folder_dialog_sequence_interval": "Intervalo de Etapa:",
+    "folder_dialog_tooltip_sequence": "<b>Modo de Prioridade Sequencial:</b><br>Quando a PRIMEIRA imagem nesta pasta corresponde, o sistema entra em modo de sequência.<br>Ele buscará as próximas imagens (B, C, D...) uma por uma.<br>Para cada imagem, ele espera/busca pelo 'Intervalo de Etapa' especificado antes de mover forçadamente para a próxima imagem.",
+    "log_sequence_started": "Modo de prioridade sequencial iniciado. Etapas restantes: %s",
+    "log_sequence_next_step": "Etapa da sequência: Buscando por '%s'",
+    "log_sequence_completed": "Modo de prioridade sequencial concluído."
 }

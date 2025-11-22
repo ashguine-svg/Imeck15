@@ -1,4 +1,5 @@
-# ui.py (完全版: 自動スケール修正 & 孫フォルダ対応)
+# ui.py
+# ★★★ (修正) 順序優先フォルダのアイコン・文字色を水色(Cyan)に設定 ★★★
 
 import sys
 import json
@@ -9,7 +10,7 @@ from PySide6.QtWidgets import (
     QTreeWidget, QTreeWidgetItem, QMenu, QTabWidget, QTextEdit, QDialog, QMessageBox,
     QComboBox, QDialogButtonBox, QRadioButton, QButtonGroup, QScrollArea, QAbstractItemView,
     QProxyStyle, QStyle, QStyleOptionViewItem, QToolTip,
-    QInputDialog, QTreeWidgetItemIterator # ★ QTreeWidgetItemIterator を追加
+    QInputDialog, QTreeWidgetItemIterator
 )
 from PySide6.QtGui import (
     QIcon, QPixmap, QImage, QPainter, QColor, QBrush, QFont, QPalette,
@@ -938,12 +939,11 @@ class UIManager(QMainWindow):
         as_conf = self.app_config.get('auto_scale', {})
         self.auto_scale_widgets['use_window_scale'].setChecked(as_conf.get('use_window_scale', True))
         
-        # --- ▼▼▼ 追加: 設定値の読み込み ▼▼▼ ---
         self.auto_scale_widgets['enabled'].setChecked(as_conf.get('enabled', False))
         self.auto_scale_widgets['center'].setValue(as_conf.get('center', 1.0))
         self.auto_scale_widgets['range'].setValue(as_conf.get('range', 0.2))
         self.auto_scale_widgets['steps'].setValue(as_conf.get('steps', 5))
-        # --- ▲▲▲ 追加完了 ▲▲▲ ---
+        
         self.app_settings_widgets['capture_method'].setChecked(self.app_config.get('capture_method', 'dxcam') == 'dxcam')
         self.app_settings_widgets['frame_skip_rate'].setValue(self.app_config.get('frame_skip_rate', 2))
         self.app_settings_widgets['grayscale_matching'].setChecked(self.app_config.get('grayscale_matching', False))
@@ -973,10 +973,6 @@ class UIManager(QMainWindow):
     def update_dependent_widgets_state(self):
         is_lw_mode_enabled = self.app_settings_widgets['lightweight_mode_enabled'].isChecked()
         
-        # --- ▼▼▼ 修正: 以下の行を削除しました (軽量化モードでも操作可能にする) ▼▼▼ ---
-        # self.auto_scale_group.setEnabled(not is_lw_mode_enabled) 
-        # --- ▲▲▲ 修正完了 ▲▲▲ ---
-        
         self.app_settings_widgets['lightweight_mode_preset'].setEnabled(is_lw_mode_enabled)
         
         # --- 自動スケール項目の有効無効制御 ---
@@ -989,7 +985,6 @@ class UIManager(QMainWindow):
         self.as_steps_label.setEnabled(is_search_enabled)
         self.auto_scale_info_label.setEnabled(is_search_enabled)
         
-        # 情報ラベルの更新を呼び出し (翻訳メソッドを再利用)
         self.as_search_desc_label.setEnabled(is_search_enabled)
         self.retranslate_ui()
 
@@ -1055,15 +1050,14 @@ class UIManager(QMainWindow):
                 
                 brush = QBrush(QApplication.palette().text().color())
                 icon_color = Qt.transparent
-                # --- ▼▼▼ 修正箇所: 水色(Qt.cyan) から 紫(QColor("purple")) に変更 ▼▼▼ ---
+                
                 if mode == 'normal': brush = QBrush(QColor("darkgray")); icon_color = QColor("darkgray")
                 elif mode == 'excluded': brush = QBrush(Qt.red); icon_color = Qt.red
-                
-                # ★ Qt.cyan を QColor("purple") に変更しました
                 elif mode == 'cooldown': brush = QBrush(QColor("purple")); icon_color = QColor("purple") 
-                
                 elif mode == 'priority_image': brush = QBrush(Qt.blue); icon_color = Qt.blue
                 elif mode == 'priority_timer': brush = QBrush(Qt.darkGreen); icon_color = Qt.green
+                # --- ★★★ 修正箇所: 順序優先モードの色設定 (水色) ★★★ ---
+                elif mode == 'priority_sequence': brush = QBrush(Qt.cyan); icon_color = Qt.cyan
                 # --- ▲▲▲ 修正完了 ▲▲▲ ---
                 
                 folder_item.setIcon(0, self.create_colored_icon(icon_color))
@@ -1324,62 +1318,57 @@ class UIManager(QMainWindow):
         """
         (UIスレッド) 現在のツリーの順序を読み取り、
         保存用のデータディクショナリとして返します。
+        ★ 修正: 再帰処理を導入し、孫フォルダ以降の階層構造も正しく保存するように変更
         """
         data_to_save = {
             'top_level': [],
             'folders': {}
         }
         
-        top_level_order_paths = []
-        folder_data_map = {}
+        # --- 内部関数: 再帰的にフォルダの中身を収集 ---
+        def process_folder_recursive(parent_item):
+            """
+            フォルダアイテムを受け取り、その子アイテムのリストを返します。
+            子アイテムがさらにフォルダだった場合、data_to_save['folders'] に登録します。
+            """
+            child_order_filenames = []
+            parent_path_str = parent_item.data(0, Qt.UserRole)
+            
+            for j in range(parent_item.childCount()):
+                child_item = parent_item.child(j)
+                if not child_item: continue
+                
+                child_path_str = child_item.data(0, Qt.UserRole)
+                if not child_path_str: continue
+                
+                original_child_path = Path(child_path_str)
+                child_path_name = original_child_path.name
+                
+                # フォルダの場合、再帰的に処理を行う
+                if original_child_path.is_dir():
+                    # この孫フォルダの中身も保存対象にする
+                    process_folder_recursive(child_item)
+                
+                child_order_filenames.append(child_path_name)
+            
+            # 辞書に登録 (親フォルダパス -> 子ファイル名リスト)
+            if parent_path_str:
+                data_to_save['folders'][parent_path_str] = child_order_filenames
 
+        # --- メイン処理: トップレベルアイテムの走査 ---
         for i in range(self.image_tree.topLevelItemCount()):
             item = self.image_tree.topLevelItem(i)
             if not item: continue
             
-            original_path_str = item.data(0, Qt.UserRole)
-            if not original_path_str: continue
+            path_str = item.data(0, Qt.UserRole)
+            if not path_str: continue
             
-            original_path = Path(original_path_str)
-            path_str = original_path_str
-
-            if original_path.is_dir():
-                path_str = str(original_path)
-            else:
-                new_path = self.config_manager.base_dir / original_path.name
-                path_str = str(new_path)
+            # トップレベルリストに追加
+            data_to_save['top_level'].append(path_str)
             
-            if str(original_path) != path_str:
-                item.setData(0, Qt.UserRole, path_str)
-            
-            top_level_order_paths.append(path_str)
-            
+            # アイテムがフォルダの場合、再帰処理を開始
             if Path(path_str).is_dir():
-                folder_path_str = path_str
-                child_order_filenames = []
-                for j in range(item.childCount()):
-                    child_item = item.child(j)
-                    if not child_item: continue
-                    
-                    child_path_str = child_item.data(0, Qt.UserRole)
-                    if not child_path_str: continue
-                    
-                    original_child_path = Path(child_path_str)
-                    child_path_name = original_child_path.name
-                    
-                    if not original_child_path.is_dir():
-                        new_child_path = Path(folder_path_str) / original_child_path.name
-                        child_path_name = original_child_path.name
-                        
-                        if str(original_child_path) != str(new_child_path):
-                            child_item.setData(0, Qt.UserRole, str(new_child_path))
-                    
-                    child_order_filenames.append(child_path_name)
-                
-                folder_data_map[folder_path_str] = child_order_filenames
-        
-        data_to_save['top_level'] = top_level_order_paths
-        data_to_save['folders'] = folder_data_map
+                process_folder_recursive(item)
         
         return data_to_save
 

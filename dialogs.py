@@ -1,4 +1,4 @@
-# dialogs.py
+# dialogs.py (順序優先モード追加版)
 
 import sys
 from PySide6.QtWidgets import (
@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QCursor
 from PySide6.QtCore import Qt, Signal, QTimer
 
+# ... (RecAreaSelectionDialog は変更なし) ...
 class RecAreaSelectionDialog(QDialog):
     selectionMade = Signal(str)
     
@@ -63,9 +64,11 @@ class FolderSettingsDialog(QDialog):
         mode_layout = QVBoxLayout()
         self.radio_normal = QRadioButton(lm("folder_dialog_radio_normal"))
         self.radio_excluded = QRadioButton(lm("folder_dialog_radio_excluded"))
-        self.radio_cooldown = QRadioButton(lm("folder_dialog_radio_cooldown")) # ★追加
+        self.radio_cooldown = QRadioButton(lm("folder_dialog_radio_cooldown"))
         self.radio_priority_image = QRadioButton(lm("folder_dialog_radio_priority_image"))
         self.radio_priority_timer = QRadioButton(lm("folder_dialog_radio_priority_timer"))
+        # ★ 追加: 順序優先
+        self.radio_priority_sequence = QRadioButton(lm("folder_dialog_radio_priority_sequence"))
         
         # ルートでない場合はタイマー優先を無効化
         if not is_root:
@@ -76,24 +79,27 @@ class FolderSettingsDialog(QDialog):
         self.mode_group = QButtonGroup(self)
         self.mode_group.addButton(self.radio_normal, 0)
         self.mode_group.addButton(self.radio_excluded, 1)
-        self.mode_group.addButton(self.radio_cooldown, 2) # ★ID 2を使用
+        self.mode_group.addButton(self.radio_cooldown, 2)
         self.mode_group.addButton(self.radio_priority_image, 3)
         self.mode_group.addButton(self.radio_priority_timer, 4)
+        self.mode_group.addButton(self.radio_priority_sequence, 5) # ★ ID 5
         
         mode_layout.addWidget(self.radio_normal)
         mode_layout.addWidget(self.radio_excluded)
-        mode_layout.addWidget(self.radio_cooldown) # ★追加
+        mode_layout.addWidget(self.radio_cooldown)
         mode_layout.addWidget(self.radio_priority_image)
         mode_layout.addWidget(self.radio_priority_timer)
+        mode_layout.addWidget(self.radio_priority_sequence) # ★ 追加
+        
         mode_box.setLayout(mode_layout)
         self.layout.addWidget(mode_box)
         
-        # --- クールダウン設定 (新規) ---
+        # --- クールダウン設定 ---
         self.cooldown_box = QGroupBox(lm("folder_dialog_group_cooldown"))
         cooldown_layout = QGridLayout()
         cooldown_layout.addWidget(QLabel(lm("folder_dialog_cooldown_time")), 0, 0)
         self.cooldown_time_spin = QSpinBox()
-        self.cooldown_time_spin.setRange(1, 3600) # 最大1時間
+        self.cooldown_time_spin.setRange(1, 3600)
         self.cooldown_time_spin.setSuffix(lm("folder_dialog_suffix_seconds"))
         cooldown_layout.addWidget(self.cooldown_time_spin, 0, 1)
         self.cooldown_box.setLayout(cooldown_layout)
@@ -127,29 +133,42 @@ class FolderSettingsDialog(QDialog):
         self.timer_priority_box.setLayout(timer_layout)
         self.layout.addWidget(self.timer_priority_box)
 
+        # --- ★ 順序優先設定 (新規) ---
+        # タイマー設定と似ていますが、「1枚あたりの待機時間」を設定します
+        self.sequence_priority_box = QGroupBox(lm("folder_dialog_group_sequence"))
+        sequence_layout = QGridLayout()
+        sequence_layout.addWidget(QLabel(lm("folder_dialog_sequence_interval")), 0, 0)
+        self.sequence_interval_spin = QSpinBox()
+        self.sequence_interval_spin.setRange(1, 300) # 最大5分待機
+        self.sequence_interval_spin.setSuffix(lm("folder_dialog_suffix_seconds"))
+        sequence_layout.addWidget(self.sequence_interval_spin, 0, 1)
+        self.sequence_priority_box.setLayout(sequence_layout)
+        self.layout.addWidget(self.sequence_priority_box)
+
         # --- 表示制御 ---
         self.radio_cooldown.toggled.connect(self.cooldown_box.setEnabled)
         self.radio_priority_image.toggled.connect(self.image_priority_box.setEnabled)
         self.radio_priority_timer.toggled.connect(self.timer_priority_box.setEnabled)
+        # ★ 追加
+        self.radio_priority_sequence.toggled.connect(self.sequence_priority_box.setEnabled)
         
         # --- ツールチップ ---
         cooldown_tooltip = lm("folder_dialog_tooltip_cooldown")
         self.radio_cooldown.setToolTip(cooldown_tooltip)
         self.cooldown_box.setToolTip(cooldown_tooltip)
-        self.radio_cooldown.setToolTipDuration(-1)
-        self.cooldown_box.setToolTipDuration(-1)
 
         image_tooltip = lm("folder_dialog_tooltip_image")
         self.radio_priority_image.setToolTip(image_tooltip)
         self.image_priority_box.setToolTip(image_tooltip)
-        self.radio_priority_image.setToolTipDuration(-1)
-        self.image_priority_box.setToolTipDuration(-1)
 
         timer_tooltip = lm("folder_dialog_tooltip_timer")
         self.radio_priority_timer.setToolTip(timer_tooltip)
         self.timer_priority_box.setToolTip(timer_tooltip)
-        self.radio_priority_timer.setToolTipDuration(-1)
-        self.timer_priority_box.setToolTipDuration(-1)
+        
+        # ★ 追加
+        sequence_tooltip = lm("folder_dialog_tooltip_sequence")
+        self.radio_priority_sequence.setToolTip(sequence_tooltip)
+        self.sequence_priority_box.setToolTip(sequence_tooltip)
 
         self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         self.buttons.accepted.connect(self.accept)
@@ -162,24 +181,29 @@ class FolderSettingsDialog(QDialog):
         mode = settings.get('mode', 'normal')
         if mode == 'excluded':
             self.radio_excluded.setChecked(True)
-        elif mode == 'cooldown': # ★追加
+        elif mode == 'cooldown':
             self.radio_cooldown.setChecked(True)
         elif mode == 'priority_image':
             self.radio_priority_image.setChecked(True)
         elif mode == 'priority_timer':
             self.radio_priority_timer.setChecked(True)
+        elif mode == 'priority_sequence': # ★ 追加
+            self.radio_priority_sequence.setChecked(True)
         else:
             self.radio_normal.setChecked(True)
         
-        self.cooldown_time_spin.setValue(settings.get('cooldown_time', 30)) # ★追加
+        self.cooldown_time_spin.setValue(settings.get('cooldown_time', 30))
         self.priority_image_timeout_spin.setValue(settings.get('priority_image_timeout', 10))
         self.interval_spin.setValue(settings.get('priority_interval', 10))
         self.timeout_spin.setValue(settings.get('priority_timeout', 5))
+        # ★ 追加: デフォルト3秒
+        self.sequence_interval_spin.setValue(settings.get('sequence_interval', 3)) 
         
         # 初期状態の有効/無効設定
         self.cooldown_box.setEnabled(mode == 'cooldown')
         self.image_priority_box.setEnabled(mode == 'priority_image')
         self.timer_priority_box.setEnabled(mode == 'priority_timer')
+        self.sequence_priority_box.setEnabled(mode == 'priority_sequence') # ★ 追加
 
     def get_settings(self):
         mode_id = self.mode_group.checkedId()
@@ -187,21 +211,24 @@ class FolderSettingsDialog(QDialog):
         if mode_id == 1:
             mode = 'excluded'
         elif mode_id == 2:
-            mode = 'cooldown' # ★追加
+            mode = 'cooldown'
         elif mode_id == 3:
             mode = 'priority_image'
         elif mode_id == 4:
             mode = 'priority_timer'
+        elif mode_id == 5: # ★ 追加
+            mode = 'priority_sequence'
             
         return {
             'mode': mode,
-            'cooldown_time': self.cooldown_time_spin.value(), # ★追加
+            'cooldown_time': self.cooldown_time_spin.value(),
             'priority_image_timeout': self.priority_image_timeout_spin.value(),
             'priority_interval': self.interval_spin.value(),
-            'priority_timeout': self.timeout_spin.value()
+            'priority_timeout': self.timeout_spin.value(),
+            'sequence_interval': self.sequence_interval_spin.value() # ★ 追加
         }
 
-
+# ... (InitializationDialog は変更なし) ...
 class InitializationDialog(QDialog):
     def __init__(self, core_engine, logger, locale_manager, parent=None):
         super().__init__(parent)

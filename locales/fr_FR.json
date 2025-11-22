@@ -1,6 +1,6 @@
 {
     "language_name": "Français",
-    "window_title": "Imeck15 v1.6.1.0 Édition multilingue",
+    "window_title": "Imeck15 v1.6.2.0 Édition multilingue",
     "monitor_button_start": "Démarrer la surveillance",
     "monitor_button_stop": "Arrêter la surveillance",
     "monitor_button_tooltip": "Démarrer la surveillance.<br>Double-clic droit pour arrêter, triple-clic droit pour démarrer",
@@ -30,7 +30,7 @@
     "tab_auto_scale": "Échelle Auto",
     "auto_scale_use_window": "Utiliser Base Échelle Fenêtre",
     "auto_scale_use_window_tooltip": "ON: Applique l'échelle optimale obtenue de la fenêtre ou de la recherche au modèle.<br>OFF: Désactive la correction d'échelle et tente toujours la reconnaissance avec la taille originale de l'image (1.0x).",
-    "auto_scale_enable_search": "Activer la recherche d'échelle",
+    "auto_scale_enable_search": "Activer la recherche multi-échelle automatique",
     "auto_scale_center": "Centre :",
     "auto_scale_range": "Plage (±) :",
     "auto_scale_steps": "Étapes :",
@@ -391,5 +391,12 @@
     "folder_dialog_cooldown_time": "Temps d'arrêt après clic :",
     "folder_dialog_tooltip_cooldown": "<b>Détails du mode Refroidissement au clic :</b><br>Si <b>une seule image</b> de ce dossier est cliquée; tout le dossier est <b>désactivé (ignoré)</b> pendant la durée spécifiée.<br>Utilisez ceci lorsque le groupe n'est plus nécessaire pendant un moment après une action.",
     "log_folder_cooldown_started": "Refroidissement commencé pour le dossier '%s' (%s secondes)",
-    "auto_scale_search_desc": "<b>Recherche multi-échelle automatique :</b><br>Utilisez cette option lorsque la taille de l'image enregistrée diffère légèrement de la cible réelle (par exemple, différences de rendu de police).<br>Effectue une recherche en divisant la plage de l'échelle \"Centre\" par la \"Plage (±)\" en \"Étapes\".<br>*L'augmentation des étapes augmentera la charge du processeur."
+    "auto_scale_search_desc": "<b>Recherche multi-échelle automatique :</b><br>Utilisez cette option lorsque la taille de l'image enregistrée diffère légèrement de la cible réelle (par exemple, différences de rendu de police).<br>Effectue une recherche en divisant la plage de l'échelle \"Centre\" par la \"Plage (±)\" en \"Étapes\".<br>*L'augmentation des étapes augmentera la charge du processeur.",
+    "folder_dialog_radio_priority_sequence": "Priorité séquentielle",
+    "folder_dialog_group_sequence": "Paramètres de priorité séquentielle",
+    "folder_dialog_sequence_interval": "Intervalle d'étape :",
+    "folder_dialog_tooltip_sequence": "<b>Mode Priorité Séquentielle :</b><br>Lorsque la PREMIÈRE image de ce dossier correspond, le système passe en mode séquence.<br>Il cherchera les images suivantes (B, C, D...) une par une.<br>Pour chaque image, il attend/cherche pendant l''Intervalle d''étape' spécifié avant de passer obligatoirement à l'image suivante.",
+    "log_sequence_started": "Mode priorité séquentielle démarré. Étapes restantes : %s",
+    "log_sequence_next_step": "Étape de séquence : Recherche de '%s'",
+    "log_sequence_completed": "Mode priorité séquentielle terminé."
 }

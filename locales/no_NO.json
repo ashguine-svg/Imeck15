@@ -1,6 +1,6 @@
 {
     "language_name": "Norsk",
-    "window_title": "Imeck15 v1.6.1.0 Flerspråklig utgave",
+    "window_title": "Imeck15 v1.6.2.0 Flerspråklig utgave",
     "monitor_button_start": "Start Overvåking",
     "monitor_button_stop": "Stopp Overvåking",
     "monitor_button_tooltip": "Start overvåking.<br>Høyre dobbeltklikk for å stoppe, høyre trippelklikk for å starte",
@@ -30,7 +30,7 @@
     "tab_auto_scale": "Auto-Skalering",
     "auto_scale_use_window": "Bruk Vindu Skala Basis",
     "auto_scale_use_window_tooltip": "PÅ: Bruker den optimale skalaen oppnådd fra vindu eller søk på malen.<br>AV: Deaktiverer skalakorreksjon og prøver alltid gjenkjenning med den originale bildestørrelsen (1.0x).",
-    "auto_scale_enable_search": "Aktiver skalasøk",
+    "auto_scale_enable_search": "Aktiver automatisk flerskala-søk",
     "auto_scale_center": "Senter:",
     "auto_scale_range": "Område (±):",
     "auto_scale_steps": "Trinn:",
@@ -391,5 +391,12 @@
     "folder_dialog_cooldown_time": "Stopptid etter klikk:",
     "folder_dialog_tooltip_cooldown": "<b>Detaljer om nedkjøling ved treff:</b><br>Hvis det klikkes på <b>et enkelt bilde</b> i denne mappen; blir hele mappen <b>deaktivert (ignorert)</b> i den angitte tiden.<br>Bruk dette når gruppen ikke trengs på en stund etter at en handling er utført.",
     "log_folder_cooldown_started": "Nedkjøling startet for mappe '%s' (%s sekunder)",
-    "auto_scale_search_desc": "<b>Automatisk flerskalasøk:</b><br>Bruk når størrelsen på det registrerte bildet avviker litt fra det faktiske målet (f.eks. forskjeller i skriftgjengivelse).<br>Søker ved å dele området fra \"Senter\"-skalaen med \"Område (±)\" i \"Trinn\".<br>*Å øke trinn vil øke CPU-belastningen."
+    "auto_scale_search_desc": "<b>Automatisk flerskalasøk:</b><br>Bruk når størrelsen på det registrerte bildet avviker litt fra det faktiske målet (f.eks. forskjeller i skriftgjengivelse).<br>Søker ved å dele området fra \"Senter\"-skalaen med \"Område (±)\" i \"Trinn\".<br>*Å øke trinn vil øke CPU-belastningen.",
+    "folder_dialog_radio_priority_sequence": "Sekvensiell prioritet",
+    "folder_dialog_group_sequence": "Innstillinger for sekvensiell prioritet",
+    "folder_dialog_sequence_interval": "Trinnintervall:",
+    "folder_dialog_tooltip_sequence": "<b>Sekvensiell prioritetsmodus:</b><br>Når det FØRSTE bildet i denne mappen matches, går systemet inn i en sekvensmodus.<br>Det vil søke etter de neste bildene (B, C, D...) ett etter ett.<br>For hvert bilde venter/søker det i det angitte 'Trinnintervallet' før det tvinges videre til neste bilde.",
+    "log_sequence_started": "Sekvensiell prioritetsmodus startet. Gjenstående trinn: %s",
+    "log_sequence_next_step": "Sekvenstrinn: Søker etter '%s'",
+    "log_sequence_completed": "Sekvensiell prioritetsmodus fullført."
 }

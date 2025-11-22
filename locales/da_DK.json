@@ -1,6 +1,6 @@
 {
     "language_name": "Dansk",
-    "window_title": "Imeck15 v1.6.1.0 Flersproget udgave",
+    "window_title": "Imeck15 v1.6.2.0 Flersproget udgave",
     "monitor_button_start": "Start Overvågning",
     "monitor_button_stop": "Stop Overvågning",
     "monitor_button_tooltip": "Start overvågning.<br>Højre dobbeltklik for at stoppe, højre tredobbeltklik for at starte",
@@ -30,7 +30,7 @@
     "tab_auto_scale": "Auto-Skala",
     "auto_scale_use_window": "Brug Vindues Skalabasis",
     "auto_scale_use_window_tooltip": "TIL: Anvender den optimale skala opnået fra vinduet eller søgningen på skabelonen.<br>FRA: Deaktiverer skalakorrigering og forsøger altid genkendelse med den originale billedstørrelse (1.0x).",
-    "auto_scale_enable_search": "Aktiver skalasøgning",
+    "auto_scale_enable_search": "Aktiver automatisk flerskala-søgning",
     "auto_scale_center": "Center:",
     "auto_scale_range": "Område (±):",
     "auto_scale_steps": "Trin:",
@@ -391,5 +391,12 @@
     "folder_dialog_cooldown_time": "Stoptid efter klik:",
     "folder_dialog_tooltip_cooldown": "<b>Detaljer om nedkøling ved hit:</b><br>Hvis der klikkes på <b>et enkelt billede</b> i denne mappe; bliver hele mappen <b>deaktiveret (ignoreret)</b> i den angivne tid.<br>Brug dette; når gruppen ikke er nødvendig i et stykke tid efter en handling.",
     "log_folder_cooldown_started": "Nedkøling startet for mappe '%s' (%s sekunder)",
-    "auto_scale_search_desc": "<b>Automatisk flerskala-søgning:</b><br>Brug når størrelsen på det registrerede billede afviger lidt fra det faktiske mål (f.eks. forskelle i skrifttyperendering).<br>Søger ved at opdele området fra \"Center\"-skalaen med \"Område (±)\" i \"Trin\".<br>*Forøgelse af trin vil øge CPU-belastningen."
+    "auto_scale_search_desc": "<b>Automatisk flerskala-søgning:</b><br>Brug når størrelsen på det registrerede billede afviger lidt fra det faktiske mål (f.eks. forskelle i skrifttyperendering).<br>Søger ved at opdele området fra \"Center\"-skalaen med \"Område (±)\" i \"Trin\".<br>*Forøgelse af trin vil øge CPU-belastningen.",
+    "folder_dialog_radio_priority_sequence": "Sekventiel prioritet",
+    "folder_dialog_group_sequence": "Indstillinger for sekventiel prioritet",
+    "folder_dialog_sequence_interval": "Trininterval:",
+    "folder_dialog_tooltip_sequence": "<b>Sekventiel Prioritetstilstand:</b><br>Når det FØRSTE billede i denne mappe matches, går systemet i sekvenstilstand.<br>Det vil søge efter de næste billeder (B, C, D...) et efter et.<br>For hvert billede venter/søger det i det angivne 'Trininterval', før det tvinges videre til det næste billede.",
+    "log_sequence_started": "Sekventiel prioritetstilstand startet. Resterende trin: %s",
+    "log_sequence_next_step": "Sekvenstrin: Søger efter '%s'",
+    "log_sequence_completed": "Sekventiel prioritetstilstand afsluttet."
 }

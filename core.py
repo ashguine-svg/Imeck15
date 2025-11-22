@@ -33,7 +33,7 @@ from selection import SelectionOverlay, WindowSelectionListener
 from matcher import _match_template_task, calculate_phash
 from action import ActionManager
 from template_manager import TemplateManager
-from monitoring_states import IdleState, PriorityState, CountdownState
+from monitoring_states import IdleState, PriorityState, CountdownState, SequencePriorityState
 from environment_tracker import EnvironmentTracker
 
 
@@ -189,6 +189,11 @@ class CoreEngine(QObject):
             self.state = new_state
         self._last_clicked_path = None
         self.match_detected_at.clear()
+        
+    # ★ 新規追加
+    def transition_to_sequence_priority(self, ordered_paths, interval_sec):
+        new_state = SequencePriorityState(self, ordered_paths, interval_sec)
+        self.transition_to(new_state)
 
     def transition_to_timer_priority(self, folder_path):
         folder_settings = self.config_manager.load_item_setting(Path(folder_path))

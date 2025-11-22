@@ -1,6 +1,6 @@
 {
     "language_name": "Deutsch (DE)",
-    "window_title": "Imeck15 v1.6.1.0 Mehrsprachige Ausgabe",
+    "window_title": "Imeck15 v1.6.2.0 Mehrsprachige Ausgabe",
     "monitor_button_start": "Überwachung starten",
     "monitor_button_stop": "Überwachung stoppen",
     "monitor_button_tooltip": "Überwachung starten.<br>Rechts-Doppelklick zum Stoppen, Rechts-Dreifachklick zum Starten",
@@ -30,7 +30,7 @@
     "tab_auto_scale": "Auto-Skalierung",
     "auto_scale_use_window": "Fensterskalierung als Basis verwenden",
     "auto_scale_use_window_tooltip": "EIN: Wendet den optimalen Maßstab, der von Fenster oder Suche ermittelt wurde, auf die Vorlage an.<br>AUS: Deaktiviert die Maßstabskorrektur und versucht die Erkennung immer mit der Originalbildgröße (1.0x).",
-    "auto_scale_enable_search": "Skalierungssuche aktivieren",
+    "auto_scale_enable_search": "Automatische Multi-Skalen-Suche aktivieren",
     "auto_scale_center": "Mitte:",
     "auto_scale_range": "Bereich (±):",
     "auto_scale_steps": "Schritte:",
@@ -389,5 +389,12 @@
     "folder_dialog_cooldown_time": "Stoppzeit nach Klick:",
     "folder_dialog_tooltip_cooldown": "<b>Details zum Modus Abklingzeit bei Treffer:</b><br>Wenn <b>ein einziges Bild</b> in diesem Ordner angeklickt wird; wird der gesamte Ordner für die angegebene Zeit <b>deaktiviert (ignoriert)</b>.<br>Verwenden Sie dies; wenn die Gruppe nach einer Aktion für eine Weile nicht benötigt wird.",
     "log_folder_cooldown_started": "Abklingzeit für Ordner '%s' gestartet (%s Sekunden)",
-    "auto_scale_search_desc": "<b>Automatische Mehrfachskalierungssuche:</b><br>Verwenden Sie diese Funktion, wenn die Größe des registrierten Bildes geringfügig vom tatsächlichen Ziel abweicht (z. B. Unterschiede beim Schriftart-Rendering).<br>Sucht durch Aufteilen des Bereichs von der \"Mitte\"-Skala um den \"Bereich (±)\" in \"Schritte\".<br>*Das Erhöhen der Schritte erhöht die CPU-Last."
+    "auto_scale_search_desc": "<b>Automatische Mehrfachskalierungssuche:</b><br>Verwenden Sie diese Funktion, wenn die Größe des registrierten Bildes geringfügig vom tatsächlichen Ziel abweicht (z. B. Unterschiede beim Schriftart-Rendering).<br>Sucht durch Aufteilen des Bereichs von der \"Mitte\"-Skala um den \"Bereich (±)\" in \"Schritte\".<br>*Das Erhöhen der Schritte erhöht die CPU-Last.",
+    "folder_dialog_radio_priority_sequence": "Sequenzielle Priorität",
+    "folder_dialog_group_sequence": "Einstellungen für sequenzielle Priorität",
+    "folder_dialog_sequence_interval": "Schrittintervall:",
+    "folder_dialog_tooltip_sequence": "<b>Modus Sequenzielle Priorität:</b><br>Wenn das ERSTE Bild in diesem Ordner übereinstimmt, wechselt das System in den Sequenzmodus.<br>Es sucht nacheinander nach den nächsten Bildern (B, C, D...).<br>Für jedes Bild wartet/sucht es das angegebene 'Schrittintervall', bevor es zwangsweise zum nächsten Bild übergeht.",
+    "log_sequence_started": "Sequenzieller Prioritätsmodus gestartet. Verbleibende Schritte: %s",
+    "log_sequence_next_step": "Sequenzschritt: Suche nach '%s'",
+    "log_sequence_completed": "Sequenzieller Prioritätsmodus abgeschlossen."
 }

@@ -1,6 +1,6 @@
 {
     "language_name": "Polski",
-    "window_title": "Imeck15 v1.6.1.0 Wersja wielojęzyczna",
+    "window_title": "Imeck15 v1.6.2.0 Wersja wielojęzyczna",
     "monitor_button_start": "Rozpocznij Monitorowanie",
     "monitor_button_stop": "Zatrzymaj Monitorowanie",
     "monitor_button_tooltip": "Rozpocznij monitorowanie.<br>Prawy podwójny klik, aby zatrzymać, prawy potrójny klik, aby rozpocząć",
@@ -30,7 +30,7 @@
     "tab_auto_scale": "Auto Skalowanie",
     "auto_scale_use_window": "Użyj Podstawy Skali Okna",
     "auto_scale_use_window_tooltip": "WŁ: Stosuje optymalną skalę uzyskaną z okna lub wyszukiwania do szablonu.<br>WYŁ: Wyłącza korekcję skali i zawsze próbuje rozpoznawania z oryginalnym rozmiarem obrazu (1.0x).",
-    "auto_scale_enable_search": "Włącz wyszukiwanie skali",
+    "auto_scale_enable_search": "Włącz automatyczne wyszukiwanie wieloskalowe",
     "auto_scale_center": "Środek:",
     "auto_scale_range": "Zakres (±):",
     "auto_scale_steps": "Kroki:",
@@ -391,5 +391,12 @@
     "folder_dialog_cooldown_time": "Czas zatrzymania po kliknięciu:",
     "folder_dialog_tooltip_cooldown": "<b>Szczegóły trybu odnowienia po kliknięciu:</b><br>Jeśli kliknięty zostanie <b>jakikolwiek obraz</b> w tym folderze; cały folder zostanie <b>wyłączony z wyszukiwania (ignorowany)</b> na określony czas.<br>Użyj tego; gdy grupa nie jest potrzebna przez chwilę po wykonaniu akcji.",
     "log_folder_cooldown_started": "Rozpoczęto odnowienie dla folderu '%s' (%s s)",
-    "auto_scale_search_desc": "<b>Automatyczne wyszukiwanie wieloskalowe:</b><br>Użyj, gdy rozmiar zarejestrowanego obrazu nieznacznie różni się od rzeczywistego celu (np. różnice w renderowaniu czcionek).<br>Wyszukuje, dzieląc zakres od skali \"Środek\" przez \"Zakres (±)\" na \"Kroki\".<br>*Zwiększenie liczby kroków zwiększy obciążenie procesora."
+    "auto_scale_search_desc": "<b>Automatyczne wyszukiwanie wieloskalowe:</b><br>Użyj, gdy rozmiar zarejestrowanego obrazu nieznacznie różni się od rzeczywistego celu (np. różnice w renderowaniu czcionek).<br>Wyszukuje, dzieląc zakres od skali \"Środek\" przez \"Zakres (±)\" na \"Kroki\".<br>*Zwiększenie liczby kroków zwiększy obciążenie procesora.",
+    "folder_dialog_radio_priority_sequence": "Priorytet sekwencyjny",
+    "folder_dialog_group_sequence": "Ustawienia priorytetu sekwencyjnego",
+    "folder_dialog_sequence_interval": "Interwał kroku:",
+    "folder_dialog_tooltip_sequence": "<b>Tryb priorytetu sekwencyjnego:</b><br>Gdy zostanie dopasowany PIERWSZY obraz w tym folderze, system przechodzi w tryb sekwencyjny.<br>Będzie wyszukiwać kolejne obrazy (B, C, D...) jeden po drugim.<br>Dla każdego obrazu czeka/szuka przez określony 'Interwał kroku' przed wymuszonym przejściem do następnego obrazu.",
+    "log_sequence_started": "Uruchomiono tryb priorytetu sekwencyjnego. Pozostałe kroki: %s",
+    "log_sequence_next_step": "Krok sekwencji: Szukanie '%s'",
+    "log_sequence_completed": "Tryb priorytetu sekwencyjnego zakończony."
 }

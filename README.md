@@ -2,6 +2,10 @@
 
 -----
 
+<<<<<<< HEAD
+=======
+{
+>>>>>>> 28317e87717755eaf57606ff977afcf1a90a5eb6
 type: uploaded file
 fileName: README.md
 fullContent:

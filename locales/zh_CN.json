@@ -1,6 +1,6 @@
 {
     "language_name": "简体中文",
-    "window_title": "Imeck15 v1.6.1.0 多语言版",
+    "window_title": "Imeck15 v1.6.2.0 多语言版",
     "monitor_button_start": "开始监控",
     "monitor_button_stop": "停止监控",
     "monitor_button_tooltip": "开始监控。<br>鼠标右键双击停止，鼠标右键三击开始",
@@ -30,7 +30,7 @@
     "tab_auto_scale": "自动缩放",
     "auto_scale_use_window": "使用窗口基础缩放",
     "auto_scale_use_window_tooltip": "开：将从窗口或搜索中获得的最佳比例应用于模板。<br>关：禁用比例校正，始终尝试使用原始图像大小（1.0倍）进行识别。",
-    "auto_scale_enable_search": "启用缩放搜索",
+    "auto_scale_enable_search": "启用自动多尺度搜索",
     "auto_scale_center": "中心：",
     "auto_scale_range": "范围(±)：",
     "auto_scale_steps": "步数：",
@@ -389,5 +389,12 @@
     "folder_dialog_cooldown_time": "点击后的停止时间：",
     "folder_dialog_tooltip_cooldown": "<b>命中后冷却模式详情：</b><br>如果点击了此文件夹中的<b>任何一张图片</b>，整个文件夹将在指定时间内<b>停止搜索（忽略）</b>。<br>当“执行其中一个后，该组暂时不再需要”时使用此功能。",
     "log_folder_cooldown_started": "文件夹 '%s' 的冷却已开始 (%s秒)",
-    "auto_scale_search_desc": "<b>自动多尺度搜索：</b><br>当注册图像的大小与实际目标略有不同（例如字体渲染差异）时使用。<br>通过将从“中心”比例到“范围(±)”的范围划分为“步数”来进行搜索。<br>*增加步数会增加 CPU 负载。"
+    "auto_scale_search_desc": "<b>自动多尺度搜索：</b><br>当注册图像的大小与实际目标略有不同（例如字体渲染差异）时使用。<br>通过将从“中心”比例到“范围(±)”的范围划分为“步数”来进行搜索。<br>*增加步数会增加 CPU 负载。",
+    "folder_dialog_radio_priority_sequence": "顺序优先",
+    "folder_dialog_group_sequence": "顺序优先设置",
+    "folder_dialog_sequence_interval": "步骤间隔:",
+    "folder_dialog_tooltip_sequence": "<b>顺序优先模式：</b><br>当此文件夹中的<b>第一张图片</b>匹配时，系统进入顺序模式。<br>它将逐一搜索后续图片（B、C、D...）。<br>对于每张图片，它会在强制移动到下一张图片之前，按照指定的<b>“步骤间隔”</b>进行等待/搜索。",
+    "log_sequence_started": "顺序优先模式已启动。剩余步骤：%s",
+    "log_sequence_next_step": "顺序步骤：正在搜索 '%s'",
+    "log_sequence_completed": "顺序优先模式已完成。"
 }

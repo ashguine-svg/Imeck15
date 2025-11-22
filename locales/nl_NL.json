@@ -1,6 +1,6 @@
 {
     "language_name": "Nederlands",
-    "window_title": "Imeck15 v1.6.1.0 Meertalige editie",
+    "window_title": "Imeck15 v1.6.2.0 Meertalige editie",
     "monitor_button_start": "Start Monitoring",
     "monitor_button_stop": "Stop Monitoring",
     "monitor_button_tooltip": "Start monitoring.<br>Rechter dubbelklik om te stoppen, rechter driedubbelklik om te starten",
@@ -30,7 +30,7 @@
     "tab_auto_scale": "Automatische Schaal",
     "auto_scale_use_window": "Gebruik Venster Schaal Basis",
     "auto_scale_use_window_tooltip": "AAN: Past de optimale schaal, verkregen uit venster of zoekopdracht, toe op het sjabloon.<br>UIT: Schakelt schaalcorrectie uit en probeert altijd herkenning met de originele afbeeldingsgrootte (1.0x).",
-    "auto_scale_enable_search": "Schaal zoeken inschakelen",
+    "auto_scale_enable_search": "Automatisch zoeken op meerdere schalen inschakelen",
     "auto_scale_center": "Midden:",
     "auto_scale_range": "Bereik (±):",
     "auto_scale_steps": "Stappen:",
@@ -391,5 +391,12 @@
     "folder_dialog_cooldown_time": "Stoptijd na klik:",
     "folder_dialog_tooltip_cooldown": "<b>Details modus Afkoeling bij treffer:</b><br>Als op <b>één afbeelding</b> in deze map wordt geklikt; wordt het zoeken in de hele map <b>uitgeschakeld (genegeerd)</b> gedurende de opgegeven tijd.<br>Gebruik dit wanneer de groep even niet nodig is nadat een actie is uitgevoerd.",
     "log_folder_cooldown_started": "Afkoeling gestart voor map '%s' (%s seconden)",
-    "auto_scale_search_desc": "<b>Automatisch zoeken op meerdere schalen:</b><br>Gebruik wanneer de grootte van de geregistreerde afbeelding enigszins afwijkt van het werkelijke doel (bijv. verschillen in lettertypeweergave).<br>Zoekt door het bereik van de schaal \"Midden\" door het \"Bereik (±)\" te verdelen in \"Stappen\".<br>*Het verhogen van stappen verhoogt de CPU-belasting."
+    "auto_scale_search_desc": "<b>Automatisch zoeken op meerdere schalen:</b><br>Gebruik wanneer de grootte van de geregistreerde afbeelding enigszins afwijkt van het werkelijke doel (bijv. verschillen in lettertypeweergave).<br>Zoekt door het bereik van de schaal \"Midden\" door het \"Bereik (±)\" te verdelen in \"Stappen\".<br>*Het verhogen van stappen verhoogt de CPU-belasting.",
+    "folder_dialog_radio_priority_sequence": "Sequentiële prioriteit",
+    "folder_dialog_group_sequence": "Instellingen sequentiële prioriteit",
+    "folder_dialog_sequence_interval": "Stapinterval:",
+    "folder_dialog_tooltip_sequence": "<b>Sequentiële prioriteitsmodus:</b><br>Wanneer de EERSTE afbeelding in deze map overeenkomt, gaat het systeem naar een volgordemodus.<br>Het zoekt één voor één naar de volgende afbeeldingen (B, C, D...).<br>Voor elke afbeelding wacht/zoekt het gedurende het opgegeven 'Stapinterval' voordat het geforceerd naar de volgende afbeelding gaat.",
+    "log_sequence_started": "Sequentiële prioriteitsmodus gestart. Resterende stappen: %s",
+    "log_sequence_next_step": "Volgordestap: Zoeken naar '%s'",
+    "log_sequence_completed": "Sequentiële prioriteitsmodus voltooid."
 }

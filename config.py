@@ -1,5 +1,5 @@
 # config.py
-# ★★★ (修正) _get_recursive_list で順序リストのパスとファイル名の照合不一致を修正 ★★★
+# ★★★ (修正) クリーンアップ時に、移動した画像のJSONを自動追従(レスキュー)させるロジックを追加 ★★★
 
 import json
 import shutil
@@ -19,16 +19,17 @@ class ConfigManager:
         self.window_scales_path = self.base_dir / "window_scales.json"
 
         # ロック機構の初期化
-        # JSONファイルごとの書き込み競合を防ぐためのロック辞書
         self.item_json_locks = {}
-        # ロック辞書にアクセスするための共通ロック
         self.item_json_locks_lock = threading.Lock()
 
+        # 初期化時にクリーンアップとレスキューを実行
         self._cleanup_orphaned_json_files()
 
     def _cleanup_orphaned_json_files(self):
         """
-        ペアとなる画像ファイルが存在しない、孤立した設定JSONファイルを削除します。
+        孤立した設定JSONファイルを処理します。
+        画像がOS上で移動されていた場合、JSONを追従して移動させます。
+        画像が完全に削除されていた場合のみ、JSONを削除します。
         """
         protected_files = [
             self.app_config_path.name,
@@ -38,11 +39,23 @@ class ConfigManager:
             self.sub_order_filename
         ]
         
-        image_extensions = ['.png', '.jpg', '.jpeg', '.bmp']
+        image_extensions = {'.png', '.jpg', '.jpeg', '.bmp'}
 
         self.logger.log("log_cleanup_start")
         cleaned_count = 0
+        rescued_count = 0
+
         try:
+            # 1. 現在存在するすべての画像のマップを作成 (ファイル名(拡張子なし) -> フルパス)
+            #    これにより、画像がどこへ移動していても見つけられるようにする
+            all_images_map = {}
+            for img_path in self.base_dir.rglob('*'):
+                if img_path.is_file() and img_path.suffix.lower() in image_extensions:
+                    # 同名のファイルが複数ある場合は、最後に見つかったものを優先する形になるが、
+                    # 通常の移動であれば問題ないレベル
+                    all_images_map[img_path.stem] = img_path
+
+            # 2. すべてのJSONファイルをチェック
             for json_path in self.base_dir.rglob('*.json'):
                 if json_path.name in protected_files:
                     continue
@@ -50,14 +63,39 @@ class ConfigManager:
                 base_name = json_path.stem
                 parent_dir = json_path.parent
                 
-                has_pair = False
+                # まず、同じフォルダに画像があるかチェック (通常の状態)
+                has_pair_locally = False
                 for ext in image_extensions:
-                    image_path = parent_dir / (base_name + ext)
-                    if image_path.exists():
-                        has_pair = True
+                    if (parent_dir / (base_name + ext)).exists():
+                        has_pair_locally = True
                         break
                 
-                if not has_pair:
+                if has_pair_locally:
+                    continue # 正常なので何もしない
+
+                # --- ここからレスキュー処理 ---
+                # 同じフォルダにない場合、別のフォルダに画像が移動していないか探す
+                if base_name in all_images_map:
+                    # 画像が見つかった！ JSONをそちらに移動する
+                    new_image_path = all_images_map[base_name]
+                    new_json_path = new_image_path.with_suffix('.json')
+                    
+                    try:
+                        # 移動先に既にJSONがない場合のみ移動
+                        if not new_json_path.exists():
+                            shutil.move(str(json_path), str(new_json_path))
+                            self.logger.log(f"[INFO] Rescued config JSON: Moved from '{json_path.parent.name}' to '{new_image_path.parent.name}'")
+                            rescued_count += 1
+                        else:
+                            # 移動先に既にJSONがあるなら、古い方は不要なので削除
+                            # (例: 画像を上書き移動した場合など)
+                            json_path.unlink()
+                            self.logger.log(f"[INFO] Deleted duplicate JSON: {json_path.name}")
+                            cleaned_count += 1
+                    except Exception as e:
+                        self.logger.log(f"[ERROR] Failed to move rescued JSON: {e}")
+                else:
+                    # 画像がどこにも見つからない -> 本当に削除されたファイル
                     try:
                         json_path.unlink()
                         self.logger.log("log_cleanup_deleted", str(json_path))
@@ -68,8 +106,8 @@ class ConfigManager:
         except Exception as e:
             self.logger.log("log_cleanup_error_general", str(e))
 
-        if cleaned_count > 0:
-            self.logger.log("log_cleanup_complete_deleted", cleaned_count)
+        if cleaned_count > 0 or rescued_count > 0:
+            self.logger.log(f"[INFO] Cleanup finished. Deleted: {cleaned_count}, Rescued: {rescued_count}")
         else:
             self.logger.log("log_cleanup_complete_none")
 
@@ -144,7 +182,6 @@ class ConfigManager:
             self.logger.log("log_window_scales_save_error", str(e))
 
     def _get_item_json_lock(self, json_path: Path) -> threading.Lock:
-        """指定されたJSONパスに対応するロックを取得または生成します。"""
         with self.item_json_locks_lock:
             path_key = str(json_path)
             if path_key not in self.item_json_locks:
@@ -154,15 +191,11 @@ class ConfigManager:
     def _filter_item_by_app(self, item_settings: dict, current_app_name: str) -> bool:
         if not current_app_name:
             return True
-
         env_list = item_settings.get("environment_info", [])
-
         if not env_list:
             return True
-
         has_matching_app = False
         has_any_app_name = False
-
         for entry in env_list:
             app_name = entry.get("app_name")
             if app_name:
@@ -170,13 +203,10 @@ class ConfigManager:
                 if app_name == current_app_name:
                     has_matching_app = True
                     break 
-        
         if has_matching_app:
             return True
-        
         if has_any_app_name and not has_matching_app:
             return False
-
         return True
 
     def _get_setting_path(self, item_path: Path) -> Path:
@@ -266,9 +296,6 @@ class ConfigManager:
             json.dump(order_list, f, indent=2, ensure_ascii=False)
             
     def save_tree_order_data(self, data_to_save: dict):
-        """
-        (ワーカースレッド) UIスレッドから渡された順序データでJSONファイルを上書きします。
-        """
         try:
             top_level_order = data_to_save.get('top_level', [])
             self.save_image_order(top_level_order, folder_path=None)
@@ -327,7 +354,6 @@ class ConfigManager:
         try:
             if not item_path_str or not new_name:
                 return False, self.logger.locale_manager.tr("log_rename_error_empty")
-            
             if any(char in new_name for char in '/\\:*?"<>|'):
                  return False, self.logger.locale_manager.tr("log_rename_error_general", "Invalid characters in name")
 
@@ -343,7 +369,6 @@ class ConfigManager:
             dest_json_path = self._get_setting_path(dest_path)
 
             source_path.rename(dest_path)
-
             if source_json_path.exists():
                 source_json_path.rename(dest_json_path)
 
@@ -360,74 +385,42 @@ class ConfigManager:
                 self.save_image_order(order, order_file_owner)
             
             return True, self.logger.locale_manager.tr("log_rename_success", source_path.name, dest_path.name)
-        
         except Exception as e:
             return False, self.logger.locale_manager.tr("log_rename_error_general", str(e))
     
     def update_environment_info(self, item_path_str: str, env_data: dict):
-        if not item_path_str:
-            return
-            
+        if not item_path_str: return
         try:
             item_path = Path(item_path_str)
-            
             setting_path = self._get_setting_path(item_path)
             file_lock = self._get_item_json_lock(setting_path)
-
             with file_lock:
                 current_settings = self.load_item_setting(item_path)
-                
                 env_list = current_settings.get("environment_info", [])
-                
                 is_duplicate = False
                 for existing_env in env_list:
                     if existing_env == env_data:
                         is_duplicate = True
                         break
-                
                 if not is_duplicate:
                     env_list.append(env_data)
                     current_settings["environment_info"] = env_list
-                    
                     self.save_item_setting(item_path, current_settings)
                     self.logger.log("[DEBUG] Environment info updated for %s", item_path.name)
-
         except Exception as e:
             self.logger.log("[ERROR] Failed to update environment info for %s: %s", item_path_str, str(e))
 
-    def get_ordered_item_list(self) -> list:
-        ordered_paths_str = self.load_image_order()
-        try:
-            all_items = {p for p in self.base_dir.iterdir() if p.is_dir() or p.suffix.lower() in ('.png', '.jpg', '.jpeg', '.bmp')}
-        except FileNotFoundError:
-            all_items = set()
-            
-        all_item_paths_str = {str(p) for p in all_items}
-        
-        final_order = [path_str for path_str in ordered_paths_str if path_str in all_item_paths_str]
-        for item in sorted(list(all_items)):
-            if str(item) not in final_order:
-                final_order.append(str(item))
-        
-        if final_order != ordered_paths_str:
-            self.save_image_order(final_order)
-        
-        return [Path(p) for p in final_order]
-
-    # --- ▼▼▼ 修正: 再帰的なリスト取得メソッドのバグ修正 ▼▼▼ ---
     def _get_recursive_list(self, current_dir: Path, current_app_name: str = None):
         """
         指定されたディレクトリ以下のアイテムを再帰的に取得して
         階層構造のリストを作成するヘルパーメソッド。
-        ★ 修正: ordered_names がフルパス(str)の場合とファイル名(str)の場合の両方に対応。
+        OSでのファイル作成・削除を検知し、順序リストを自動同期します。
         """
         structured_list = []
         
-        # 1. 現在のディレクトリ内の順序を読み込む
-        order_file_arg = current_dir if current_dir != self.base_dir else None
-        ordered_names = self.load_image_order(order_file_arg)
+        order_file_owner = current_dir if current_dir != self.base_dir else None
+        ordered_raw_names = self.load_image_order(order_file_owner)
         
-        # 2. 現在のディレクトリ内の実際のファイル・フォルダ一覧を取得
         try:
             all_items_on_disk = {
                 p for p in current_dir.iterdir() 
@@ -439,41 +432,39 @@ class ConfigManager:
         all_names_on_disk = {p.name for p in all_items_on_disk}
         
         final_order_names = []
+        is_order_changed = False
         
-        # 3. 順序リストに従って並べ替え (★ ここを修正)
-        for raw_name in ordered_names:
-            # JSONに記録されているのがフルパスの場合でもファイル名を取り出す
+        for raw_name in ordered_raw_names:
             name = Path(raw_name).name
-            
             if name in all_names_on_disk:
                 final_order_names.append(name)
                 all_names_on_disk.remove(name)
+            else:
+                is_order_changed = True
         
-        # 4. 順序リストにないアイテム（新規追加など）を末尾に追加
         if all_names_on_disk:
             new_names_sorted = sorted(list(all_names_on_disk))
             final_order_names.extend(new_names_sorted)
+            is_order_changed = True
             
-            # 順序ファイル (_sub_order.json / image_order.json) を更新
-            # (既存の形式を尊重したいが、ここではシンプルに名前リストとして保存する形になるかもしれない)
-            # ただし、ルートの場合はフルパス保存が基本だが、このメソッドは読み込み用なので
-            # 保存は UI の save_tree_order 側に任せるのが安全。
-            # ここでの保存は「未知のファイルがあった場合の補完」という意味合い。
-            self.save_image_order(final_order_names, order_file_arg)
-            
-        # 5. 各アイテムを処理
+        if is_order_changed:
+            list_to_save = []
+            for name in final_order_names:
+                if order_file_owner is None: # Root
+                     list_to_save.append(str(current_dir / name))
+                else: # Subfolder
+                     list_to_save.append(name)
+            self.save_image_order(list_to_save, order_file_owner)
+            self.logger.log("[INFO] Sync: Order file updated for %s", current_dir.name)
+
         for name in final_order_names:
             item_path = current_dir / name
-            
-            # 設定を読み込む
             item_settings = self.load_item_setting(item_path)
             
-            # アプリコンテキストによるフィルタリング
             if not self._filter_item_by_app(item_settings, current_app_name):
                 continue
             
             if item_path.is_file():
-                # 画像ファイルの場合
                 structured_list.append({
                     'type': 'image', 
                     'path': str(item_path), 
@@ -481,9 +472,7 @@ class ConfigManager:
                     'settings': item_settings
                 })
             elif item_path.is_dir():
-                # フォルダの場合、再帰呼び出しを行う
                 children = self._get_recursive_list(item_path, current_app_name)
-                
                 folder_item = {
                     'type': 'folder', 
                     'path': str(item_path), 
@@ -494,13 +483,8 @@ class ConfigManager:
                 structured_list.append(folder_item)
                 
         return structured_list
-    # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
     def get_hierarchical_list(self, current_app_name: str = None):
-        """
-        ルートディレクトリから始まる階層リストを取得します。
-        再帰メソッド _get_recursive_list を使用して、多階層構造に対応しています。
-        """
         return self._get_recursive_list(self.base_dir, current_app_name)
 
     def create_folder(self, folder_name: str):
@@ -519,6 +503,10 @@ class ConfigManager:
             return False, self.logger.locale_manager.tr("log_create_folder_error_general", str(e))
 
     def move_item(self, source_path_str: str, dest_folder_path_str: str):
+        """
+        アイテムを指定されたフォルダへ移動します。
+        画像ファイルに対応する設定JSONファイルも一緒に移動します。
+        """
         try:
             source_path = Path(source_path_str)
             dest_folder_path = Path(dest_folder_path_str)
@@ -530,15 +518,19 @@ class ConfigManager:
             if dest_path.exists():
                 return False, self.logger.locale_manager.tr("log_move_item_error_exists", source_path.name)
             
+            source_json_path = self._get_setting_path(source_path)
+            dest_json_path = dest_folder_path / source_json_path.name
+            
             shutil.move(str(source_path), str(dest_path))
 
-            source_json_path = self._get_setting_path(source_path)
             if source_json_path.exists():
-                shutil.move(str(source_json_path), dest_folder_path / source_json_path.name)
+                shutil.move(str(source_json_path), str(dest_json_path))
+                self.logger.log("[DEBUG] Moved config JSON: %s", source_json_path.name)
             
             source_parent = source_path.parent
             source_order_list = self.load_image_order(None if source_parent == self.base_dir else source_parent)
             item_key_source = str(source_path) if source_parent == self.base_dir else source_path.name
+            
             if item_key_source in source_order_list:
                 source_order_list.remove(item_key_source)
                 self.save_image_order(source_order_list, None if source_parent == self.base_dir else source_parent)

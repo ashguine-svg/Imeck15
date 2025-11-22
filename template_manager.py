@@ -32,7 +32,7 @@ class TemplateManager:
         auto_scale_settings = app_config.get('auto_scale', {})
         use_window_scale_base = auto_scale_settings.get('use_window_scale', True)
         
-        # --- ▼▼▼ 修正: ベースとなるスケールの決定 ▼▼▼ ---
+        # --- ベースとなるスケールの決定 ---
         base_window_scale = 1.0
         if use_window_scale_base and current_window_scale is not None:
             base_window_scale = current_window_scale
@@ -55,16 +55,13 @@ class TemplateManager:
                  search_multipliers = [center]
         
         # 最終的な適用スケールリストを作成
-        # (Windowスケール) * (探索倍率) * (キャプチャ縮小率)
         scales = []
         for multiplier in search_multipliers:
             final_scale = base_window_scale * multiplier * effective_capture_scale
             if final_scale > 0:
                 scales.append(final_scale)
         
-        # 重複を除去してソート (無駄な計算を防ぐため)
         scales = sorted(list(set(scales)))
-        # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
         if effective_capture_scale != 1.0:
             self.logger.log("log_capture_scale_applied", f"{effective_capture_scale:.2f}")
@@ -82,7 +79,10 @@ class TemplateManager:
             """
             inherited_context: {
                 'scan_group_path': str, 
-                'cooldown_time': int  # ★追加: 親から継承したクールダウン時間
+                'cooldown_time': int,
+                'folder_mode': str, # ★ 追加
+                'sequence_interval': int, # ★ 追加
+                'ordered_children_paths': list # ★ 追加 (順序優先用)
             }
             """
             for item_data in item_list:
@@ -98,12 +98,19 @@ class TemplateManager:
                     if inherited_context:
                         # 親の設定を継承
                         scan_group_path = inherited_context['scan_group_path']
-                        cooldown_time = inherited_context.get('cooldown_time', 0) # 継承
+                        cooldown_time = inherited_context.get('cooldown_time', 0)
+                        
+                        # 親が順序優先なら、子はそれを知る必要があるが、
+                        # 基本的に順序優先は「ルート直下」または「そのフォルダ内」で完結するため、
+                        # ここでは親の sequence 情報は継承しない（孫への遷移は monitoring_states で制御）
+                        # ただし、孫が画像として登録される際に、自分がどの順序リストに属するかは知る必要があるか？
+                        # → 今回の仕様では「フォルダ内の一番先頭の画像」がトリガー。
+                        #    フォルダ内のアイテムリストを作成しておく。
+                        folder_ordered_children = []
+                        
                     else:
                         # ルートフォルダ
                         scan_group_path = current_path
-                        
-                        # ★ クールダウン時間の取得 (ルートのみ)
                         cooldown_time = 0
                         if current_mode == 'cooldown':
                             cooldown_time = settings.get('cooldown_time', 30)
@@ -119,11 +126,24 @@ class TemplateManager:
                                  priority_timers[current_path] = time.time() + interval_seconds
                             else:
                                  priority_timers[current_path] = existing_priority_timers[current_path]
+                    
+                    # ★ このフォルダ直下の画像（およびフォルダ）の順序リストを作成
+                    # item_data['children'] は既にソート/同期済み
+                    ordered_children_paths = []
+                    for child in item_data.get('children', []):
+                        # 除外設定やフォルダを除いた純粋な画像のリストにするか、
+                        # フォルダも含めて再帰的にするか？
+                        # 仕様：「フォルダ内の画像A・B・C・D」
+                        # ここではシンプルに、このフォルダの children にある 'path' をリスト化
+                        ordered_children_paths.append(child['path'])
 
                     # 次の階層へ渡すコンテキスト
                     next_context = {
                         'scan_group_path': scan_group_path,
-                        'cooldown_time': cooldown_time # ★追加
+                        'cooldown_time': cooldown_time,
+                        'folder_mode': current_mode, # ★
+                        'sequence_interval': settings.get('sequence_interval', 3), # ★
+                        'ordered_children_paths': ordered_children_paths # ★
                     }
 
                     process_list_recursive(item_data.get('children', []), next_context)
@@ -132,34 +152,43 @@ class TemplateManager:
                     # 画像処理
                     if inherited_context:
                         scan_group_path = inherited_context['scan_group_path']
-                        cooldown_time = inherited_context.get('cooldown_time', 0) # ★追加
+                        cooldown_time = inherited_context.get('cooldown_time', 0)
+                        parent_mode = inherited_context.get('folder_mode', 'normal')
                         
                         if scan_group_path in folder_children_map:
                             folder_children_map[scan_group_path].add(item_data['path'])
                             
-                        parent_path = Path(item_data['path']).parent
-                        parent_settings = self.config_manager.load_item_setting(parent_path)
-                        parent_mode = parent_settings.get('mode', 'normal')
+                        # 親フォルダ設定
+                        parent_path = str(Path(item_data['path']).parent)
                         
-                        if parent_mode == 'excluded':
-                            continue
-                            
-                        folder_mode_for_cache = parent_mode
-                        priority_trigger_path = str(parent_path) if parent_mode == 'priority_image' else None
+                        priority_trigger_path = None
+                        sequence_info = None # ★
+
+                        if parent_mode == 'priority_image':
+                            priority_trigger_path = parent_path
+                        elif parent_mode == 'priority_sequence':
+                            # ★ 順序優先の場合、トリガーパスと順序情報をキャッシュに持たせる
+                            priority_trigger_path = parent_path
+                            sequence_info = {
+                                'interval': inherited_context.get('sequence_interval', 3),
+                                'ordered_paths': inherited_context.get('ordered_children_paths', [])
+                            }
 
                     else:
                         scan_group_path = None
-                        folder_mode_for_cache = 'normal'
+                        parent_mode = 'normal'
                         priority_trigger_path = None
                         cooldown_time = 0
+                        sequence_info = None
 
                     self._process_item_for_cache(
                         item_data, 
                         scales, 
                         scan_group_path,
-                        folder_mode_for_cache,
+                        parent_mode,
                         priority_trigger_path,
-                        cooldown_time, # ★引数追加
+                        cooldown_time,
+                        sequence_info, # ★引数追加
                         normal_cache, 
                         backup_cache
                     )
@@ -171,8 +200,8 @@ class TemplateManager:
 
         return normal_cache, backup_cache, priority_timers, folder_children_map
 
-    # ★ 引数 cooldown_time を追加
-    def _process_item_for_cache(self, item_data, scales, folder_path, folder_mode, priority_trigger_path, cooldown_time, normal_cache, backup_cache):
+    # ★ 引数 sequence_info を追加
+    def _process_item_for_cache(self, item_data, scales, folder_path, folder_mode, priority_trigger_path, cooldown_time, sequence_info, normal_cache, backup_cache):
         try:
             path = item_data['path']
             settings = self.config_manager.load_item_setting(Path(path))
@@ -237,7 +266,8 @@ class TemplateManager:
                 'folder_path': folder_path,
                 'folder_mode': folder_mode,
                 'priority_trigger_path': priority_trigger_path,
-                'cooldown_time': cooldown_time # ★追加: キャッシュに記録
+                'cooldown_time': cooldown_time,
+                'sequence_info': sequence_info # ★ 追加
             }
             
             if settings.get('backup_click', False):

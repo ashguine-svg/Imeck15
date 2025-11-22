@@ -1,6 +1,6 @@
 {
     "language_name": "Suomi",
-    "window_title": "Imeck15 v1.6.1.0 Monikielinen versio",
+    "window_title": "Imeck15 v1.6.2.0 Monikielinen versio",
     "monitor_button_start": "Aloita Valvonta",
     "monitor_button_stop": "Lopeta Valvonta",
     "monitor_button_tooltip": "Aloita valvonta.<br>Oikea tuplaklikkaus lopettaa, oikea triplaklikkaus aloittaa",
@@ -30,7 +30,7 @@
     "tab_auto_scale": "Automaattinen Skaalaus",
     "auto_scale_use_window": "Käytä Ikkunan Skaalausperustaa",
     "auto_scale_use_window_tooltip": "PÄÄLLÄ: Soveltaa ikkunasta tai hausta saadun optimaalisen skaalan malliin.<br>POIS PÄÄLTÄ: Poistaa skaalauksen korjauksen käytöstä ja yrittää aina tunnistusta alkuperäisellä kuvakoolla (1.0x).",
-    "auto_scale_enable_search": "Ota skaalahaku käyttöön",
+    "auto_scale_enable_search": "Ota käyttöön automaattinen monimittakaavahaku",
     "auto_scale_center": "Keskus:",
     "auto_scale_range": "Alue (±):",
     "auto_scale_steps": "Vaiheet:",
@@ -391,5 +391,12 @@
     "folder_dialog_cooldown_time": "Pysäytysaika klikkauksen jälkeen:",
     "folder_dialog_tooltip_cooldown": "<b>Jäähy osumasta -tilan tiedot:</b><br>Jos <b>mitä tahansa kuvaa</b> tässä kansiossa klikataan; koko kansio <b>poistetaan hausta (ohitetaan)</b> määritetyksi ajaksi.<br>Käytä tätä; kun ryhmää ei tarvita hetkeen toiminnon suorittamisen jälkeen.",
     "log_folder_cooldown_started": "Jäähy aloitettu kansiolle '%s' (%s sekuntia)",
-    "auto_scale_search_desc": "<b>Automaattinen monimittakaavahaku:</b><br>Käytä, kun rekisteröidyn kuvan koko eroaa hieman todellisesta kohteesta (esim. fontin renderöintierot).<br>Hakee jakamalla alueen \"Keskus\"-asteikosta \"Alueella (±)\" \"Vaiheisiin\".<br>*Vaiheiden lisääminen lisää suorittimen kuormitusta."
+    "auto_scale_search_desc": "<b>Automaattinen monimittakaavahaku:</b><br>Käytä, kun rekisteröidyn kuvan koko eroaa hieman todellisesta kohteesta (esim. fontin renderöintierot).<br>Hakee jakamalla alueen \"Keskus\"-asteikosta \"Alueella (±)\" \"Vaiheisiin\".<br>*Vaiheiden lisääminen lisää suorittimen kuormitusta.",
+    "folder_dialog_radio_priority_sequence": "Sekventiaalinen prioriteetti",
+    "folder_dialog_group_sequence": "Sekventiaalisen prioriteetin asetukset",
+    "folder_dialog_sequence_interval": "Vaiheväli:",
+    "folder_dialog_tooltip_sequence": "<b>Sekventiaalinen prioriteettitila:</b><br>Kun kansion ENSIMMÄINEN kuva täsmää, järjestelmä siirtyy sekvenssitilaan.<br>Se etsii seuraavat kuvat (B, C, D...) yksitellen.<br>Jokaisen kuvan kohdalla se odottaa/etsii määritetyn 'Vaiheväli'-ajan ennen siirtymistä pakotetusti seuraavaan kuvaan.",
+    "log_sequence_started": "Sekventiaalinen prioriteettitila käynnistetty. Vaiheita jäljellä: %s",
+    "log_sequence_next_step": "Sekvenssivaihe: Etsitään '%s'",
+    "log_sequence_completed": "Sekventiaalinen prioriteettitila valmis."
 }

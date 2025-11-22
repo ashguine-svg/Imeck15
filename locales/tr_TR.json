@@ -1,6 +1,6 @@
 {
     "language_name": "Türkçe",
-    "window_title": "Imeck15 v1.6.1.0 Çok Dilli Sürüm",
+    "window_title": "Imeck15 v1.6.2.0 Çok Dilli Sürüm",
     "monitor_button_start": "İzlemeyi Başlat",
     "monitor_button_stop": "İzlemeyi Durdur",
     "monitor_button_tooltip": "İzlemeyi başlat.<br>Durdurmak için sağ çift tıklama, başlatmak için sağ üçlü tıklama",
@@ -30,7 +30,7 @@
     "tab_auto_scale": "Otomatik Ölçek",
     "auto_scale_use_window": "Pencere Ölçeği Temelini Kullan",
     "auto_scale_use_window_tooltip": "AÇIK: Pencereden veya aramadan elde edilen optimal ölçeği şablona uygular.<br>KAPALI: Ölçek düzeltmesini devre dışı bırakır ve her zaman orijinal görüntü boyutuyla (1.0x) tanımayı dener.",
-    "auto_scale_enable_search": "Ölçek aramayı etkinleştir",
+    "auto_scale_enable_search": "Otomatik çok ölçekli aramayı etkinleştir",
     "auto_scale_center": "Merkez:",
     "auto_scale_range": "Aralık (±):",
     "auto_scale_steps": "Adımlar:",
@@ -391,5 +391,12 @@
     "folder_dialog_cooldown_time": "Tıklama sonrası durma süresi:",
     "folder_dialog_tooltip_cooldown": "<b>Tıklamada Bekleme Süresi Modu Ayrıntıları:</b><br>Bu klasördeki <b>herhangi bir resme</b> tıklanırsa; tüm klasör belirtilen süre boyunca <b>aramadan çıkarılır (yoksayılır)</b>.<br>Bir işlem yapıldıktan sonra grup bir süre gerekli olmadığında bunu kullanın.",
     "log_folder_cooldown_started": "'%s' klasörü için bekleme süresi başlatıldı (%s saniye)",
-    "auto_scale_search_desc": "<b>Otomatik Çok Ölçekli Arama:</b><br>Kayıtlı görüntünün boyutu gerçek hedeftent biraz farklı olduğunda (örneğin, yazı tipi oluşturma farklılıkları) kullanın.<br>\"Merkez\" ölçeğinden \"Aralık (±)\" kadar olan aralığı \"Adımlar\"a bölerek arama yapar.<br>*Adımları artırmak CPU yükünü artıracaktır."
+    "auto_scale_search_desc": "<b>Otomatik Çok Ölçekli Arama:</b><br>Kayıtlı görüntünün boyutu gerçek hedeftent biraz farklı olduğunda (örneğin, yazı tipi oluşturma farklılıkları) kullanın.<br>\"Merkez\" ölçeğinden \"Aralık (±)\" kadar olan aralığı \"Adımlar\"a bölerek arama yapar.<br>*Adımları artırmak CPU yükünü artıracaktır.",
+    "folder_dialog_radio_priority_sequence": "Sıralı Öncelik",
+    "folder_dialog_group_sequence": "Sıralı Öncelik Ayarları",
+    "folder_dialog_sequence_interval": "Adım Aralığı:",
+    "folder_dialog_tooltip_sequence": "<b>Sıralı Öncelik Modu:</b><br>Bu klasördeki İLK görüntü eşleştiğinde, sistem sıralı moda girer.<br>Sonraki görüntüleri (B, C, D...) tek tek arayacaktır.<br>Her görüntü için, bir sonraki görüntüye zorla geçmeden önce belirtilen 'Adım Aralığı' boyunca bekler/arar.",
+    "log_sequence_started": "Sıralı öncelik modu başlatıldı. Kalan adımlar: %s",
+    "log_sequence_next_step": "Sıra adımı: '%s' aranıyor",
+    "log_sequence_completed": "Sıralı öncelik modu tamamlandı."
 }

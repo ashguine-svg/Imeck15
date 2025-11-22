@@ -1,6 +1,6 @@
 {
     "language_name": "Italiano",
-    "window_title": "Imeck15 v1.6.1.0 Edizione multilingue",
+    "window_title": "Imeck15 v1.6.2.0 Edizione multilingue",
     "monitor_button_start": "Avvia Monitoraggio",
     "monitor_button_stop": "Ferma Monitoraggio",
     "monitor_button_tooltip": "Avvia il monitoraggio.<br>Doppio clic destro per fermare, triplo clic destro per avviare",
@@ -30,7 +30,7 @@
     "tab_auto_scale": "Scala Automatica",
     "auto_scale_use_window": "Usa Base Scala Finestra",
     "auto_scale_use_window_tooltip": "ON: Applica la scala ottimale ottenuta dalla finestra o dalla ricerca al modello.<br>OFF: Disabilita la correzione della scala e tenta sempre il riconoscimento con la dimensione originale dell'immagine (1.0x).",
-    "auto_scale_enable_search": "Abilita ricerca scala",
+    "auto_scale_enable_search": "Abilita ricerca multiscala automatica",
     "auto_scale_center": "Centro:",
     "auto_scale_range": "Intervallo (±):",
     "auto_scale_steps": "Passaggi:",
@@ -391,5 +391,12 @@
     "folder_dialog_cooldown_time": "Tempo di arresto dopo il clic:",
     "folder_dialog_tooltip_cooldown": "<b>Dettagli modalità Raffreddamento al clic:</b><br>Se viene cliccata <b>una qualsiasi immagine</b> in questa cartella; l'intera cartella viene <b>disabilitata (ignorata)</b> per il tempo specificato.<br>Usare questa opzione se il gruppo non è necessario per un po' dopo un'azione.",
     "log_folder_cooldown_started": "Raffreddamento avviato per la cartella '%s' (%s secondi)",
-    "auto_scale_search_desc": "<b>Ricerca multi-scala automatica:</b><br>Utilizzare quando la dimensione dell'immagine registrata differisce leggermente dall'obiettivo reale (ad es. differenze di rendering dei caratteri).<br>Cerca dividendo l'intervallo dalla scala \"Centro\" per l'\"Intervallo (±)\" in \"Passaggi\".<br>*L'aumento dei passaggi aumenterà il carico della CPU."
+    "auto_scale_search_desc": "<b>Ricerca multi-scala automatica:</b><br>Utilizzare quando la dimensione dell'immagine registrata differisce leggermente dall'obiettivo reale (ad es. differenze di rendering dei caratteri).<br>Cerca dividendo l'intervallo dalla scala \"Centro\" per l'\"Intervallo (±)\" in \"Passaggi\".<br>*L'aumento dei passaggi aumenterà il carico della CPU.",
+    "folder_dialog_radio_priority_sequence": "Priorità sequenziale",
+    "folder_dialog_group_sequence": "Impostazioni priorità sequenziale",
+    "folder_dialog_sequence_interval": "Intervallo passo:",
+    "folder_dialog_tooltip_sequence": "<b>Modalità Priorità Sequenziale:</b><br>Quando viene trovata la PRIMA immagine in questa cartella, il sistema entra in modalità sequenza.<br>Cercherà le immagini successive (B, C, D...) una per una.<br>Per ogni immagine, attende/cerca per l''Intervallo passo' specificato prima di passare forzatamente all'immagine successiva.",
+    "log_sequence_started": "Modalità priorità sequenziale avviata. Passi rimanenti: %s",
+    "log_sequence_next_step": "Passo sequenza: Ricerca di '%s'",
+    "log_sequence_completed": "Modalità priorità sequenziale completata."
 }

@@ -1,6 +1,6 @@
 {
     "language_name": "Svenska",
-    "window_title": "Imeck15 v1.6.1.0 Flerspråkig utgåva",
+    "window_title": "Imeck15 v1.6.2.0 Flerspråkig utgåva",
     "monitor_button_start": "Starta Övervakning",
     "monitor_button_stop": "Stoppa Övervakning",
     "monitor_button_tooltip": "Starta övervakning.<br>Höger dubbelklick för att stoppa, höger trippelklick för att starta",
@@ -30,7 +30,7 @@
     "tab_auto_scale": "Auto-skala",
     "auto_scale_use_window": "Använd Fönsterskala Bas",
     "auto_scale_use_window_tooltip": "PÅ: Tillämpar den optimala skalan erhållen från fönstret eller sökningen på mallen.<br>AV: Inaktiverar skalakorrigering och försöker alltid igenkänning med den ursprungliga bildstorleken (1.0x).",
-    "auto_scale_enable_search": "Aktivera skalsökning",
+    "auto_scale_enable_search": "Aktivera automatisk flerskalsökning",
     "auto_scale_center": "Center:",
     "auto_scale_range": "Intervall (±):",
     "auto_scale_steps": "Steg:",
@@ -391,5 +391,12 @@
     "folder_dialog_cooldown_time": "Stopptid efter klick:",
     "folder_dialog_tooltip_cooldown": "<b>Detaljer för läget Svalning vid träff:</b><br>Om <b>någon bild</b> i den här mappen klickas på; blir hela mappen <b>inaktiverad (ignorerad)</b> under den angivna tiden.<br>Använd detta när gruppen inte behövs på en stund efter att en åtgärd har utförts.",
     "log_folder_cooldown_started": "Svalning startad för mapp '%s' (%s sekunder)",
-    "auto_scale_search_desc": "<b>Automatisk flerskalsökning:</b><br>Använd när storleken på den registrerade bilden skiljer sig något från det faktiska målet (t.ex. skillnader i teckensnittsrendering).<br>Söker genom att dela intervallet från skalan \"Center\" med \"Intervall (±)\" i \"Steg\".<br>*Att öka stegen ökar CPU-belastningen."
+    "auto_scale_search_desc": "<b>Automatisk flerskalsökning:</b><br>Använd när storleken på den registrerade bilden skiljer sig något från det faktiska målet (t.ex. skillnader i teckensnittsrendering).<br>Söker genom att dela intervallet från skalan \"Center\" med \"Intervall (±)\" i \"Steg\".<br>*Att öka stegen ökar CPU-belastningen.",
+    "folder_dialog_radio_priority_sequence": "Sekventiell prioritet",
+    "folder_dialog_group_sequence": "Inställningar för sekventiell prioritet",
+    "folder_dialog_sequence_interval": "Stegintervall:",
+    "folder_dialog_tooltip_sequence": "<b>Sekventiellt prioritetsläge:</b><br>När den FÖRSTA bilden i denna mapp matchas, går systemet in i ett sekvensläge.<br>Det kommer att söka efter nästa bilder (B, C, D...) en efter en.<br>För varje bild väntar/söker det under det angivna 'Stegintervallet' innan det tvingas vidare till nästa bild.",
+    "log_sequence_started": "Sekventiellt prioritetsläge startat. Återstående steg: %s",
+    "log_sequence_next_step": "Sekvenssteg: Söker efter '%s'",
+    "log_sequence_completed": "Sekventiellt prioritetsläge slutfört."
 }

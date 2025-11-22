@@ -23,13 +23,32 @@ class IdleState(State):
             for match in normal_matches:
                 path = match['path']
                 cache_item = context.normal_template_cache.get(path)
-                if cache_item and cache_item.get('folder_mode') == 'priority_image':
-                    # ★★★ 修正: トリガーパスがあればそちら（孫）へ、なければ通常（親）へ遷移 ★★★
-                    trigger_path = cache_item.get('priority_trigger_path')
-                    target_path = trigger_path if trigger_path else cache_item['folder_path']
+                
+                if cache_item:
+                    folder_mode = cache_item.get('folder_mode')
                     
-                    context.transition_to_image_priority(target_path)
-                    return
+                    # --- 画像優先モードへの遷移 ---
+                    if folder_mode == 'priority_image':
+                        trigger_path = cache_item.get('priority_trigger_path')
+                        target_path = trigger_path if trigger_path else cache_item['folder_path']
+                        context.transition_to_image_priority(target_path)
+                        return
+                    
+                    # --- ★ 順序優先モードへの遷移 ---
+                    if folder_mode == 'priority_sequence':
+                        seq_info = cache_item.get('sequence_info')
+                        if seq_info:
+                            ordered_paths = seq_info.get('ordered_paths', [])
+                            # リストの先頭画像がマッチした場合のみトリガー
+                            if ordered_paths and ordered_paths[0] == path:
+                                # 通常のクリック処理を行ってから遷移する
+                                context._process_matches_as_sequence([match], current_time, last_match_time_map)
+                                
+                                # 次の画像（インデックス1）から開始するステートへ遷移
+                                # インターバル設定を取得
+                                step_interval = seq_info.get('interval', 3)
+                                context.transition_to_sequence_priority(ordered_paths, step_interval)
+                                return
 
         was_clicked = context._process_matches_as_sequence(normal_matches, current_time, last_match_time_map)
         if was_clicked:
@@ -63,18 +82,15 @@ class PriorityState(State):
             self.context.transition_to(IdleState(self.context))
             return
 
-        # 現在の優先対象フォルダ（またはルート）に属する画像のみフィルタリング
         def filter_by_folder(cache):
             return {p: d for p, d in cache.items() if d.get('folder_path') == self.folder_path}
 
         priority_normal_cache = filter_by_folder(self.context.normal_template_cache)
         priority_backup_cache = filter_by_folder(self.context.backup_template_cache)
         
-        # スキャン実行
         all_matches = self.context._find_best_match(*screen_data, priority_normal_cache)
         all_matches.extend(self.context._find_best_match(*screen_data, priority_backup_cache))
         
-        # 画像優先モードのタイムアウト判定
         if not all_matches and self.mode_type == 'image':
             if current_time - self.no_match_since_time > 10:
                 self.context.logger.log("log_priority_image_timeout", Path(self.folder_path).name)
@@ -84,17 +100,13 @@ class PriorityState(State):
         if all_matches:
             if self.mode_type == 'image': self.no_match_since_time = current_time
 
-            # ★★★ 追加: 孫フォルダの優先モードへのオーバーライド判定 ★★★
-            # 親の優先中であっても、マッチした画像が「孫独自の優先設定」を持っていればそちらへ遷移する
             for match in all_matches:
                 path = match['path']
                 cache_item = self.context.normal_template_cache.get(path) or self.context.backup_template_cache.get(path)
                 
                 if cache_item:
                     trigger_path = cache_item.get('priority_trigger_path')
-                    # トリガーパスがあり、かつ現在実行中のパスと異なる場合
                     if trigger_path and trigger_path != self.folder_path:
-                         # 孫フォルダの優先へ切り替え（親のタイマーは実質リセット/破棄される）
                          self.context.transition_to_image_priority(trigger_path)
                          return
 
@@ -112,6 +124,85 @@ class PriorityState(State):
                         self.context.logger.log("log_priority_image_completed", Path(self.folder_path).name)
                         self.context.transition_to(IdleState(self.context))
                         return
+
+class SequencePriorityState(State):
+    """
+    ★ 新規追加: 順序優先ステート
+    A(トリガー済み) -> B -> C -> D と順番に検索し、各ステップでインターバル時間だけ待機・検索を行う。
+    """
+    def __init__(self, context, ordered_paths, interval_sec):
+        super().__init__(context)
+        self.ordered_paths = ordered_paths # 全画像のパスリスト [A, B, C, D]
+        self.interval_sec = interval_sec
+        
+        # 現在のターゲットインデックス (A=0はトリガー済みなので、B=1から開始)
+        self.current_index = 1
+        
+        # 次のステップに進む時刻
+        self.step_end_time = time.time() + self.interval_sec
+        
+        # 現在のステップでクリック済みかどうか
+        self.has_clicked_current_step = False
+        
+        self.context.logger.log("log_sequence_started", len(ordered_paths) - 1)
+
+    def handle(self, current_time, screen_data, last_match_time_map, pre_matches=None):
+        # すべての画像を巡回し終えたら終了
+        if self.current_index >= len(self.ordered_paths):
+            self.context.logger.log("log_sequence_completed")
+            self.context.transition_to(IdleState(self.context))
+            return
+
+        # ステップの制限時間を超えたか？
+        if current_time >= self.step_end_time:
+            # 次の画像へ
+            self.current_index += 1
+            if self.current_index >= len(self.ordered_paths):
+                self.context.logger.log("log_sequence_completed")
+                self.context.transition_to(IdleState(self.context))
+                return
+            
+            # 新しいステップの開始
+            target_name = Path(self.ordered_paths[self.current_index]).name
+            self.context.logger.log("log_sequence_next_step", target_name)
+            self.step_end_time = current_time + self.interval_sec
+            self.has_clicked_current_step = False
+            return
+
+        # 現在のターゲット画像のみを検索対象とするキャッシュを作成
+        target_path = self.ordered_paths[self.current_index]
+        
+        # ターゲットがディレクトリ(孫フォルダ等)の場合はスキップして次へ
+        # (現在の仕様では画像のみ対象とするのが安全)
+        if Path(target_path).is_dir():
+             # 即座に次へ
+             self.step_end_time = current_time # 次のループでindexが増える
+             return
+
+        # キャッシュからターゲット画像データを抽出
+        target_cache = {}
+        if target_path in self.context.normal_template_cache:
+            target_cache[target_path] = self.context.normal_template_cache[target_path]
+        elif target_path in self.context.backup_template_cache:
+            target_cache[target_path] = self.context.backup_template_cache[target_path]
+        
+        if not target_cache:
+            # キャッシュにない（設定除外など）場合は待機時間を消化するだけ
+            return
+
+        # まだクリックしていない場合のみ検索＆クリック試行
+        if not self.has_clicked_current_step:
+            matches = self.context._find_best_match(*screen_data, target_cache)
+            if matches:
+                # マッチしたらクリック実行
+                # (インターバル制御などは無視して即座にクリックする。
+                #  なぜならこのステート自体がシーケンス制御を行っているため)
+                best_match = max(matches, key=lambda m: m['confidence'])
+                self.context._execute_click(best_match)
+                
+                # クリック済みフラグを立てる (このステップではもうクリックしない)
+                self.has_clicked_current_step = True
+                # ユーザー要件: "マッチしてもインターバル待機" なので、step_end_time は短縮しない
 
 class CountdownState(State):
     def __init__(self, context, trigger_match):

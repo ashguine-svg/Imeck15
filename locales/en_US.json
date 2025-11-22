@@ -1,6 +1,6 @@
 {
     "language_name": "English (US)",
-    "window_title": "Imeck15 v1.6.1.0 Multilingual Edition",
+    "window_title": "Imeck15 v1.6.2.0 Multilingual Edition",
     "monitor_button_start": "Start Monitoring",
     "monitor_button_stop": "Stop Monitoring",
     "monitor_button_tooltip": "Start monitoring.<br>Right double-click to stop, Right triple-click to start",
@@ -30,7 +30,7 @@
     "tab_auto_scale": "Auto Scale",
     "auto_scale_use_window": "Use Window Scale Basis",
     "auto_scale_use_window_tooltip": "ON: Applies the optimal scale obtained from window or search to the template.<br>OFF: Disables scale correction and always tries recognition with the original image size (1.0x).",
-    "auto_scale_enable_search": "Enable scale search",
+    "auto_scale_enable_search": "Enable automatic multi-scale search",
     "auto_scale_center": "Center:",
     "auto_scale_range": "Range (±):",
     "auto_scale_steps": "Steps:",
@@ -391,5 +391,12 @@
     "folder_dialog_cooldown_time": "Stop time after click:",
     "folder_dialog_tooltip_cooldown": "<b>Cooldown on Hit Mode Details:</b><br>If <b>any single image</b> in this folder is clicked; the entire folder becomes <b>search disabled (ignored)</b> for the specified time.<br>Use this when the group is not needed for a while after one action is executed.",
     "log_folder_cooldown_started": "Started cooldown for folder '%s' (%s seconds)",
-    "auto_scale_search_desc": "<b>Auto Multi-Scale Search:</b><br>Use when the size of the registered image differs slightly from the actual target (e.g., font rendering differences).<br>Searches by dividing the range from the \"Center\" scale by the \"Range (±)\" into \"Steps\".<br>*Increasing steps will increase CPU load."
+    "auto_scale_search_desc": "<b>Auto Multi-Scale Search:</b><br>Use when the size of the registered image differs slightly from the actual target (e.g., font rendering differences).<br>Searches by dividing the range from the \"Center\" scale by the \"Range (±)\" into \"Steps\".<br>*Increasing steps will increase CPU load.",
+    "folder_dialog_radio_priority_sequence": "Sequential Priority",
+    "folder_dialog_group_sequence": "Sequential Priority Settings",
+    "folder_dialog_sequence_interval": "Step Interval:",
+    "folder_dialog_tooltip_sequence": "<b>Sequential Priority Mode:</b><br>When the FIRST image in this folder is matched, the system enters a sequence mode.<br>It will search for the next images (B, C, D...) one by one.<br>For each image, it waits/searches for the specified 'Step Interval' before forcibly moving to the next image.",
+    "log_sequence_started": "Sequential priority mode started. Steps remaining: %s",
+    "log_sequence_next_step": "Sequence step: Searching for '%s'",
+    "log_sequence_completed": "Sequential priority mode completed."
 }

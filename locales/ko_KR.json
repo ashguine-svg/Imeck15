@@ -1,6 +1,6 @@
 {
     "language_name": "한국어",
-    "window_title": "Imeck15 v1.6.1.0 다국어 버전",
+    "window_title": "Imeck15 v1.6.2.0 다국어 버전",
     "monitor_button_start": "모니터링 시작",
     "monitor_button_stop": "모니터링 중지",
     "monitor_button_tooltip": "모니터링을 시작합니다.<br>마우스 오른쪽 더블클릭으로 중지, 오른쪽 트리플클릭으로 시작",
@@ -30,7 +30,7 @@
     "tab_auto_scale": "자동 스케일",
     "auto_scale_use_window": "창 기준 스케일 사용",
     "auto_scale_use_window_tooltip": "켜짐: 창 또는 검색에서 얻은 최적 스케일을 템플릿에 적용합니다.<br>꺼짐: 스케일 보정을 비활성화하고 항상 원본 이미지 크기(1.0배)로 인식을 시도합니다。",
-    "auto_scale_enable_search": "스케일 검색 활성화",
+    "auto_scale_enable_search": "자동 멀티 스케일 검색 활성화",
     "auto_scale_center": "중심:",
     "auto_scale_range": "범위(±):",
     "auto_scale_steps": "단계 수:",
@@ -390,5 +390,12 @@
     "folder_dialog_cooldown_time": "클릭 후 정지 시간:",
     "folder_dialog_tooltip_cooldown": "<b>적중 시 쿨다운 모드 상세:</b><br>이 폴더 내의 이미지가 <b>하나라도 클릭되면</b>; 폴더 전체가 지정된 시간 동안 <b>검색 중지(무시)</b>됩니다.<br>'하나라도 실행하면 당분간 이 그룹은 불필요'한 경우에 사용합니다.",
     "log_folder_cooldown_started": "폴더 '%s'의 쿨다운이 시작되었습니다 (%s초)",
-    "auto_scale_search_desc": "<b>자동 멀티 스케일 검색:</b><br>등록된 이미지의 크기가 실제 대상과 약간 다를 때(예: 폰트 렌더링 차이) 사용합니다.<br>\"중심\" 배율에서 \"범위(±)\"만큼 \"단계 수\"로 나누어 검색합니다.<br>*단계를 늘리면 CPU 부하가 증가합니다."
+    "auto_scale_search_desc": "<b>자동 멀티 스케일 검색:</b><br>등록된 이미지의 크기가 실제 대상과 약간 다를 때(예: 폰트 렌더링 차이) 사용합니다.<br>\"중심\" 배율에서 \"범위(±)\"만큼 \"단계 수\"로 나누어 검색합니다.<br>*단계를 늘리면 CPU 부하가 증가합니다.",
+    "folder_dialog_radio_priority_sequence": "순차 우선",
+    "folder_dialog_group_sequence": "순차 우선 설정",
+    "folder_dialog_sequence_interval": "단계 간격:",
+    "folder_dialog_tooltip_sequence": "<b>순차 우선 모드:</b><br>이 폴더의 <b>첫 번째 이미지</b>가 일치하면 시스템이 순차 모드로 진입합니다.<br>그 다음 이미지들(B, C, D...)을 하나씩 검색합니다.<br>각 이미지에 대해 지정된 <b>'단계 간격'</b> 동안 대기/검색한 후 강제로 다음 이미지로 이동합니다.",
+    "log_sequence_started": "순차 우선 모드가 시작되었습니다. 남은 단계: %s",
+    "log_sequence_next_step": "순차 단계: '%s' 검색 중...",
+    "log_sequence_completed": "순차 우선 모드가 완료되었습니다."
 }
