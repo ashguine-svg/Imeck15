@@ -147,12 +147,34 @@ class UIManager(QMainWindow):
             QMessageBox.warning(self, self.locale_manager.tr("error_title_open_folder"), self.locale_manager.tr("error_message_open_folder", str(e)))
             
     def setup_ui(self):
+        """UI構築のメインフロー"""
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
+        
+        # メインレイアウト
+        self.main_layout = QVBoxLayout(central_widget)
 
+        # 1. ヘッダーエリア (監視ボタンなど)
+        self._setup_header(self.main_layout)
+
+        # コンテンツエリア (左右分割)
+        content_frame = QFrame()
+        self.content_layout = QHBoxLayout(content_frame)
+        
+        # 2. 左パネル (ツリー、操作ボタン)
+        self._setup_left_panel(self.content_layout)
+
+        # 3. 右パネル (プレビュー、タブ、設定)
+        self._setup_right_panel(self.content_layout)
+
+        # コンテンツエリアをメインに追加
+        self.main_layout.addWidget(content_frame)
+
+    def _setup_header(self, parent_layout):
+        """ヘッダー部分のUI構築"""
         header_frame = QFrame()
         header_layout = QHBoxLayout(header_frame)
+        
         self.monitor_button = QPushButton()
         self.monitor_button.setFixedSize(120, 30)
         header_layout.addWidget(self.monitor_button)
@@ -161,9 +183,11 @@ class UIManager(QMainWindow):
         self.header_rec_area_button.setFixedSize(120, 30)
         self.header_rec_area_button.clicked.connect(self.setRecAreaDialog)
         header_layout.addWidget(self.header_rec_area_button)
+        
         self.toggle_minimal_ui_button = QPushButton()
         self.toggle_minimal_ui_button.setFixedSize(120, 30)
         header_layout.addWidget(self.toggle_minimal_ui_button)
+        
         self.open_image_folder_button = QPushButton()
         self.open_image_folder_button.setFixedSize(120, 30)
         header_layout.addWidget(self.open_image_folder_button)
@@ -174,18 +198,22 @@ class UIManager(QMainWindow):
         header_layout.addWidget(self.capture_image_button)
         
         header_layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
+        
         self.status_label = QLabel()
         self.status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: green;")
         header_layout.addWidget(self.status_label)
-        main_layout.addWidget(header_frame)
+        
+        parent_layout.addWidget(header_frame)
 
-        content_frame = QFrame()
-        content_layout = QHBoxLayout(content_frame)
-
+    def _setup_left_panel(self, parent_layout):
+        """左側パネル（ツリーと操作ボタン）の構築"""
         left_frame = QFrame()
         left_layout = QVBoxLayout(left_frame)
+        
         self.list_title_label = QLabel()
         left_layout.addWidget(self.list_title_label)
+        
+        # 順序変更ボタン
         order_button_frame = QHBoxLayout()
         self.move_up_button = QPushButton()
         self.move_down_button = QPushButton()
@@ -193,16 +221,15 @@ class UIManager(QMainWindow):
         order_button_frame.addWidget(self.move_down_button)
         left_layout.addLayout(order_button_frame)
         
+        # ツリーウィジェット
         self.image_tree = DraggableTreeWidget(self.config_manager)
-        
         self.image_tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        
-        self.image_tree.setDragDropMode(QAbstractItemView.DragDrop) 
-
+        self.image_tree.setDragDropMode(QAbstractItemView.DragDrop)
         self.image_tree.setDragEnabled(True)
         self.image_tree.setAcceptDrops(True)
         self.image_tree.setDropIndicatorShown(False)
         self.image_tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        # スタイル設定は省略（元のコードと同じ）
         self.image_tree.setStyleSheet("""
             QTreeWidget {
                 background-color: palette(base);
@@ -221,6 +248,7 @@ class UIManager(QMainWindow):
         self.image_tree.setHeaderHidden(True)
         left_layout.addWidget(self.image_tree)
         
+        # 操作ボタン群
         button_layout = QGridLayout()
         self.load_image_button = QPushButton()
         button_layout.addWidget(self.load_image_button, 0, 0)
@@ -230,13 +258,17 @@ class UIManager(QMainWindow):
         
         self.delete_item_button = QPushButton()
         button_layout.addWidget(self.delete_item_button, 1, 0)
+        
         self.create_folder_button = QPushButton()
         button_layout.addWidget(self.create_folder_button, 1, 1)
+        
         self.move_in_button = QPushButton()
         button_layout.addWidget(self.move_in_button, 2, 0)
+        
         self.move_out_button = QPushButton()
         button_layout.addWidget(self.move_out_button, 2, 1)
         
+        # シグナル接続 (UI生成時に接続できるものはここで行う)
         self.load_image_button.clicked.connect(self.load_images_dialog)
         self.delete_item_button.clicked.connect(self.on_delete_button_clicked)
         self.move_up_button.clicked.connect(self.move_item_up)
@@ -244,215 +276,270 @@ class UIManager(QMainWindow):
         self.create_folder_button.clicked.connect(self.createFolderRequested.emit)
         self.move_in_button.clicked.connect(self.moveItemIntoFolderRequested.emit)
         self.move_out_button.clicked.connect(self.moveItemOutOfFolderRequested.emit)
+        
         left_layout.addLayout(button_layout)
-        content_layout.addWidget(left_frame, 1)
+        
+        # 左パネルは伸縮可能にする (stretch=1)
+        parent_layout.addWidget(left_frame, 1)
 
+    def _setup_right_panel(self, parent_layout):
+        """右側パネル（プレビュー、タブ、設定）の構築"""
         right_frame = QFrame()
         right_layout = QVBoxLayout(right_frame)
+        
         self.preview_tabs = QTabWidget()
 
+        # 各タブの中身をヘルパーメソッドで生成
+        self._setup_tab_preview()
+        self._setup_tab_rec_area()
+        self._setup_tab_log()
+        self._setup_tab_auto_scale()
+        self._setup_tab_app_settings()
+        self._setup_tab_usage()
+        
+        right_layout.addWidget(self.preview_tabs, 2)
+        
+        # アイテム個別設定エリア
+        self._setup_item_settings_group(right_layout)
+        
+        # 右パネルは左パネルより広くする (stretch=2)
+        parent_layout.addWidget(right_frame, 2)
+
+    def _setup_tab_preview(self):
         self.main_preview_widget = QWidget()
-        main_preview_layout = QVBoxLayout(self.main_preview_widget)
+        layout = QVBoxLayout(self.main_preview_widget)
         self.preview_label = InteractivePreviewLabel()
         self.preview_label.setAlignment(Qt.AlignCenter)
-        main_preview_layout.addWidget(self.preview_label)
+        layout.addWidget(self.preview_label)
         self.preview_tabs.addTab(self.main_preview_widget, "")
 
+    def _setup_tab_rec_area(self):
         rec_area_widget = QWidget()
-        rec_area_layout = QVBoxLayout(rec_area_widget)
-        rec_area_buttons_layout = QHBoxLayout()
+        layout = QVBoxLayout(rec_area_widget)
+        buttons_layout = QHBoxLayout()
         self.set_rec_area_button_main_ui = QPushButton()
         self.clear_rec_area_button_main_ui = QPushButton()
-        rec_area_buttons_layout.addWidget(self.set_rec_area_button_main_ui)
-        rec_area_buttons_layout.addWidget(self.clear_rec_area_button_main_ui)
-        rec_area_layout.addLayout(rec_area_buttons_layout)
+        buttons_layout.addWidget(self.set_rec_area_button_main_ui)
+        buttons_layout.addWidget(self.clear_rec_area_button_main_ui)
+        layout.addLayout(buttons_layout)
+        
         self.rec_area_preview_label = ScaledPixmapLabel()
         self.rec_area_preview_label.setAlignment(Qt.AlignCenter)
-        rec_area_layout.addWidget(self.rec_area_preview_label)
+        layout.addWidget(self.rec_area_preview_label)
         self.preview_tabs.addTab(rec_area_widget, "")
 
+    def _setup_tab_log(self):
         log_widget = QWidget()
-        log_layout = QVBoxLayout(log_widget)
+        layout = QVBoxLayout(log_widget)
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
-        log_layout.addWidget(self.log_text)
+        layout.addWidget(self.log_text)
         self.preview_tabs.addTab(log_widget, "")
 
+    def _setup_tab_auto_scale(self):
         self.auto_scale_group = QGroupBox()
-        auto_scale_layout = QGridLayout(self.auto_scale_group)
+        layout = QGridLayout(self.auto_scale_group)
         
-        # Row 0: Window Scale Checkbox
+        # Row 0
         self.auto_scale_widgets['use_window_scale'] = QCheckBox()
-        auto_scale_layout.addWidget(self.auto_scale_widgets['use_window_scale'], 0, 0, 1, 2)
+        layout.addWidget(self.auto_scale_widgets['use_window_scale'], 0, 0, 1, 2)
         
-        # Row 1: Multi-scale Search Checkbox
+        # Row 1
         self.auto_scale_widgets['enabled'] = QCheckBox()
-        auto_scale_layout.addWidget(self.auto_scale_widgets['enabled'], 1, 0, 1, 2)
+        layout.addWidget(self.auto_scale_widgets['enabled'], 1, 0, 1, 2)
 
-        # Row 2: Center
+        # Row 2
         center_layout = QHBoxLayout()
         self.as_center_label = QLabel()
         center_layout.addWidget(self.as_center_label)
         self.auto_scale_widgets['center'] = QDoubleSpinBox()
         self.auto_scale_widgets['center'].setRange(0.1, 5.0); self.auto_scale_widgets['center'].setSingleStep(0.1); self.auto_scale_widgets['center'].setValue(1.0)
         center_layout.addWidget(self.auto_scale_widgets['center'])
-        auto_scale_layout.addLayout(center_layout, 2, 0)
+        layout.addLayout(center_layout, 2, 0)
 
-        # Row 2: Range
         range_layout = QHBoxLayout()
         self.as_range_label = QLabel()
         range_layout.addWidget(self.as_range_label)
         self.auto_scale_widgets['range'] = QDoubleSpinBox()
         self.auto_scale_widgets['range'].setRange(0.01, 1.0); self.auto_scale_widgets['range'].setSingleStep(0.05); self.auto_scale_widgets['range'].setValue(0.2)
         range_layout.addWidget(self.auto_scale_widgets['range'])
-        auto_scale_layout.addLayout(range_layout, 2, 1)
+        layout.addLayout(range_layout, 2, 1)
 
-        # Row 3: Steps and Info Label
+        # Row 3
         steps_layout = QHBoxLayout()
         self.as_steps_label = QLabel()
         steps_layout.addWidget(self.as_steps_label)
         self.auto_scale_widgets['steps'] = QSpinBox()
         self.auto_scale_widgets['steps'].setRange(1, 20); self.auto_scale_widgets['steps'].setValue(5)
         steps_layout.addWidget(self.auto_scale_widgets['steps'])
-        auto_scale_layout.addLayout(steps_layout, 3, 0, 1, 2)
+        layout.addLayout(steps_layout, 3, 0, 1, 2)
         
         self.auto_scale_info_label = QLabel()
         self.auto_scale_info_label.setStyleSheet("color: #555555;")
-        auto_scale_layout.addWidget(self.auto_scale_info_label, 3, 2, 1, 2)
+        layout.addWidget(self.auto_scale_info_label, 3, 2, 1, 2)
         
-        # Row 4: Auto Scale Search Description
+        # Row 4, 5, 6 (Labels)
         self.as_search_desc_label = QLabel()
         self.as_search_desc_label.setWordWrap(True)
         self.as_search_desc_label.setStyleSheet("font-size: 11px; color: #555555; margin-top: 5px; margin-bottom: 5px;")
-        auto_scale_layout.addWidget(self.as_search_desc_label, 4, 0, 1, 4)
+        layout.addWidget(self.as_search_desc_label, 4, 0, 1, 4)
 
-        # Row 5: Best Scale Info
         scale_info_layout = QHBoxLayout()
         self.current_best_scale_label = QLabel()
         font = self.current_best_scale_label.font(); font.setBold(True)
         self.current_best_scale_label.setFont(font); self.current_best_scale_label.setStyleSheet("color: gray;")
         scale_info_layout.addWidget(self.current_best_scale_label)
         scale_info_layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
-        auto_scale_layout.addLayout(scale_info_layout, 5, 0, 1, 4)
+        layout.addLayout(scale_info_layout, 5, 0, 1, 4)
         
-        # Row 6: Window Scale Description (Restored)
         self.as_desc_label = QLabel()
         self.as_desc_label.setWordWrap(True); self.as_desc_label.setStyleSheet("font-size: 11px; color: #555555;"); self.as_desc_label.setMinimumWidth(0)
-        auto_scale_layout.addWidget(self.as_desc_label, 6, 0, 1, 4)
+        layout.addWidget(self.as_desc_label, 6, 0, 1, 4)
         
         self.auto_scale_group.setFlat(True)
         self.preview_tabs.addTab(self.auto_scale_group, "")
 
-        app_settings_scroll_area = QScrollArea()
-        app_settings_scroll_area.setWidgetResizable(True)
-        app_settings_scroll_area.setStyleSheet("QScrollArea { border: 0; }")
-        app_settings_widget = QWidget()
-        app_settings_layout = QVBoxLayout(app_settings_widget)
-        app_settings_layout.setSpacing(10)
-        app_settings_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.app_settings_widgets['grayscale_matching'] = QCheckBox()
-        app_settings_layout.addWidget(self.app_settings_widgets['grayscale_matching'])
+    def _setup_tab_app_settings(self):
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setStyleSheet("QScrollArea { border: 0; }")
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(10)
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        
+        # Helper to simplify widget creation
+        def add_checkbox(key, enabled=True):
+            cb = QCheckBox()
+            cb.setEnabled(enabled)
+            self.app_settings_widgets[key] = cb
+            layout.addWidget(cb)
+            return cb
+            
+        def add_desc(label_obj):
+            label_obj.setWordWrap(True)
+            label_obj.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
+            layout.addWidget(label_obj)
+
+        # Grayscale
+        add_checkbox('grayscale_matching')
         self.gs_desc_label = QLabel()
-        self.gs_desc_label.setWordWrap(True); self.gs_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
-        app_settings_layout.addWidget(self.gs_desc_label)
+        add_desc(self.gs_desc_label)
         
-        self.app_settings_widgets['strict_color_matching'] = QCheckBox()
-        app_settings_layout.addWidget(self.app_settings_widgets['strict_color_matching'])
+        # Strict Color
+        add_checkbox('strict_color_matching')
         self.strict_color_desc_label = QLabel()
-        self.strict_color_desc_label.setWordWrap(True)
-        self.strict_color_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
-        app_settings_layout.addWidget(self.strict_color_desc_label)
+        add_desc(self.strict_color_desc_label)
         
-        self.app_settings_widgets['capture_method'] = QCheckBox()
-        self.app_settings_widgets['capture_method'].setEnabled(DXCAM_AVAILABLE)
-        app_settings_layout.addWidget(self.app_settings_widgets['capture_method'])
+        # Capture Method
+        add_checkbox('capture_method', enabled=DXCAM_AVAILABLE)
         self.dxcam_desc_label = QLabel()
-        self.dxcam_desc_label.setWordWrap(True); self.dxcam_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
-        app_settings_layout.addWidget(self.dxcam_desc_label)
-        self.app_settings_widgets['eco_mode_enabled'] = QCheckBox()
-        app_settings_layout.addWidget(self.app_settings_widgets['eco_mode_enabled'])
+        add_desc(self.dxcam_desc_label)
+        
+        # Eco Mode
+        add_checkbox('eco_mode_enabled')
         self.eco_desc_label = QLabel()
-        self.eco_desc_label.setWordWrap(True); self.eco_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
-        app_settings_layout.addWidget(self.eco_desc_label)
+        add_desc(self.eco_desc_label)
+        
+        # Frame Skip
         fs_layout = QHBoxLayout(); self.fs_label = QLabel()
         fs_layout.addWidget(self.fs_label)
         self.app_settings_widgets['frame_skip_rate'] = QSpinBox(); self.app_settings_widgets['frame_skip_rate'].setRange(1, 20)
         fs_layout.addWidget(self.app_settings_widgets['frame_skip_rate']); fs_layout.addStretch()
-        app_settings_layout.addLayout(fs_layout)
+        layout.addLayout(fs_layout)
         self.fs_desc_label = QLabel()
-        self.fs_desc_label.setWordWrap(True); self.fs_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
-        app_settings_layout.addWidget(self.fs_desc_label)
-        self.app_settings_widgets['use_opencl'] = QCheckBox()
-        self.app_settings_widgets['use_opencl'].setEnabled(OPENCL_AVAILABLE)
-        app_settings_layout.addWidget(self.app_settings_widgets['use_opencl'])
+        add_desc(self.fs_desc_label)
+        
+        # OpenCL
+        add_checkbox('use_opencl', enabled=OPENCL_AVAILABLE)
         self.opencl_desc_label = QLabel()
-        self.opencl_desc_label.setWordWrap(True); self.opencl_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
-        app_settings_layout.addWidget(self.opencl_desc_label)
+        add_desc(self.opencl_desc_label)
+        
+        # Stability Group
         self.stability_group = QGroupBox()
-        stability_layout = QGridLayout(self.stability_group)
+        stab_layout = QGridLayout(self.stability_group)
         self.app_settings_widgets['stability_check_enabled'] = QCheckBox()
-        stability_layout.addWidget(self.app_settings_widgets['stability_check_enabled'], 0, 0)
-        threshold_layout = QHBoxLayout(); self.stability_threshold_label = QLabel()
-        threshold_layout.addWidget(self.stability_threshold_label)
+        stab_layout.addWidget(self.app_settings_widgets['stability_check_enabled'], 0, 0)
+        
+        th_layout = QHBoxLayout(); self.stability_threshold_label = QLabel()
+        th_layout.addWidget(self.stability_threshold_label)
         self.app_settings_widgets['stability_threshold'] = QSpinBox()
         self.app_settings_widgets['stability_threshold'].setRange(0, 20)
-        threshold_layout.addWidget(self.app_settings_widgets['stability_threshold']); threshold_layout.addStretch()
-        stability_layout.addLayout(threshold_layout, 0, 1)
+        th_layout.addWidget(self.app_settings_widgets['stability_threshold']); th_layout.addStretch()
+        stab_layout.addLayout(th_layout, 0, 1)
+        
         self.stability_desc_label = QLabel()
         self.stability_desc_label.setWordWrap(True); self.stability_desc_label.setStyleSheet("font-size: 11px; color: #555555;")
-        stability_layout.addWidget(self.stability_desc_label, 1, 0, 1, 2)
-        app_settings_layout.addWidget(self.stability_group)
+        stab_layout.addWidget(self.stability_desc_label, 1, 0, 1, 2)
+        layout.addWidget(self.stability_group)
+        
+        # Lightweight Group
         self.lw_mode_group = QGroupBox()
-        lw_mode_layout = QVBoxLayout(self.lw_mode_group)
+        lw_layout = QVBoxLayout(self.lw_mode_group)
         self.app_settings_widgets['lightweight_mode_enabled'] = QCheckBox()
-        lw_mode_layout.addWidget(self.app_settings_widgets['lightweight_mode_enabled'])
+        lw_layout.addWidget(self.app_settings_widgets['lightweight_mode_enabled'])
+        
         preset_layout = QHBoxLayout(); self.lw_mode_preset_label = QLabel()
         preset_layout.addWidget(self.lw_mode_preset_label); self.app_settings_widgets['lightweight_mode_preset'] = QComboBox()
         preset_layout.addWidget(self.app_settings_widgets['lightweight_mode_preset']); preset_layout.addStretch()
-        lw_mode_layout.addLayout(preset_layout)
+        lw_layout.addLayout(preset_layout)
+        
         self.lw_mode_desc_label = QLabel()
         self.lw_mode_desc_label.setWordWrap(True); self.lw_mode_desc_label.setStyleSheet("font-size: 11px; color: #555555; padding-left: 20px;")
-        lw_mode_layout.addWidget(self.lw_mode_desc_label); app_settings_layout.addWidget(self.lw_mode_group)
-        app_settings_layout.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
+        lw_layout.addWidget(self.lw_mode_desc_label); layout.addWidget(self.lw_mode_group)
+        
+        layout.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
+        
+        # Language
         self.lang_label = QLabel()
         lang_layout = QHBoxLayout(); lang_layout.addWidget(self.lang_label); self.language_combo = QComboBox()
-        lang_layout.addWidget(self.language_combo); lang_layout.addStretch(); app_settings_layout.addLayout(lang_layout)
-        app_settings_scroll_area.setWidget(app_settings_widget)
-        self.preview_tabs.addTab(app_settings_scroll_area, "")
+        lang_layout.addWidget(self.language_combo); lang_layout.addStretch(); layout.addLayout(lang_layout)
+        
+        scroll_area.setWidget(widget)
+        self.preview_tabs.addTab(scroll_area, "")
 
+    def _setup_tab_usage(self):
         usage_widget = QWidget()
-        usage_layout = QVBoxLayout(usage_widget)
+        layout = QVBoxLayout(usage_widget)
         self.usage_text = QTextEdit()
         self.usage_text.setReadOnly(True)
-        usage_layout.addWidget(self.usage_text)
-        usage_widget.setLayout(usage_layout)
+        layout.addWidget(self.usage_text)
+        usage_widget.setLayout(layout)
         self.preview_tabs.addTab(usage_widget, "")
 
-        right_layout.addWidget(self.preview_tabs, 2)
-
+    def _setup_item_settings_group(self, parent_layout):
         self.item_settings_group = QGroupBox()
-        item_settings_layout = QGridLayout(self.item_settings_group)
-        item_settings_layout.setColumnStretch(1, 1); item_settings_layout.setColumnStretch(3, 1)
+        layout = QGridLayout(self.item_settings_group)
+        layout.setColumnStretch(1, 1); layout.setColumnStretch(3, 1)
+        
+        # Row 0
         self.item_threshold_label = QLabel()
-        item_settings_layout.addWidget(self.item_threshold_label, 0, 0)
+        layout.addWidget(self.item_threshold_label, 0, 0)
         self.item_settings_widgets['threshold'] = QDoubleSpinBox()
         self.item_settings_widgets['threshold'].setRange(0.5, 1.0); self.item_settings_widgets['threshold'].setSingleStep(0.01); self.item_settings_widgets['threshold'].setValue(0.8)
-        item_settings_layout.addWidget(self.item_settings_widgets['threshold'], 0, 1)
+        layout.addWidget(self.item_settings_widgets['threshold'], 0, 1)
+        
         self.item_interval_label = QLabel()
-        item_settings_layout.addWidget(self.item_interval_label, 0, 2)
+        layout.addWidget(self.item_interval_label, 0, 2)
         self.item_settings_widgets['interval_time'] = QDoubleSpinBox()
         self.item_settings_widgets['interval_time'].setRange(0.1, 10.0); self.item_settings_widgets['interval_time'].setSingleStep(0.1); self.item_settings_widgets['interval_time'].setValue(1.5)
-        item_settings_layout.addWidget(self.item_settings_widgets['interval_time'], 0, 3)
+        layout.addWidget(self.item_settings_widgets['interval_time'], 0, 3)
+        
+        # Row 1
         self.item_settings_widgets['backup_click'] = QCheckBox()
-        item_settings_layout.addWidget(self.item_settings_widgets['backup_click'], 1, 0)
+        layout.addWidget(self.item_settings_widgets['backup_click'], 1, 0)
         self.item_settings_widgets['backup_time'] = QDoubleSpinBox()
         self.item_settings_widgets['backup_time'].setRange(1.0, 600.0); self.item_settings_widgets['backup_time'].setSingleStep(1.0); self.item_settings_widgets['backup_time'].setValue(300.0)
-        item_settings_layout.addWidget(self.item_settings_widgets['backup_time'], 1, 1)
+        layout.addWidget(self.item_settings_widgets['backup_time'], 1, 1)
+        
         self.item_debounce_label = QLabel()
-        item_settings_layout.addWidget(self.item_debounce_label, 1, 2)
+        layout.addWidget(self.item_debounce_label, 1, 2)
         self.item_settings_widgets['debounce_time'] = QDoubleSpinBox()
         self.item_settings_widgets['debounce_time'].setRange(0.0, 10.0); self.item_settings_widgets['debounce_time'].setSingleStep(0.1); self.item_settings_widgets['debounce_time'].setValue(0.0)
-        item_settings_layout.addWidget(self.item_settings_widgets['debounce_time'], 1, 3)
+        layout.addWidget(self.item_settings_widgets['debounce_time'], 1, 3)
+        
+        # Row 2 (Click Type)
         click_type_layout = QHBoxLayout()
         self.item_settings_widgets['point_click'] = QCheckBox()
         self.item_settings_widgets['range_click'] = QCheckBox()
@@ -460,11 +547,15 @@ class UIManager(QMainWindow):
         click_type_layout.addWidget(self.item_settings_widgets['point_click'])
         click_type_layout.addWidget(self.item_settings_widgets['range_click'])
         click_type_layout.addWidget(self.item_settings_widgets['random_click'])
-        item_settings_layout.addLayout(click_type_layout, 2, 0, 1, 4)
+        layout.addLayout(click_type_layout, 2, 0, 1, 4)
+        
         separator = QFrame(); separator.setFrameShape(QFrame.Shape.HLine); separator.setFrameShadow(QFrame.Shadow.Sunken)
-        item_settings_layout.addWidget(separator, 3, 0, 1, 4)
+        layout.addWidget(separator, 3, 0, 1, 4)
+        
+        # Row 4 (ROI)
         self.item_settings_widgets['roi_enabled'] = QCheckBox()
-        item_settings_layout.addWidget(self.item_settings_widgets['roi_enabled'], 4, 0)
+        layout.addWidget(self.item_settings_widgets['roi_enabled'], 4, 0)
+        
         roi_mode_layout = QHBoxLayout()
         self.item_settings_widgets['roi_mode_fixed'] = QRadioButton()
         self.item_settings_widgets['roi_mode_variable'] = QRadioButton()
@@ -473,14 +564,13 @@ class UIManager(QMainWindow):
         self.roi_mode_group.addButton(self.item_settings_widgets['roi_mode_variable'])
         roi_mode_layout.addWidget(self.item_settings_widgets['roi_mode_fixed'])
         roi_mode_layout.addWidget(self.item_settings_widgets['roi_mode_variable'])
-        item_settings_layout.addLayout(roi_mode_layout, 4, 1)
+        layout.addLayout(roi_mode_layout, 4, 1)
+        
         self.item_settings_widgets['set_roi_variable_button'] = QPushButton()
         self.item_settings_widgets['set_roi_variable_button'].setCheckable(True)
-        item_settings_layout.addWidget(self.item_settings_widgets['set_roi_variable_button'], 4, 2, 1, 2)
-
-        right_layout.addWidget(self.item_settings_group, 1)
-        content_layout.addWidget(right_frame, 2)
-        main_layout.addWidget(content_frame)
+        layout.addWidget(self.item_settings_widgets['set_roi_variable_button'], 4, 2, 1, 2)
+        
+        parent_layout.addWidget(self.item_settings_group, 1)
 
     def changeEvent(self, event):
         """

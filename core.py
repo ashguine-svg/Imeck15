@@ -1,4 +1,4 @@
-# core.py (解像度変更時の強制再起動 & 監視停止UI修正版)
+# core.py (リファクタリング修正版 - 画像認識復旧)
 
 import sys
 import threading
@@ -190,7 +190,6 @@ class CoreEngine(QObject):
         self._last_clicked_path = None
         self.match_detected_at.clear()
         
-    # ★ 新規追加
     def transition_to_sequence_priority(self, ordered_paths, interval_sec):
         new_state = SequencePriorityState(self, ordered_paths, interval_sec)
         self.transition_to(new_state)
@@ -628,136 +627,219 @@ class CoreEngine(QObject):
             self.priority_timers.clear()
             self.folder_cooldowns.clear() 
             
-            # --- ▼▼▼ 修正: 条件判定を削除し、必ずIdle状態に戻す ▼▼▼ ---
             self.updateStatus.emit("idle", "green")
-            # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
 
     def _monitoring_loop(self):
-        last_match_time_map = {}; fps_last_time = time.time(); frame_counter = 0
+        """
+        メインの監視ループ。
+        各処理をフェーズごとにメソッド化し、可読性を向上させています。
+        """
+        last_match_time_map = {}
+        fps_last_time = time.time()
+        frame_counter = 0
+
         while self.is_monitoring:
-            with self.state_lock: current_state = self.state
+            with self.state_lock:
+                current_state = self.state
+            
+            # 状態チェック
             if not current_state:
                 if not self.is_monitoring: break
-                else: self.logger.log("[WARN] Monitoring is active but state is None. Re-initializing to IdleState."); self.transition_to(IdleState(self)); continue
+                else: 
+                    self.logger.log("[WARN] Monitoring active but state is None. Resetting to Idle.")
+                    self.transition_to(IdleState(self))
+                    continue
+
             try:
                 current_time = time.time()
-                
-                expired_cooldowns = [p for p, end_time in self.folder_cooldowns.items() if current_time >= end_time]
-                for p in expired_cooldowns:
-                    del self.folder_cooldowns[p]
-                
-                if self._cooldown_until > current_time: time.sleep(min(self._cooldown_until - current_time, 0.1)); continue
-                
-                if self._is_reinitializing_display:
-                    self.logger.log("log_warn_display_reinitializing_monitor_loop")
-                    time.sleep(0.5) 
-                    continue
-                
-                frame_counter += 1; delta_time = current_time - fps_last_time
-                if delta_time >= 1.0: 
-                    fps = frame_counter / delta_time; 
-                    self.fpsUpdated.emit(fps); 
-                    self.current_fps = fps
-                    fps_last_time = current_time; 
-                    frame_counter = 0
-                
-                if isinstance(current_state, IdleState): self._check_and_activate_timer_priority_mode()
-                is_eco_enabled = self.app_config.get('eco_mode',{}).get('enabled',True)
-                is_eco_eligible = (is_eco_enabled and self.last_successful_click_time > 0 and isinstance(current_state, IdleState) and (current_time - self.last_successful_click_time > self.ECO_MODE_DELAY))
-                self.is_eco_cooldown_active = is_eco_eligible
-                
-                if isinstance(current_state, CountdownState): time.sleep(1.0) 
-                
-                elif self.is_eco_cooldown_active:
-                    self._log("log_eco_mode_standby")
-                    time_since_last_check = current_time - self._last_eco_check_time
-                    sleep_time = 0 
-                    if time_since_last_check < self.ECO_CHECK_INTERVAL:
-                        sleep_time = self.ECO_CHECK_INTERVAL - time_since_last_check
-                        time.sleep(sleep_time)
-                        continue 
-                    else: 
-                        self._last_eco_check_time = current_time
-                
-                elif (frame_counter % self.effective_frame_skip_rate) != 0: 
-                    time.sleep(0.01)
+
+                # --- 1. タイミング制御フェーズ ---
+                should_process, fps_last_time, frame_counter = self._wait_for_next_frame(
+                    current_time, current_state, fps_last_time, frame_counter
+                )
+                if not should_process:
                     continue
 
-                screen_bgr = self.capture_manager.capture_frame(region=self.recognition_area)
-                
-                if screen_bgr is None:
-                    self.consecutive_capture_failures += 1
-                    self._log("log_capture_failed") 
-                    
-                    if self.consecutive_capture_failures >= 10:
-                        self.logger.log("log_capture_failed_limit_reached", force=True)
-                        self.updateStatus.emit("idle_error", "red")
-                        self.is_monitoring = False 
-                        
-                    time.sleep(1.0) 
+                # --- 2. 画像キャプチャ & 前処理フェーズ ---
+                screen_data, pre_matches = self._capture_and_process_image(current_state)
+                if not screen_data:
                     continue
-                
-                self.consecutive_capture_failures = 0 
-                
-                if self.effective_capture_scale != 1.0: screen_bgr = cv2.resize(screen_bgr, None, fx=self.effective_capture_scale, fy=self.effective_capture_scale, interpolation=cv2.INTER_AREA)
 
-                self.latest_frame_for_hash = screen_bgr.copy() 
-                screen_gray = cv2.cvtColor(screen_bgr, cv2.COLOR_BGR2GRAY)
+                # ★★★ 修正箇所: IdleState または CountdownState の場合に検索を実行 ★★★
+                if pre_matches is None:
+                    if isinstance(current_state, (IdleState, CountdownState)):
+                        pre_matches = self._find_matches_for_eco_check(screen_data, current_state)
 
-                screen_bgr_umat, screen_gray_umat = None, None
-                if OPENCL_AVAILABLE and cv2.ocl.useOpenCL():
-                    try: screen_bgr_umat = cv2.UMat(screen_bgr); screen_gray_umat = cv2.UMat(screen_gray)
-                    except Exception as e: self.logger.log("log_umat_convert_failed", str(e))
-
-                screen_data = (screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat)
-
-                all_matches = self._find_matches_for_eco_check(screen_data, current_state)
-                if self.is_eco_cooldown_active and all_matches:
-                    self.last_successful_click_time = time.time() 
-                    self._log("log_eco_mode_resumed", force=True)
-
-                current_state.handle(current_time, screen_data, last_match_time_map, pre_matches=all_matches)
-
+                # --- 3. ロジック実行フェーズ (State Pattern) ---
+                current_state.handle(current_time, screen_data, last_match_time_map, pre_matches=pre_matches)
+           
             except Exception as e:
                 if isinstance(e, AttributeError) and "'NoneType' object has no attribute 'handle'" in str(e):
-                    self.logger.log("[CRITICAL] Race condition detected (state became None unexpectedly). Loop will restart/exit.")
+                    self.logger.log("[CRITICAL] Race condition detected. Restarting loop.")
                 else:
                     self.logger.log("log_error_monitoring_loop", str(e))
                 time.sleep(1.0)
+            
             finally:
-                current_time = time.time()
-                if current_time - self.last_stats_emit_time >= 1.0:
-                    self.last_stats_emit_time = current_time
-                    
-                    uptime_seconds = int(current_time - self.start_time)
-                    h = uptime_seconds // 3600
-                    m = (uptime_seconds % 3600) // 60
-                    s = uptime_seconds % 60
-                    uptime_str = f"{h:02d}h{m:02d}m{s:02d}s"
-                    
-                    timer_data = {
-                        'backup': self.get_backup_click_countdown(),
-                        'priority': -1.0
-                    }
-                    if self.priority_timers:
-                        active_timer_path = next(iter(self.priority_timers), None)
-                        if active_timer_path:
-                            remaining_sec = self.priority_timers[active_timer_path] - current_time
-                            timer_data['priority'] = max(0, remaining_sec / 60.0) 
-                    
-                    cpu_percent = 0.0
-                    if self.process:
-                        try:
-                            cpu_percent = self.process.cpu_percent(interval=None)
-                        except Exception:
-                            cpu_percent = 0.0 
-                    
-                    fps_value = self.current_fps
-                    
-                    self.statsUpdated.emit(self._click_count, uptime_str, timer_data, cpu_percent, fps_value)
-                
+                # --- 4. 統計更新フェーズ ---
+                self._update_statistics(time.time())
                 time.sleep(0.01)
+
+    def _wait_for_next_frame(self, current_time, current_state, fps_last_time, frame_counter):
+        """
+        監視ループのタイミング制御を行います。
+        Return: (should_process, fps_last_time, frame_counter)
+        """
+        # 1. フォルダクールダウンの管理
+        expired_cooldowns = [p for p, end_time in self.folder_cooldowns.items() if current_time >= end_time]
+        for p in expired_cooldowns:
+            del self.folder_cooldowns[p]
+        
+        # 2. グローバルクールダウン (クリック直後など)
+        if self._cooldown_until > current_time:
+            time.sleep(min(self._cooldown_until - current_time, 0.1))
+            return False, fps_last_time, frame_counter
+
+        # 3. ディスプレイ再初期化待ち
+        if self._is_reinitializing_display:
+            self.logger.log("log_warn_display_reinitializing_monitor_loop")
+            time.sleep(0.5)
+            return False, fps_last_time, frame_counter
+        
+        # 4. FPS計算
+        frame_counter += 1
+        delta_time = current_time - fps_last_time
+        if delta_time >= 1.0:
+            fps = frame_counter / delta_time
+            self.fpsUpdated.emit(fps)
+            self.current_fps = fps
+            fps_last_time = current_time
+            frame_counter = 0
+
+        # 5. タイマー優先モードのチェック
+        if isinstance(current_state, IdleState):
+            self._check_and_activate_timer_priority_mode()
+
+        # 6. Ecoモード判定
+        is_eco_enabled = self.app_config.get('eco_mode', {}).get('enabled', True)
+        is_eco_eligible = (is_eco_enabled and 
+                           self.last_successful_click_time > 0 and 
+                           isinstance(current_state, IdleState) and 
+                           (current_time - self.last_successful_click_time > self.ECO_MODE_DELAY))
+        
+        self.is_eco_cooldown_active = is_eco_eligible
+
+        if isinstance(current_state, CountdownState):
+             time.sleep(1.0) # カウントダウン中はゆっくり
+        
+        elif self.is_eco_cooldown_active:
+            self._log("log_eco_mode_standby")
+            time_since_last_check = current_time - self._last_eco_check_time
+            if time_since_last_check < self.ECO_CHECK_INTERVAL:
+                time.sleep(self.ECO_CHECK_INTERVAL - time_since_last_check)
+                return False, fps_last_time, frame_counter
+            else:
+                self._last_eco_check_time = current_time
+        
+        # 7. フレームスキップ (Ecoモードでない場合)
+        elif (frame_counter % self.effective_frame_skip_rate) != 0:
+            time.sleep(0.01)
+            return False, fps_last_time, frame_counter
+
+        return True, fps_last_time, frame_counter
+
+    def _capture_and_process_image(self, current_state):
+        """
+        画面キャプチャ、リサイズ、色変換を行い、
+        Ecoモード時は復帰判定も行います。
+        Return: (screen_data, matches)
+        """
+        # 1. キャプチャ
+        screen_bgr = self.capture_manager.capture_frame(region=self.recognition_area)
+        
+        if screen_bgr is None:
+            self.consecutive_capture_failures += 1
+            self._log("log_capture_failed")
+            
+            if self.consecutive_capture_failures >= 10:
+                self.logger.log("log_capture_failed_limit_reached", force=True)
+                self.updateStatus.emit("idle_error", "red")
+                self.is_monitoring = False
+            
+            time.sleep(1.0)
+            return None, None # ★ 修正
+
+        self.consecutive_capture_failures = 0
+        
+        # 2. リサイズ (軽量化)
+        if self.effective_capture_scale != 1.0:
+            screen_bgr = cv2.resize(screen_bgr, None, 
+                                    fx=self.effective_capture_scale, 
+                                    fy=self.effective_capture_scale, 
+                                    interpolation=cv2.INTER_AREA)
+
+        self.latest_frame_for_hash = screen_bgr.copy()
+        
+        # 3. グレースケール変換
+        screen_gray = cv2.cvtColor(screen_bgr, cv2.COLOR_BGR2GRAY)
+
+        # 4. OpenCL (UMat) 変換
+        screen_bgr_umat, screen_gray_umat = None, None
+        if OPENCL_AVAILABLE and cv2.ocl.useOpenCL():
+            try:
+                screen_bgr_umat = cv2.UMat(screen_bgr)
+                screen_gray_umat = cv2.UMat(screen_gray)
+            except Exception as e:
+                self.logger.log("log_umat_convert_failed", str(e))
+
+        screen_data = (screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat)
+
+        # 5. Ecoモード復帰チェック
+        if self.is_eco_cooldown_active:
+             all_matches = self._find_matches_for_eco_check(screen_data, current_state)
+             if all_matches:
+                 self.last_successful_click_time = time.time()
+                 self._log("log_eco_mode_resumed", force=True)
+                 # ★★★ 修正: マッチング結果も返す ★★★
+                 return screen_data, all_matches
+             else:
+                 return None, None
+
+        # 通常時はマッチング結果はNoneで返す (ループ内で計算)
+        return screen_data, None
+
+    def _update_statistics(self, current_time):
+        """統計情報を更新し、UIに通知します"""
+        if current_time - self.last_stats_emit_time >= 1.0:
+            self.last_stats_emit_time = current_time
+            
+            uptime_seconds = int(current_time - self.start_time)
+            h = uptime_seconds // 3600
+            m = (uptime_seconds % 3600) // 60
+            s = uptime_seconds % 60
+            uptime_str = f"{h:02d}h{m:02d}m{s:02d}s"
+            
+            timer_data = {
+                'backup': self.get_backup_click_countdown(),
+                'priority': -1.0
+            }
+            if self.priority_timers:
+                active_timer_path = next(iter(self.priority_timers), None)
+                if active_timer_path:
+                    remaining_sec = self.priority_timers[active_timer_path] - current_time
+                    timer_data['priority'] = max(0, remaining_sec / 60.0)
+            
+            cpu_percent = 0.0
+            if self.process:
+                try:
+                    cpu_percent = self.process.cpu_percent(interval=None)
+                except Exception:
+                    cpu_percent = 0.0
+            
+            fps_value = self.current_fps
+            
+            self.statsUpdated.emit(self._click_count, uptime_str, timer_data, cpu_percent, fps_value)
     
     def _find_matches_for_eco_check(self, screen_data, current_state):
         def filter_cache_for_eco(cache): return {p: d for p, d in cache.items() if d.get('folder_mode') not in ['excluded', 'priority_timer']}
@@ -907,6 +989,9 @@ class CoreEngine(QObject):
         return True
 
     def _find_best_match(self, s_bgr, s_gray, s_bgr_umat, s_gray_umat, cache):
+        """
+        最適化版: 高信頼度のマッチが見つかった時点で探索を打ち切る (Early Exit)
+        """
         results = []
         futures = []
         
@@ -940,6 +1025,9 @@ class CoreEngine(QObject):
                 
                 templates_to_check = data['scaled_templates']
 
+                # ★★★ 最適化: テンプレートを「スケール1.0に近い順」または「逆順」にする等の工夫が可能だが
+                # ここでは「見つかったら即終了」を入れる
+                
                 for t in templates_to_check:
                     try:
                         template_image = t['gray'] if use_gs else t['image']
@@ -951,26 +1039,38 @@ class CoreEngine(QObject):
                         t_shape = t['shape']
 
                         if self.thread_pool and not use_cl:
+                            # スレッドプールの場合は即時終了が難しいので、全て投げてあとで選別
                             future = self.thread_pool.submit(_match_template_task, screen_image, template_image, task_data, s_shape, t_shape, effective_strict_color)
                             futures.append(future)
                         else:
+                            # 直列実行 (OpenCLなど) の場合
                             match_result = _match_template_task(screen_image, template_image, task_data, s_shape, t_shape, effective_strict_color)
                             if match_result:
+                                # ★★★ 高信頼度なら即リターン (Early Exit) ★★★
+                                if match_result['confidence'] >= 0.95:
+                                    return [match_result]
                                 results.append(match_result)
+                                
                     except Exception as e:
                          self.logger.log("Error during template processing for %s (scale %s): %s", Path(path).name, t.get('scale', 'N/A'), str(e))
 
+        # スレッドプールの結果回収
         if futures:
             for f in futures:
                 try:
-                    match_result = f.result();
-                    if match_result: results.append(match_result)
+                    match_result = f.result()
+                    if match_result:
+                        if match_result['confidence'] >= 0.95:
+                             return [match_result] # ここでも即リターン可能
+                        results.append(match_result)
                 except Exception as e:
                      self.logger.log("Error getting result from match thread: %s", str(e))
 
         if not results: return []
         
-        return results
+        # 複数の候補がある場合、最も信頼度が高いものを返す
+        best_match = max(results, key=lambda x: x['confidence'])
+        return [best_match]
 
     def _execute_click(self, match_info):
         try:
@@ -1427,11 +1527,12 @@ class CoreEngine(QObject):
         return -1.0
 
     def on_screen_geometry_changed(self, rect):
+        if self.environment_tracker:
+            self.environment_tracker.refresh_screen_info()
+
         if self._is_reinitializing_display:
             return
             
-        # --- ▼▼▼ 修正: 条件判定を削除し、無条件で再起動する ▼▼▼ ---
-        # 監視停止中や範囲未設定であっても、DXCamの不整合を防ぐために再起動プロセスへ移行する
         self._is_reinitializing_display = True 
         self.logger.log("log_screen_resolution_changed")
         
@@ -1443,4 +1544,3 @@ class CoreEngine(QObject):
         
         self.logger.log("log_lazy_reinitialize_scheduled")
         self.restartApplicationRequested.emit()
-        # --- ▲▲▲ 修正完了 ▲▲▲ ---

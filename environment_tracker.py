@@ -15,14 +15,6 @@ class EnvironmentTracker:
     """
     
     def __init__(self, core_engine, config_manager, logger):
-        """
-        関連するモジュールへの参照を保持します。
-        
-        Args:
-            core_engine (CoreEngine): CoreEngineのインスタンス (スケール値やスレッドプールへのアクセス用)
-            config_manager (ConfigManager): ConfigManagerのインスタンス (書き込み処理の呼び出し用)
-            logger (Logger): Loggerインスタンス
-        """
         self.core_engine = core_engine
         self.config_manager = config_manager
         self.logger = logger
@@ -30,71 +22,88 @@ class EnvironmentTracker:
         # CoreEngineが保持していたアプリ名をこちらで保持
         self.recognition_area_app_title = None
 
-    def on_rec_area_set(self, method: str, title: str = None):
-        """
-        認識範囲が設定または変更されたときに CoreEngine から呼び出されます。
+        # ★★★ 修正: 画面情報をキャッシュする変数を初期化 ★★★
+        self.cached_resolution = "Unknown"
+        self.cached_dpi = 96
         
-        Args:
-            method (str): 'rectangle', 'window', 'fullscreen'
-            title (str, optional): 'window' の場合のアプリ名
-        """
+        # 初期化時に一度情報を取得しておく（ここはメインスレッドで実行される前提）
+        self.refresh_screen_info()
+
+    def on_rec_area_set(self, method: str, title: str = None):
+        """認識範囲設定時のコールバック"""
         if method == "rectangle":
             self.recognition_area_app_title = None
             self.logger.log("[DEBUG] EnvironmentTracker: App title cleared (Rectangle mode).")
-        # --- ▼▼▼ 新規追加 (全画面モードの処理) ▼▼▼ ---
         elif method == "fullscreen":
             self.recognition_area_app_title = None
             self.logger.log("[DEBUG] EnvironmentTracker: App title cleared (Fullscreen mode).")
-        # --- ▲▲▲ 修正完了 ▲▲▲ ---
         elif method == "window" and title:
             self.recognition_area_app_title = title
             self.logger.log(f"[DEBUG] EnvironmentTracker: App title set to '{title}'.")
 
     def on_rec_area_clear(self):
-        """認識範囲がクリアされたときに CoreEngine から呼び出されます。"""
+        """認識範囲クリア時のコールバック"""
         self.recognition_area_app_title = None
         self.logger.log("[DEBUG] EnvironmentTracker: App title cleared (Area cleared).")
+
+    # --- ▼▼▼ 追加: メインスレッドから安全に呼び出して情報を更新するメソッド ▼▼▼ ---
+    def refresh_screen_info(self):
+        """
+        現在の画面解像度とDPIを取得してキャッシュを更新します。
+        必ずメインスレッドから呼び出してください。
+        """
+        try:
+            screen = QApplication.primaryScreen()
+            
+            # 1. 解像度の取得
+            resolution_str = "Unknown"
+            if PYAUTOGUI_AVAILABLE:
+                try:
+                    screen_size = pyautogui.size()
+                    resolution_str = f"{screen_size.width}x{screen_size.height}"
+                except Exception:
+                    if screen:
+                        geo = screen.geometry()
+                        resolution_str = f"{geo.width()}x{geo.height()}"
+            elif screen:
+                geo = screen.geometry()
+                resolution_str = f"{geo.width()}x{geo.height()}"
+            
+            self.cached_resolution = resolution_str
+
+            # 2. DPIの取得
+            dpi = 96
+            if screen:
+                try:
+                    dpi = screen.logicalDotsPerInch()
+                except Exception:
+                    dpi = 96
+            self.cached_dpi = int(dpi)
+
+            self.logger.log(f"[DEBUG] Environment info refreshed: {self.cached_resolution}, DPI={self.cached_dpi}")
+
+        except Exception as e:
+            self.logger.log(f"[ERROR] Failed to refresh screen info: {e}")
+    # --- ▲▲▲ 追加完了 ▲▲▲ ---
 
     def _collect_current_environment(self) -> dict:
         """
         現在の実行環境（解像度、DPI、スケール）を収集します。
-        
-        Returns:
-            dict: 仕様書に定義された env_data 辞書
+        ★ ワーカースレッドから呼ばれても安全なように、キャッシュされた値を返します。
         """
         
-        # 1. アプリ名
+        # 1. アプリ名 (文字列アクセスは安全)
         app_name = self.recognition_area_app_title
 
-        # 2. 解像度
-        resolution_str = "Unknown"
-        screen = QApplication.primaryScreen()
-        
-        if PYAUTOGUI_AVAILABLE:
-            try:
-                screen_size = pyautogui.size()
-                resolution_str = f"{screen_size.width}x{screen_size.height}"
-            except Exception:
-                if screen:
-                    geo = screen.geometry()
-                    resolution_str = f"{geo.width()}x{geo.height()}"
-        elif screen:
-            geo = screen.geometry()
-            resolution_str = f"{geo.width()}x{geo.height()}"
+        # 2. 解像度 (キャッシュを使用)
+        resolution_str = self.cached_resolution
 
-        # 3. DPI
-        dpi = 96
-        if screen:
-            try:
-                # 物理DPI (WindowsのDPI Unaware設定下では 96 が返る想定)
-                dpi = screen.logicalDotsPerInch()
-            except Exception:
-                dpi = 96 # フォールバック
+        # 3. DPI (キャッシュを使用)
+        dpi = self.cached_dpi
 
-        # 4. Imeck15 スケール値
+        # 4. Imeck15 スケール値 (単純な数値アクセスは安全)
         imeck_scale = 1.0
         if self.core_engine.current_window_scale is not None:
-            # ★ 修正: この行をインデントします
             imeck_scale = self.core_engine.current_window_scale
         else:
             imeck_scale = self.core_engine.effective_capture_scale
@@ -102,26 +111,20 @@ class EnvironmentTracker:
         return {
             "app_name": app_name,
             "resolution": resolution_str,
-            "dpi": int(dpi),
-            "imeck_scale": imeck_scale # ★ round() を削除
+            "dpi": dpi,
+            "imeck_scale": imeck_scale
         }
 
     def track_environment_on_click(self, item_path_str: str):
         """
-        (CoreEngine._execute_click から) クリック実行直前に呼び出されます。
-        環境情報を収集し、非同期での書き込みタスクをスレッドプールに投入します。
-        
-        Args:
-            item_path_str (str): マッチした画像のファイルパス
+        クリック実行時に環境情報を収集し、保存タスクを発行します。
         """
         if not item_path_str:
             return
             
-        # 1. 現在の環境情報を収集
+        # キャッシュされた情報を収集 (安全)
         env_data = self._collect_current_environment()
         
-        # 2. ワーカースレッドプールに、ConfigManagerの更新タスクを投げる
-        # これにより、監視ループはブロックされずに続行する
         thread_pool = self.core_engine.thread_pool
         
         if thread_pool:
