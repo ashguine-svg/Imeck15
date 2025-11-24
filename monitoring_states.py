@@ -4,12 +4,27 @@ import time
 from pathlib import Path
 
 class State:
-    def __init__(self, context):
+    def __init__(self, context, parent_state=None):
         self.context = context
+        self.parent_state = parent_state # ★ 親ステートへの参照 (スタック構造)
+
     def handle(self, current_time, screen_data, last_match_time_map, pre_matches=None):
         raise NotImplementedError
+    
     def get_name(self):
         return self.__class__.__name__
+
+    def _return_to_parent_or_idle(self):
+        """処理完了時に親ステートへ戻るか、親がいなければIdleへ戻る"""
+        if self.parent_state:
+            self.parent_state.on_child_finished() # 親に「子の処理が終わった」と通知
+            self.context.transition_to(self.parent_state)
+        else:
+            self.context.transition_to(IdleState(self.context))
+            
+    def on_child_finished(self):
+        """子ステートから復帰した際のフック (必要に応じてオーバーライド)"""
+        pass
 
 class IdleState(State):
     def handle(self, current_time, screen_data, last_match_time_map, pre_matches=None):
@@ -31,23 +46,28 @@ class IdleState(State):
                     if folder_mode == 'priority_image':
                         trigger_path = cache_item.get('priority_trigger_path')
                         target_path = trigger_path if trigger_path else cache_item['folder_path']
-                        context.transition_to_image_priority(target_path)
+                        
+                        # ★ 修正: CoreEngineのメソッドを使わず直接インスタンス化
+                        timeout_time = time.time() + 300 # デフォルト値
+                        required_children = context.folder_children_map.get(target_path, set())
+                        new_state = PriorityState(context, 'image', target_path, timeout_time, required_children)
+                        context.transition_to(new_state)
                         return
                     
-                    # --- ★ 順序優先モードへの遷移 ---
+                    # --- 順序優先モードへの遷移 ---
                     if folder_mode == 'priority_sequence':
                         seq_info = cache_item.get('sequence_info')
                         if seq_info:
                             ordered_paths = seq_info.get('ordered_paths', [])
                             # リストの先頭画像がマッチした場合のみトリガー
                             if ordered_paths and ordered_paths[0] == path:
-                                # 通常のクリック処理を行ってから遷移する
+                                # まず最初の画像のクリック処理を行う
                                 context._process_matches_as_sequence([match], current_time, last_match_time_map)
                                 
-                                # 次の画像（インデックス1）から開始するステートへ遷移
-                                # インターバル設定を取得
+                                # ★ 修正: CoreEngineのメソッドを使わず直接インスタンス化
                                 step_interval = seq_info.get('interval', 3)
-                                context.transition_to_sequence_priority(ordered_paths, step_interval)
+                                new_state = SequencePriorityState(context, ordered_paths, step_interval, start_index=1, parent_state=None)
+                                context.transition_to(new_state)
                                 return
 
         was_clicked = context._process_matches_as_sequence(normal_matches, current_time, last_match_time_map)
@@ -56,12 +76,14 @@ class IdleState(State):
 
         if backup_trigger_matches:
             best_backup_trigger = max(backup_trigger_matches, key=lambda m: m['confidence'])
-            context.transition_to_countdown(best_backup_trigger)
+            # ★ 修正: 直接インスタンス化
+            new_state = CountdownState(context, best_backup_trigger)
+            context.transition_to(new_state)
             return
 
 class PriorityState(State):
-    def __init__(self, context, mode_type, folder_path, timeout_time, required_children=None):
-        super().__init__(context)
+    def __init__(self, context, mode_type, folder_path, timeout_time, required_children=None, parent_state=None):
+        super().__init__(context, parent_state)
         self.mode_type = mode_type
         self.folder_path = folder_path
         self.timeout_time = timeout_time
@@ -77,9 +99,10 @@ class PriorityState(State):
             self.context.logger.log("log_priority_image_started", folder_name)
 
     def handle(self, current_time, screen_data, last_match_time_map, pre_matches=None):
+        # タイムアウト判定
         if current_time >= self.timeout_time:
             self.context.logger.log("log_priority_timeout", Path(self.folder_path).name)
-            self.context.transition_to(IdleState(self.context))
+            self._return_to_parent_or_idle()
             return
 
         def filter_by_folder(cache):
@@ -91,10 +114,11 @@ class PriorityState(State):
         all_matches = self.context._find_best_match(*screen_data, priority_normal_cache)
         all_matches.extend(self.context._find_best_match(*screen_data, priority_backup_cache))
         
+        # 画像優先モードで、一定時間見つからない場合のタイムアウト判定
         if not all_matches and self.mode_type == 'image':
             if current_time - self.no_match_since_time > 10:
                 self.context.logger.log("log_priority_image_timeout", Path(self.folder_path).name)
-                self.context.transition_to(IdleState(self.context))
+                self._return_to_parent_or_idle()
                 return
         
         if all_matches:
@@ -106,8 +130,13 @@ class PriorityState(State):
                 
                 if cache_item:
                     trigger_path = cache_item.get('priority_trigger_path')
+                    # ネストされたフォルダの処理分岐
                     if trigger_path and trigger_path != self.folder_path:
-                         self.context.transition_to_image_priority(trigger_path)
+                         # ★ 修正: 直接インスタンス化
+                         timeout_time = time.time() + 300 
+                         required_children = self.context.folder_children_map.get(trigger_path, set())
+                         new_state = PriorityState(self.context, 'image', trigger_path, timeout_time, required_children, parent_state=self)
+                         self.context.transition_to(new_state)
                          return
 
             clicked_in_sequence = self.context._process_matches_as_sequence(all_matches, current_time, last_match_time_map)
@@ -120,66 +149,108 @@ class PriorityState(State):
                 
                 elif self.mode_type == 'image' and self.context._last_clicked_path:
                     self.clicked_children.add(self.context._last_clicked_path)
+                    # 必要な画像をすべてクリックしたら完了
                     if self.clicked_children.issuperset(self.required_children):
                         self.context.logger.log("log_priority_image_completed", Path(self.folder_path).name)
-                        self.context.transition_to(IdleState(self.context))
+                        self._return_to_parent_or_idle()
                         return
 
 class SequencePriorityState(State):
     """
-    ★ 新規追加: 順序優先ステート
-    A(トリガー済み) -> B -> C -> D と順番に検索し、各ステップでインターバル時間だけ待機・検索を行う。
+    ★ 順序優先ステート (再帰対応・直接インスタンス化版)
     """
-    def __init__(self, context, ordered_paths, interval_sec):
-        super().__init__(context)
-        self.ordered_paths = ordered_paths # 全画像のパスリスト [A, B, C, D]
+    def __init__(self, context, ordered_paths, interval_sec, start_index=0, parent_state=None):
+        super().__init__(context, parent_state)
+        self.ordered_paths = ordered_paths
         self.interval_sec = interval_sec
         
-        # 現在のターゲットインデックス (A=0はトリガー済みなので、B=1から開始)
-        self.current_index = 1
-        
-        # 次のステップに進む時刻
+        self.current_index = start_index
         self.step_end_time = time.time() + self.interval_sec
-        
-        # 現在のステップでクリック済みかどうか
         self.has_clicked_current_step = False
         
-        self.context.logger.log("log_sequence_started", len(ordered_paths) - 1)
+        if self.current_index == 0:
+            self.context.logger.log("log_sequence_started", len(ordered_paths))
 
+    def on_child_finished(self):
+        """子フォルダの処理が完了して戻ってきた時に呼ばれる"""
+        # 子フォルダの処理が終わったので、次のアイテムへ進む
+        self.current_index += 1
+        self.step_end_time = time.time() + self.interval_sec
+        self.has_clicked_current_step = False
+        
+        if self.current_index < len(self.ordered_paths):
+            next_name = Path(self.ordered_paths[self.current_index]).name
+            self.context.logger.log("log_sequence_next_step", next_name)
+    
     def handle(self, current_time, screen_data, last_match_time_map, pre_matches=None):
-        # すべての画像を巡回し終えたら終了
+        # 完了チェック
         if self.current_index >= len(self.ordered_paths):
             self.context.logger.log("log_sequence_completed")
-            self.context.transition_to(IdleState(self.context))
+            self._return_to_parent_or_idle()
             return
 
-        # ステップの制限時間を超えたか？
+        # ステップ時間切れチェック
         if current_time >= self.step_end_time:
-            # 次の画像へ
             self.current_index += 1
             if self.current_index >= len(self.ordered_paths):
                 self.context.logger.log("log_sequence_completed")
-                self.context.transition_to(IdleState(self.context))
+                self._return_to_parent_or_idle()
                 return
             
-            # 新しいステップの開始
-            target_name = Path(self.ordered_paths[self.current_index]).name
-            self.context.logger.log("log_sequence_next_step", target_name)
+            next_name = Path(self.ordered_paths[self.current_index]).name
+            self.context.logger.log("log_sequence_next_step", next_name)
             self.step_end_time = current_time + self.interval_sec
             self.has_clicked_current_step = False
             return
 
-        # 現在のターゲット画像のみを検索対象とするキャッシュを作成
         target_path = self.ordered_paths[self.current_index]
         
-        # ターゲットがディレクトリ(孫フォルダ等)の場合はスキップして次へ
-        # (現在の仕様では画像のみ対象とするのが安全)
+        # ★★★ ターゲットが「フォルダ」の場合の分岐 ★★★
         if Path(target_path).is_dir():
-             # 即座に次へ
-             self.step_end_time = current_time # 次のループでindexが増える
-             return
+            # ConfigManager経由でフォルダ設定をロード
+            folder_settings = self.context.config_manager.load_item_setting(Path(target_path))
+            mode = folder_settings.get('mode', 'normal')
+            
+            # 子ステートを作成して遷移 (自分を parent_state に指定)
+            if mode == 'priority_sequence':
+                child_order_names = self.context.config_manager.load_image_order(Path(target_path))
+                child_ordered_paths = []
+                for name in child_order_names:
+                     full_path = Path(target_path) / name
+                     c_set = self.context.config_manager.load_item_setting(full_path)
+                     if c_set.get('mode') != 'excluded':
+                         child_ordered_paths.append(str(full_path))
+                
+                step_interval = folder_settings.get('sequence_interval', 3)
+                # ★ 修正: 直接インスタンス化
+                new_state = SequencePriorityState(self.context, child_ordered_paths, step_interval, start_index=0, parent_state=self)
+                self.context.transition_to(new_state)
+                return
 
-        # キャッシュからターゲット画像データを抽出
+            elif mode == 'priority_image':
+                timeout_sec = folder_settings.get('priority_image_timeout', 10)
+                timeout_time = time.time() + timeout_sec
+                # ★ 修正: 直接インスタンス化
+                new_state = PriorityState(self.context, 'image', target_path, timeout_time, parent_state=self)
+                self.context.transition_to(new_state)
+                return
+            
+            else:
+                # 通常フォルダ -> 順序シーケンスとして扱う
+                child_order_names = self.context.config_manager.load_image_order(Path(target_path))
+                child_ordered_paths = []
+                for name in child_order_names:
+                     full_path = Path(target_path) / name
+                     c_set = self.context.config_manager.load_item_setting(full_path)
+                     if c_set.get('mode') != 'excluded':
+                         child_ordered_paths.append(str(full_path))
+                
+                # ★ 修正: 直接インスタンス化
+                new_state = SequencePriorityState(self.context, child_ordered_paths, 3.0, start_index=0, parent_state=self)
+                self.context.transition_to(new_state)
+                return
+
+        # ★★★ ターゲットが「画像」の場合 ★★★
         target_cache = {}
         if target_path in self.context.normal_template_cache:
             target_cache[target_path] = self.context.normal_template_cache[target_path]
@@ -187,26 +258,18 @@ class SequencePriorityState(State):
             target_cache[target_path] = self.context.backup_template_cache[target_path]
         
         if not target_cache:
-            # キャッシュにない（設定除外など）場合は待機時間を消化するだけ
             return
 
-        # まだクリックしていない場合のみ検索＆クリック試行
         if not self.has_clicked_current_step:
             matches = self.context._find_best_match(*screen_data, target_cache)
             if matches:
-                # マッチしたらクリック実行
-                # (インターバル制御などは無視して即座にクリックする。
-                #  なぜならこのステート自体がシーケンス制御を行っているため)
                 best_match = max(matches, key=lambda m: m['confidence'])
                 self.context._execute_click(best_match)
-                
-                # クリック済みフラグを立てる (このステップではもうクリックしない)
                 self.has_clicked_current_step = True
-                # ユーザー要件: "マッチしてもインターバル待機" なので、step_end_time は短縮しない
 
 class CountdownState(State):
-    def __init__(self, context, trigger_match):
-        super().__init__(context)
+    def __init__(self, context, trigger_match, parent_state=None):
+        super().__init__(context, parent_state)
         self.trigger_match = trigger_match
         self.start_time = time.time()
         self.duration = trigger_match['settings'].get('backup_time', 300.0)
@@ -220,14 +283,14 @@ class CountdownState(State):
         if normal_matches:
             context._process_matches_as_sequence(normal_matches, current_time, last_match_time_map)
             context.logger.log("log_countdown_cancelled")
-            context.transition_to(IdleState(context))
+            self._return_to_parent_or_idle()
             return
         
         elapsed_time = current_time - self.start_time
         if elapsed_time >= self.duration:
             context.logger.log("log_countdown_executing", f"{self.duration:.1f}")
             context._execute_click(self.trigger_match)
-            context.transition_to(IdleState(context))
+            self._return_to_parent_or_idle()
             context._cooldown_until = time.time() + 1.0
             return
             
