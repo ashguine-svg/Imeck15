@@ -303,13 +303,8 @@ class CoreEngine(QObject):
 
     def _on_global_click(self, x, y, button, pressed):
         if button == mouse.Button.right and pressed:
-            click_pos = QPoint(x, y)
-            if self.ui_manager and self.ui_manager.isVisible() and not self.ui_manager.isMinimized():
-                if self.ui_manager.geometry().contains(click_pos):
-                    return 
-            if self.ui_manager and self.ui_manager.is_minimal_mode and self.ui_manager.floating_window and self.ui_manager.floating_window.isVisible():
-                if self.ui_manager.floating_window.geometry().contains(click_pos):
-                    return 
+            # ★ 修正: UI上かどうかの判定ブロックを削除しました ★
+            # これにより、Imeck15の画面上でも右ダブル/トリプルクリックが機能します。
             
             current_time = time.time()
             if self.click_timer: self.click_timer.cancel(); self.click_timer = None
@@ -990,7 +985,7 @@ class CoreEngine(QObject):
 
     def _find_best_match(self, s_bgr, s_gray, s_bgr_umat, s_gray_umat, cache):
         """
-        最適化版: 高信頼度のマッチが見つかった時点で探索を打ち切る (Early Exit)
+        最適化版: 前回成功したスケールを優先探索 + ユーザー設定閾値を超えたら即終了(Early Exit)
         """
         results = []
         futures = []
@@ -1024,11 +1019,23 @@ class CoreEngine(QObject):
                         continue
                 
                 templates_to_check = data['scaled_templates']
+                num_templates = len(templates_to_check)
+                if num_templates == 0:
+                    continue
 
-                # ★★★ 最適化: テンプレートを「スケール1.0に近い順」または「逆順」にする等の工夫が可能だが
-                # ここでは「見つかったら即終了」を入れる
-                
-                for t in templates_to_check:
+                # --- ★★★ 変更点1: ユーザー設定の閾値を取得 ★★★ ---
+                # デフォルトは 0.8
+                user_threshold = data['settings'].get('threshold', 0.8)
+
+                # --- 探索順序の決定 (前回成功したものを優先) ---
+                last_idx = data.get('last_success_index', -1)
+                indices = list(range(num_templates))
+                if 0 <= last_idx < num_templates:
+                    indices.insert(0, indices.pop(last_idx))
+
+                # --- テンプレート探索 ---
+                for i in indices:
+                    t = templates_to_check[i]
                     try:
                         template_image = t['gray'] if use_gs else t['image']
                         if use_cl:
@@ -1039,38 +1046,53 @@ class CoreEngine(QObject):
                         t_shape = t['shape']
 
                         if self.thread_pool and not use_cl:
-                            # スレッドプールの場合は即時終了が難しいので、全て投げてあとで選別
                             future = self.thread_pool.submit(_match_template_task, screen_image, template_image, task_data, s_shape, t_shape, effective_strict_color)
-                            futures.append(future)
+                            futures.append((future, i, data)) 
                         else:
-                            # 直列実行 (OpenCLなど) の場合
+                            # 直列実行
                             match_result = _match_template_task(screen_image, template_image, task_data, s_shape, t_shape, effective_strict_color)
                             if match_result:
-                                # ★★★ 高信頼度なら即リターン (Early Exit) ★★★
-                                if match_result['confidence'] >= 0.95:
+                                # --- ★★★ 変更点2: ユーザー設定閾値を超えたら即終了 ★★★ ---
+                                if match_result['confidence'] >= user_threshold:
+                                    data['last_success_index'] = i
                                     return [match_result]
-                                results.append(match_result)
+                                
+                                results.append((match_result, i, data))
                                 
                     except Exception as e:
                          self.logger.log("Error during template processing for %s (scale %s): %s", Path(path).name, t.get('scale', 'N/A'), str(e))
 
         # スレッドプールの結果回収
         if futures:
-            for f in futures:
+            for f, idx, data_ref in futures:
                 try:
                     match_result = f.result()
                     if match_result:
-                        if match_result['confidence'] >= 0.95:
-                             return [match_result] # ここでも即リターン可能
-                        results.append(match_result)
+                        # ここでもユーザー閾値を使用したいが、スレッド投入時の閾値と整合性を取るため
+                        # data_refから再取得するか、単純に高い値を採用する
+                        # ここでは data_ref (キャッシュ) にアクセスできるので取得可能
+                        th = data_ref['settings'].get('threshold', 0.8)
+                        
+                        if match_result['confidence'] >= th:
+                             data_ref['last_success_index'] = idx
+                             return [match_result] 
+                        results.append((match_result, idx, data_ref))
                 except Exception as e:
                      self.logger.log("Error getting result from match thread: %s", str(e))
 
         if not results: return []
         
-        # 複数の候補がある場合、最も信頼度が高いものを返す
-        best_match = max(results, key=lambda x: x['confidence'])
-        return [best_match]
+        # 最も信頼度が高いものを返す
+        best_tuple = max(results, key=lambda x: x[0]['confidence'])
+        
+        best_match_result = best_tuple[0]
+        best_idx = best_tuple[1]
+        best_data_ref = best_tuple[2]
+        
+        # 次回のためにインデックスを更新
+        best_data_ref['last_success_index'] = best_idx
+        
+        return [best_match_result]
 
     def _execute_click(self, match_info):
         try:
