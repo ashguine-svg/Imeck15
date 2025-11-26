@@ -1,0 +1,484 @@
+# core_monitoring.py
+# 監視ループ、マッチング、アクション実行を担当
+# ★★★ 修正: _find_best_match で複数マッチング結果をリストで返すように変更 ★★★
+
+import time
+import cv2
+import numpy as np
+from pathlib import Path
+
+from matcher import _match_template_task, calculate_phash
+from monitoring_states import IdleState, CountdownState
+
+OPENCL_AVAILABLE = False
+try:
+    if cv2.ocl.haveOpenCL():
+        OPENCL_AVAILABLE = True
+except Exception:
+    pass
+
+class MonitoringProcessor:
+    def __init__(self, core):
+        self.core = core
+        self.logger = core.logger
+        # core.pyで初期化済みのスレッドプールを参照
+        self.thread_pool = core.thread_pool
+
+    def monitoring_loop(self):
+        """
+        メインの監視ループ。
+        CoreEngineからスレッドとして起動される。
+        """
+        last_match_time_map = {}
+        fps_last_time = time.time()
+        frame_counter = 0
+
+        while self.core.is_monitoring:
+            with self.core.state_lock:
+                current_state = self.core.state
+            
+            # 状態チェック
+            if not current_state:
+                if not self.core.is_monitoring: break
+                else: 
+                    self.logger.log("[WARN] Monitoring active but state is None. Resetting to Idle.")
+                    self.core.transition_to(IdleState(self.core))
+                    continue
+
+            try:
+                current_time = time.time()
+
+                # --- 1. タイミング制御フェーズ ---
+                should_process, fps_last_time, frame_counter = self._wait_for_next_frame(
+                    current_time, current_state, fps_last_time, frame_counter
+                )
+                if not should_process:
+                    continue
+
+                # --- 2. 画像キャプチャ & 前処理フェーズ ---
+                screen_data, pre_matches = self._capture_and_process_image(current_state)
+                if not screen_data:
+                    continue
+
+                # アイドルまたはカウントダウン状態の場合、ここで検索を実行してpre_matchesに格納
+                if pre_matches is None:
+                    if isinstance(current_state, (IdleState, CountdownState)):
+                        pre_matches = self._find_matches_for_eco_check(screen_data, current_state)
+
+                # --- 3. ロジック実行フェーズ (State Pattern) ---
+                current_state.handle(current_time, screen_data, last_match_time_map, pre_matches=pre_matches)
+           
+            except Exception as e:
+                if isinstance(e, AttributeError) and "'NoneType' object has no attribute 'handle'" in str(e):
+                    self.logger.log("[CRITICAL] Race condition detected. Restarting loop.")
+                else:
+                    self.logger.log(f"監視ループでエラーが発生しました: {e}")
+                time.sleep(1.0)
+            
+            finally:
+                # --- 4. 統計更新フェーズ ---
+                self._update_statistics(time.time())
+                time.sleep(0.01)
+
+    def _wait_for_next_frame(self, current_time, current_state, fps_last_time, frame_counter):
+        # 1. フォルダクールダウンの管理
+        expired_cooldowns = [p for p, end_time in self.core.folder_cooldowns.items() if current_time >= end_time]
+        for p in expired_cooldowns:
+            del self.core.folder_cooldowns[p]
+        
+        # 2. グローバルクールダウン
+        if self.core._cooldown_until > current_time:
+            time.sleep(min(self.core._cooldown_until - current_time, 0.1))
+            return False, fps_last_time, frame_counter
+
+        # 3. ディスプレイ再初期化待ち
+        if self.core._is_reinitializing_display:
+            self.logger.log("log_warn_display_reinitializing_monitor_loop")
+            time.sleep(0.5)
+            return False, fps_last_time, frame_counter
+        
+        # 4. FPS計算
+        frame_counter += 1
+        delta_time = current_time - fps_last_time
+        if delta_time >= 1.0:
+            fps = frame_counter / delta_time
+            self.core.fpsUpdated.emit(fps)
+            self.core.current_fps = fps
+            fps_last_time = current_time
+            frame_counter = 0
+
+        # 5. タイマー優先モードのチェック
+        if isinstance(current_state, IdleState):
+            self.core._check_and_activate_timer_priority_mode()
+
+        # 6. Ecoモード判定
+        is_eco_enabled = self.core.app_config.get('eco_mode', {}).get('enabled', True)
+        is_eco_eligible = (is_eco_enabled and 
+                           self.core.last_successful_click_time > 0 and 
+                           isinstance(current_state, IdleState) and 
+                           (current_time - self.core.last_successful_click_time > self.core.ECO_MODE_DELAY))
+        
+        self.core.is_eco_cooldown_active = is_eco_eligible
+
+        if isinstance(current_state, CountdownState):
+             time.sleep(1.0) # カウントダウン中はゆっくり
+        
+        elif self.core.is_eco_cooldown_active:
+            self.core._log("log_eco_mode_standby")
+            time_since_last_check = current_time - self.core._last_eco_check_time
+            if time_since_last_check < self.core.ECO_CHECK_INTERVAL:
+                time.sleep(self.core.ECO_CHECK_INTERVAL - time_since_last_check)
+                return False, fps_last_time, frame_counter
+            else:
+                self.core._last_eco_check_time = current_time
+        
+        # 7. フレームスキップ
+        elif (frame_counter % self.core.effective_frame_skip_rate) != 0:
+            time.sleep(0.01)
+            return False, fps_last_time, frame_counter
+
+        return True, fps_last_time, frame_counter
+
+    def _capture_and_process_image(self, current_state):
+        # 1. キャプチャ
+        screen_bgr = self.core.capture_manager.capture_frame(region=self.core.recognition_area)
+        
+        if screen_bgr is None:
+            self.core.consecutive_capture_failures += 1
+            self.core._log("log_capture_failed")
+            
+            if self.core.consecutive_capture_failures >= 10:
+                self.logger.log("log_capture_failed_limit_reached", force=True)
+                self.core.updateStatus.emit("idle_error", "red")
+                self.core.is_monitoring = False
+            
+            time.sleep(1.0)
+            return None, None
+
+        self.core.consecutive_capture_failures = 0
+        
+        # 2. リサイズ
+        if self.core.effective_capture_scale != 1.0:
+            screen_bgr = cv2.resize(screen_bgr, None, 
+                                    fx=self.core.effective_capture_scale, 
+                                    fy=self.core.effective_capture_scale, 
+                                    interpolation=cv2.INTER_AREA)
+
+        self.core.latest_frame_for_hash = screen_bgr.copy()
+        
+        # 3. グレースケール変換
+        screen_gray = cv2.cvtColor(screen_bgr, cv2.COLOR_BGR2GRAY)
+
+        # 4. OpenCL (UMat) 変換
+        screen_bgr_umat, screen_gray_umat = None, None
+        if OPENCL_AVAILABLE and cv2.ocl.useOpenCL():
+            try:
+                screen_bgr_umat = cv2.UMat(screen_bgr)
+                screen_gray_umat = cv2.UMat(screen_gray)
+            except Exception as e:
+                self.logger.log("log_umat_convert_failed", str(e))
+
+        screen_data = (screen_bgr, screen_gray, screen_bgr_umat, screen_gray_umat)
+
+        # 5. Ecoモード復帰チェック
+        if self.core.is_eco_cooldown_active:
+             all_matches = self._find_matches_for_eco_check(screen_data, current_state)
+             if all_matches:
+                 self.core.last_successful_click_time = time.time()
+                 self.core._log("log_eco_mode_resumed", force=True)
+                 return screen_data, all_matches
+             else:
+                 return None, None
+
+        return screen_data, None
+
+    def _find_matches_for_eco_check(self, screen_data, current_state):
+        def filter_cache_for_eco(cache): return {p: d for p, d in cache.items() if d.get('folder_mode') not in ['excluded', 'priority_timer']}
+        active_normal_cache = filter_cache_for_eco(self.core.normal_template_cache)
+        normal_matches = self._find_best_match(*screen_data, active_normal_cache)
+        
+        if isinstance(current_state, IdleState):
+            active_backup_cache = filter_cache_for_eco(self.core.backup_template_cache)
+            backup_trigger_matches = self._find_best_match(*screen_data, active_backup_cache)
+            if backup_trigger_matches: 
+                normal_matches.extend(backup_trigger_matches)
+        return normal_matches
+
+    def check_screen_stability(self) -> bool:
+        if not hasattr(self.core, 'latest_frame_for_hash') or self.core.latest_frame_for_hash is None: return False
+        h, w, _ = self.core.latest_frame_for_hash.shape
+        if h < 64 or w < 64: self.core._log("log_stability_check_skip_size", force=True); return True
+        roi = self.core.latest_frame_for_hash[0:64, 0:64]; current_hash = calculate_phash(roi)
+        if current_hash is None: return False
+        self.core.screen_stability_hashes.append(current_hash)
+        if len(self.core.screen_stability_hashes) < self.core.screen_stability_hashes.maxlen: self.core._log("log_stability_check_history_low", len(self.core.screen_stability_hashes), self.core.screen_stability_hashes.maxlen, force=True); return False
+        threshold = self.core.app_config.get('screen_stability_check', {}).get('threshold', 8); hash_diff = self.core.screen_stability_hashes[-1] - self.core.screen_stability_hashes[0]
+        self.core._log("log_stability_check_debug", str(self.core.screen_stability_hashes[-1]), str(self.core.screen_stability_hashes[0]), hash_diff, threshold, force=True)
+        return hash_diff <= threshold
+
+    def _find_best_match(self, s_bgr, s_gray, s_bgr_umat, s_gray_umat, cache):
+        """
+        最適化版: 複数マッチング対応
+        - 見つかった高信頼度のマッチングをすべてリストに格納する
+        - 1つの画像テンプレート内で最適なスケールが見つかったら、その画像については探索を終了し(break)、
+          次の画像の探索へ移る。
+        """
+        matched_results = [] # (match_result, index, data_ref) のタプルを格納
+        futures = []
+        
+        current_time = time.time()
+
+        with self.core.cache_lock:
+            if not cache:
+                return []
+
+            use_cl = OPENCL_AVAILABLE and cv2.ocl.useOpenCL()
+            use_gs = self.core.app_config.get('grayscale_matching', False)
+            strict_color = self.core.app_config.get('strict_color_matching', False)
+
+            effective_strict_color = strict_color and not use_gs
+            
+            if effective_strict_color:
+                use_cl = False
+
+            screen_image = s_gray if use_gs else s_bgr
+            if use_cl:
+                screen_umat = s_gray_umat if use_gs else s_bgr_umat
+                screen_image = screen_umat if screen_umat is not None else screen_image
+
+            s_shape = screen_image.get().shape[:2] if use_cl and isinstance(screen_image, cv2.UMat) else screen_image.shape[:2]
+
+            for path, data in cache.items():
+                folder_path = data.get('folder_path')
+                if folder_path and folder_path in self.core.folder_cooldowns:
+                    if current_time < self.core.folder_cooldowns[folder_path]:
+                        continue
+                
+                templates_to_check = data['scaled_templates']
+                num_templates = len(templates_to_check)
+                if num_templates == 0:
+                    continue
+
+                user_threshold = data['settings'].get('threshold', 0.8)
+
+                # 探索順序 (前回成功したものを優先)
+                last_idx = data.get('last_success_index', -1)
+                indices = list(range(num_templates))
+                if 0 <= last_idx < num_templates:
+                    indices.insert(0, indices.pop(last_idx))
+
+                for i in indices:
+                    t = templates_to_check[i]
+                    try:
+                        template_image = t['gray'] if use_gs else t['image']
+                        if use_cl:
+                            t_umat = t.get('gray_umat' if use_gs else 'image_umat')
+                            template_image = t_umat if t_umat else template_image
+
+                        task_data = {'path': path, 'settings': data['settings'], 'template': template_image, 'scale': t['scale']}
+                        t_shape = t['shape']
+
+                        if self.core.thread_pool and not use_cl:
+                            future = self.core.thread_pool.submit(_match_template_task, screen_image, template_image, task_data, s_shape, t_shape, effective_strict_color)
+                            futures.append((future, i, data)) 
+                        else:
+                            match_result = _match_template_task(screen_image, template_image, task_data, s_shape, t_shape, effective_strict_color)
+                            if match_result:
+                                if match_result['confidence'] >= user_threshold:
+                                    # ★ 修正: 即returnせずリストに追加し、この画像の他スケール探索を終了(break)
+                                    data['last_success_index'] = i
+                                    matched_results.append((match_result, i, data))
+                                    break 
+                                
+                    except Exception as e:
+                         self.logger.log("Error during template processing for %s (scale %s): %s", Path(path).name, t.get('scale', 'N/A'), str(e))
+
+        # スレッドプールの結果回収
+        if futures:
+            for f, idx, data_ref in futures:
+                try:
+                    match_result = f.result()
+                    if match_result:
+                        th = data_ref['settings'].get('threshold', 0.8)
+                        if match_result['confidence'] >= th:
+                             # スレッド処理の場合、同じ画像の別スケールが重複して入る可能性があるが、
+                             # 後で信頼度順にソートして処理するため許容するか、
+                             # あるいは重複チェックを入れる。ここでは単純に追加。
+                             data_ref['last_success_index'] = idx
+                             matched_results.append((match_result, idx, data_ref))
+                except Exception as e:
+                     self.logger.log("Error getting result from match thread: %s", str(e))
+
+        if not matched_results:
+            return []
+        
+        # 信頼度が高い順にソート
+        matched_results.sort(key=lambda x: x[0]['confidence'], reverse=True)
+        
+        # リストの中身（match_result辞書）だけを取り出して返す
+        final_matches = [item[0] for item in matched_results]
+        
+        return final_matches
+
+    def process_matches_as_sequence(self, all_matches, current_time, last_match_time_map):
+        """
+        Stateクラスから呼び出されるロジック（Coreの同名メソッドから委譲）
+        """
+        if not all_matches:
+            current_match_paths = set()
+            keys_to_remove = [path for path in self.core.match_detected_at if path not in current_match_paths]
+            for path in keys_to_remove:
+                del self.core.match_detected_at[path]
+            return False
+
+        clickable_after_interval = []
+        current_match_paths = {m['path'] for m in all_matches}
+
+        for m in all_matches:
+            path = m['path']
+            cache_item = self.core.normal_template_cache.get(path) or self.core.backup_template_cache.get(path)
+            if cache_item:
+                folder_path = cache_item.get('folder_path')
+                if folder_path and folder_path in self.core.folder_cooldowns:
+                    if path in self.core.match_detected_at: del self.core.match_detected_at[path]
+                    continue
+
+            settings = m['settings']
+            interval = settings.get('interval_time', 1.5)
+            debounce = settings.get('debounce_time', 0.0)
+            last_clicked = last_match_time_map.get(path, 0)
+
+            effective_debounce = debounce if self.core._last_clicked_path == path else 0.0
+
+            if current_time - last_clicked <= effective_debounce:
+                if path in self.core.match_detected_at: del self.core.match_detected_at[path]
+                continue
+
+            if path not in self.core.match_detected_at:
+                self.core.match_detected_at[path] = current_time
+                self.logger.log(f"[DEBUG] Detected '{Path(path).name}'. Interval timer started ({interval:.1f}s).")
+                continue
+            else:
+                detected_at = self.core.match_detected_at[path]
+                time_since_detected = current_time - detected_at
+                if time_since_detected >= interval:
+                    clickable_after_interval.append(m)
+                    # self.logger.log(f"[DEBUG] Interval elapsed for '{Path(path).name}'. Added to clickable.")
+                else:
+                    pass
+
+        keys_to_remove = [p for p in self.core.match_detected_at if p not in current_match_paths]
+        for p in keys_to_remove:
+            if p in self.core.match_detected_at: del self.core.match_detected_at[p]
+
+        if not clickable_after_interval:
+            return False
+
+        # 複数のクリック候補がある場合、最も優先度の高い（インターバルが短く、信頼度が高い）ものを1つ選ぶ
+        # ★ すべてクリックしたい場合はここをループにする必要がありますが、
+        #    現状の仕様では「1フレームにつき1クリック」が安全なため、ベストな1つを選びます。
+        #    次のフレームで残りの画像が処理されます。
+        try:
+            potential_target_match = min(clickable_after_interval, key=lambda m: (m['settings'].get('interval_time', 1.5), -m['confidence']))
+        except ValueError:
+            return False
+
+        # 画面安定性チェック
+        is_stability_check_enabled = self.core.app_config.get('screen_stability_check', {}).get('enabled', True)
+        if is_stability_check_enabled and not self.core.is_eco_cooldown_active:
+            if not self.check_screen_stability():
+                self.core._log("log_stability_hold_click")
+                self.core.updateStatus.emit("unstable", "orange")
+                self.core.last_successful_click_time = current_time
+                return False
+
+        if not self.core.is_eco_cooldown_active:
+            self.core.updateStatus.emit("monitoring", "blue")
+
+        if not self.core.is_monitoring:
+            return False
+
+        target_path = potential_target_match['path']
+        self.execute_click(potential_target_match)
+
+        click_time = time.time()
+        last_match_time_map[target_path] = click_time
+
+        if target_path in self.core.match_detected_at:
+            del self.core.match_detected_at[target_path]
+            
+        return True
+
+    def execute_click(self, match_info):
+        try:
+            item_path_str = match_info['path']
+            self.core.environment_tracker.track_environment_on_click(item_path_str)
+        except Exception as e:
+            self.logger.log(f"[ERROR] Failed during environment tracking pre-click: {e}")
+
+        result = self.core.action_manager.execute_click(
+            match_info, 
+            self.core.recognition_area, 
+            self.core.target_hwnd, 
+            self.core.effective_capture_scale,
+            self.core.current_window_scale
+        )
+        
+        if result and result.get('success'): 
+            self.core._click_count += 1
+            self.core._last_clicked_path = result.get('path')
+            self.core.last_successful_click_time = time.time()
+            self.core.clickCountUpdated.emit(self.core._click_count)
+            
+            path = match_info['path']
+            cache_item = self.core.normal_template_cache.get(path) or self.core.backup_template_cache.get(path)
+            if cache_item:
+                folder_mode = cache_item.get('folder_mode')
+                if folder_mode == 'cooldown':
+                    folder_path = cache_item.get('folder_path')
+                    cooldown_duration = cache_item.get('cooldown_time', 30)
+                    
+                    self.core.folder_cooldowns[folder_path] = time.time() + cooldown_duration
+                    self.logger.log("log_folder_cooldown_started", Path(folder_path).name, str(cooldown_duration))
+                    
+                    # クールダウンに入ったフォルダの画像の検出情報をリセット
+                    keys_to_remove = []
+                    for cache in [self.core.normal_template_cache, self.core.backup_template_cache]:
+                        for cached_path, item in cache.items():
+                            if item.get('folder_path') == folder_path and cached_path in self.core.match_detected_at:
+                                keys_to_remove.append(cached_path)
+                    
+                    for p in keys_to_remove:
+                        if p in self.core.match_detected_at:
+                            del self.core.match_detected_at[p]
+
+    def _update_statistics(self, current_time):
+        if current_time - self.core.last_stats_emit_time >= 1.0:
+            self.core.last_stats_emit_time = current_time
+            
+            uptime_seconds = int(current_time - self.core.start_time)
+            h = uptime_seconds // 3600
+            m = (uptime_seconds % 3600) // 60
+            s = uptime_seconds % 60
+            uptime_str = f"{h:02d}h{m:02d}m{s:02d}s"
+            
+            timer_data = {
+                'backup': self.core.get_backup_click_countdown(),
+                'priority': -1.0
+            }
+            if self.core.priority_timers:
+                active_timer_path = next(iter(self.core.priority_timers), None)
+                if active_timer_path:
+                    remaining_sec = self.core.priority_timers[active_timer_path] - current_time
+                    timer_data['priority'] = max(0, remaining_sec / 60.0)
+            
+            cpu_percent = 0.0
+            if self.core.process:
+                try:
+                    cpu_percent = self.core.process.cpu_percent(interval=None)
+                except Exception:
+                    cpu_percent = 0.0
+            
+            fps_value = self.core.current_fps
+            
+            self.core.statsUpdated.emit(self.core._click_count, uptime_str, timer_data, cpu_percent, fps_value)
