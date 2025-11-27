@@ -1,32 +1,30 @@
 # ui.py
 
 import sys
-import json
-from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QLabel,
-    QFrame, QHBoxLayout, QGroupBox, QSpinBox, QDoubleSpinBox, QCheckBox,
-    QGridLayout, QSizePolicy, QSpacerItem, QToolButton, QFileDialog, QLineEdit,
-    QTreeWidget, QTreeWidgetItem, QMenu, QTabWidget, QTextEdit, QDialog, QMessageBox,
-    QComboBox, QDialogButtonBox, QRadioButton, QButtonGroup, QScrollArea, QAbstractItemView,
-    QProxyStyle, QStyle, QStyleOptionViewItem, QToolTip,
-    QInputDialog, QTreeWidgetItemIterator
-)
-from PySide6.QtGui import (
-    QIcon, QPixmap, QImage, QPainter, QColor, QBrush, QFont, QPalette,
-    QCursor 
-)
-from PySide6.QtCore import (
-    Qt, QSize, QThread, Signal, QTimer, QObject, QRect, QPoint, QRectF, QPointF, QEvent,
-    Slot
-)
-
 import os
 import subprocess
 import cv2
 import numpy as np
 from pathlib import Path
 
-# --- 分割されたモジュールのインポート ---
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QLabel,
+    QFrame, QHBoxLayout, QGroupBox, QSpinBox, QDoubleSpinBox, QCheckBox,
+    QGridLayout, QSizePolicy, QSpacerItem, QToolButton, QFileDialog, QLineEdit,
+    QTreeWidget, QTreeWidgetItem, QMenu, QTabWidget, QTextEdit, QDialog, QMessageBox,
+    QComboBox, QDialogButtonBox, QRadioButton, QButtonGroup, QScrollArea, QAbstractItemView,
+    QStyle, QToolTip, QInputDialog
+)
+from PySide6.QtGui import (
+    QIcon, QPixmap, QImage, QPainter, QColor, QBrush, QFont, QPalette,
+    QCursor 
+)
+from PySide6.QtCore import (
+    Qt, QSize, Signal, QTimer, QObject, QRect, QPoint, QEvent, Slot
+)
+
+import qtawesome as qta
+
 from ui_tree_panel import LeftPanel
 from ui_app_settings import AppSettingsPanel
 
@@ -41,7 +39,6 @@ try:
 except:
     OPENCL_AVAILABLE = False
 
-# --- UIManager ---
 class UIManager(QMainWindow):
     startMonitoringRequested = Signal(); stopMonitoringRequested = Signal();
     loadImagesRequested = Signal(list); setRecAreaMethodSelected = Signal(str); captureImageRequested = Signal()
@@ -54,7 +51,6 @@ class UIManager(QMainWindow):
     appConfigChanged = Signal()
     
     renameItemRequested = Signal(str, str)
-    
     saveCapturedImageRequested = Signal(str, np.ndarray)
     
     def __init__(self, core_engine, capture_manager, config_manager, logger, locale_manager):
@@ -67,16 +63,14 @@ class UIManager(QMainWindow):
         self.capture_manager = capture_manager
         self.config_manager = config_manager
         
-        # --- サブパネルのインスタンス ---
         self.left_panel = None
         self.app_settings_panel = None
 
-        # --- 外部互換性のための属性（これらはサブパネル生成後に参照を貼る） ---
         self.item_settings_widgets = {}
-        self.app_settings_widgets = {} # AppSettingsPanelへ委譲
-        self.auto_scale_widgets = {}   # AppSettingsPanelへ委譲
-        self.available_langs = {}      # AppSettingsPanelへ委譲
-        self.image_tree = None         # LeftPanelへ委譲
+        self.app_settings_widgets = {} 
+        self.auto_scale_widgets = {}   
+        self.available_langs = {}      
+        self.image_tree = None         
 
         self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
 
@@ -107,7 +101,6 @@ class UIManager(QMainWindow):
 
         self.setup_ui()
         
-        # --- 互換性エイリアスの設定 (main.py等からのアクセス用) ---
         self.image_tree = self.left_panel.image_tree
         self.app_settings_widgets = self.app_settings_panel.app_settings_widgets
         self.auto_scale_widgets = self.app_settings_panel.auto_scale_widgets
@@ -153,6 +146,8 @@ class UIManager(QMainWindow):
         self.setCentralWidget(central_widget)
         
         self.main_layout = QVBoxLayout(central_widget)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
 
         # 1. ヘッダーエリア
         self._setup_header(self.main_layout)
@@ -160,63 +155,102 @@ class UIManager(QMainWindow):
         # コンテンツエリア
         content_frame = QFrame()
         self.content_layout = QHBoxLayout(content_frame)
+        self.content_layout.setContentsMargins(10, 10, 10, 10)
+        self.content_layout.setSpacing(15)
         
-        # 2. 左パネル (ui_tree_panel.py へ委譲)
+        # 2. 左パネル
         self.left_panel = LeftPanel(self, self.content_layout, self.config_manager, self.logger, self.locale_manager)
 
-        # 3. 右パネル (ガワだけ作成)
+        # 3. 右パネル
         self._setup_right_panel(self.content_layout)
 
         self.main_layout.addWidget(content_frame)
         
-        # --- ★★★ タブの順序制御 ★★★ ---
-        # 1. [画像プレビュー]
+        # --- タブ設定 ---
         self._setup_tab_preview()
-        
-        # 2. [認識範囲]
         self._setup_tab_rec_area()
         
-        # 3 & 4. [アプリ設定] -> [自動スケール] (AppSettingsPanel へ委譲)
         self.app_settings_panel = AppSettingsPanel(self, self.config_manager, self.app_config, self.locale_manager)
         self.app_settings_panel.setup_ui(self.preview_tabs)
         
-        # 5. [使い方]
         self._setup_tab_usage()
-        
-        # 6. [ログ]
         self._setup_tab_log()
-        # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
     def _setup_header(self, parent_layout):
         header_frame = QFrame()
+        header_frame.setProperty('class', 'header_frame')
         header_layout = QHBoxLayout(header_frame)
+        header_layout.setContentsMargins(15, 8, 15, 8)
+        header_layout.setSpacing(12)
         
-        self.monitor_button = QPushButton()
-        self.monitor_button.setFixedSize(120, 30)
+        def create_header_btn(icon_name, text_key, checkable=False, primary=False):
+            btn = QPushButton()
+            color = 'white' if primary else '#5f6368' # 通常時はグレー
+            btn.setIcon(qta.icon(icon_name, color=color))
+            btn.setIconSize(QSize(18, 18))
+            
+            if primary:
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #009688; 
+                        color: white; 
+                        font-weight: bold;
+                        border-radius: 4px;
+                        padding: 6px 15px;
+                        border: none;
+                    }
+                    QPushButton:hover { background-color: #26a69a; }
+                """)
+            else:
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #ffffff; 
+                        color: #333333;
+                        border: 1px solid #cfd8dc;
+                        border-radius: 4px;
+                        padding: 6px 15px;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover { background-color: #f1f3f4; }
+                """)
+            
+            btn.setCursor(Qt.PointingHandCursor)
+            if checkable:
+                btn.setCheckable(True)
+            return btn
+
+        self.monitor_button = create_header_btn('fa5s.play', "monitor_button_start", primary=True)
         header_layout.addWidget(self.monitor_button)
         
-        self.header_rec_area_button = QPushButton()
-        self.header_rec_area_button.setFixedSize(120, 30)
+        line = QFrame()
+        line.setFrameShape(QFrame.VLine)
+        line.setFrameShadow(QFrame.Sunken)
+        line.setStyleSheet("color: #e0e0e0;")
+        header_layout.addWidget(line)
+
+        self.header_rec_area_button = create_header_btn('fa5s.crop', "recognition_area_button")
         self.header_rec_area_button.clicked.connect(self.setRecAreaDialog)
         header_layout.addWidget(self.header_rec_area_button)
         
-        self.toggle_minimal_ui_button = QPushButton()
-        self.toggle_minimal_ui_button.setFixedSize(120, 30)
+        self.toggle_minimal_ui_button = create_header_btn('fa5s.window-minimize', "minimal_ui_button")
         header_layout.addWidget(self.toggle_minimal_ui_button)
         
-        self.open_image_folder_button = QPushButton()
-        self.open_image_folder_button.setFixedSize(120, 30)
-        header_layout.addWidget(self.open_image_folder_button)
-        
-        self.capture_image_button = QPushButton()
-        self.capture_image_button.setFixedSize(120, 30)
+        # ★★★ 修正: カメラアイコンをグレー系に統一 ★★★
+        self.capture_image_button = create_header_btn('fa5s.camera', "capture_image_button")
         self.capture_image_button.clicked.connect(self.captureImageRequested.emit)
         header_layout.addWidget(self.capture_image_button)
+
+        header_layout.addStretch()
         
-        header_layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
+        self.open_image_folder_button = create_header_btn('fa5s.folder-open', "open_image_folder_button")
+        header_layout.addWidget(self.open_image_folder_button)
         
         self.status_label = QLabel()
-        self.status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: green;")
+        font = self.status_label.font()
+        font.setBold(True)
+        font.setPointSize(11)
+        self.status_label.setFont(font)
+        self.status_label.setStyleSheet("color: #4caf50; margin-left: 10px;") 
         header_layout.addWidget(self.status_label)
         
         parent_layout.addWidget(header_frame)
@@ -224,37 +258,100 @@ class UIManager(QMainWindow):
     def _setup_right_panel(self, parent_layout):
         right_frame = QFrame()
         right_layout = QVBoxLayout(right_frame)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(10)
         
         self.preview_tabs = QTabWidget()
+        self.preview_tabs.setStyleSheet("""
+            QTabWidget::pane { 
+                border: 1px solid #cfd8dc; 
+                top: -1px; 
+            }
+            QTabBar::tab { 
+                border: 1px solid #cfd8dc; 
+                border-bottom: none;
+                padding: 6px 12px; 
+                margin-right: 2px; 
+                background-color: #f5f5f5;
+                color: #616161;
+            }
+            QTabBar::tab:selected { 
+                background-color: #ffffff; 
+                color: #37474f; 
+                font-weight: bold;
+                border-bottom: 2px solid #37474f; /* グレー系のアクセント */
+            }
+            QTabBar::tab:hover {
+                background-color: #e0f2f1;
+            }
+        """)
         
-        # ★★★ 修正: ここでのタブ追加処理を削除し setup_ui に移動 ★★★
-        
-        right_layout.addWidget(self.preview_tabs, 2)
+        right_layout.addWidget(self.preview_tabs, 3) 
         
         self._setup_item_settings_group(right_layout)
-        parent_layout.addWidget(right_frame, 2)
+        parent_layout.addWidget(right_frame, 3) 
 
     def _setup_tab_preview(self):
         self.main_preview_widget = QWidget()
         layout = QVBoxLayout(self.main_preview_widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
         self.preview_label = InteractivePreviewLabel()
         self.preview_label.setAlignment(Qt.AlignCenter)
+        self.preview_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.preview_label.setStyleSheet("background-color: #263238;")
+        
         layout.addWidget(self.preview_label)
         self.preview_tabs.addTab(self.main_preview_widget, "")
 
     def _setup_tab_rec_area(self):
         rec_area_widget = QWidget()
         layout = QVBoxLayout(rec_area_widget)
+        
         buttons_layout = QHBoxLayout()
         self.set_rec_area_button_main_ui = QPushButton()
+        # アイコン色をグレー系に指定
+        self.set_rec_area_button_main_ui.setIcon(qta.icon('fa5s.crop', color='#546e7a'))
+        # スタイルシートでテーマ色を上書き (グレー系)
+        self.set_rec_area_button_main_ui.setStyleSheet("""
+            QPushButton {
+                background-color: #ffffff;
+                color: #37474f;
+                border: 1px solid #cfd8dc;
+                border-radius: 4px;
+                padding: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #f5f5f5; border-color: #b0bec5; }
+        """)
+        
         self.clear_rec_area_button_main_ui = QPushButton()
+        # アイコン色をグレー系に指定
+        self.clear_rec_area_button_main_ui.setIcon(qta.icon('fa5s.times', color='#546e7a'))
+        # スタイルシートでテーマ色を上書き (グレー系)
+        self.clear_rec_area_button_main_ui.setStyleSheet("""
+            QPushButton {
+                background-color: #ffffff;
+                color: #37474f;
+                border: 1px solid #cfd8dc;
+                border-radius: 4px;
+                padding: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #f5f5f5; border-color: #b0bec5; }
+        """)
+        
         buttons_layout.addWidget(self.set_rec_area_button_main_ui)
         buttons_layout.addWidget(self.clear_rec_area_button_main_ui)
+        buttons_layout.addStretch()
         layout.addLayout(buttons_layout)
         
         self.rec_area_preview_label = ScaledPixmapLabel()
         self.rec_area_preview_label.setAlignment(Qt.AlignCenter)
+        self.rec_area_preview_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.rec_area_preview_label.setStyleSheet("background-color: black; border: 1px solid #555;")
         layout.addWidget(self.rec_area_preview_label)
+        
         self.preview_tabs.addTab(rec_area_widget, "")
 
     def _setup_tab_log(self):
@@ -262,6 +359,15 @@ class UIManager(QMainWindow):
         layout = QVBoxLayout(log_widget)
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
+        self.log_text.setStyleSheet("""
+            QTextEdit {
+                background-color: #263238; 
+                color: #e0e0e0;
+                font-family: Consolas, monospace; 
+                font-size: 11px;
+                border: none;
+            }
+        """)
         layout.addWidget(self.log_text)
         self.preview_tabs.addTab(log_widget, "")
 
@@ -271,68 +377,165 @@ class UIManager(QMainWindow):
         self.usage_text = QTextEdit()
         self.usage_text.setReadOnly(True)
         layout.addWidget(self.usage_text)
-        usage_widget.setLayout(layout)
         self.preview_tabs.addTab(usage_widget, "")
 
     def _setup_item_settings_group(self, parent_layout):
         self.item_settings_group = QGroupBox()
-        layout = QGridLayout(self.item_settings_group)
-        layout.setColumnStretch(1, 1); layout.setColumnStretch(3, 1)
+        self.item_settings_group.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid #cfd8dc;
+                border-radius: 8px;
+                margin-top: 1.5em;
+                padding-top: 15px;
+                background-color: #fafafa;
+                color: #37474f; 
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+                font-weight: bold;
+                color: #37474f;
+            }
+            QLabel, QCheckBox, QRadioButton {
+                color: #212121;
+            }
+        """)
         
+        layout = QGridLayout(self.item_settings_group)
+        layout.setVerticalSpacing(12)
+        layout.setHorizontalSpacing(15)
+        
+        # --- Row 1: Threshold & Interval ---
         self.item_threshold_label = QLabel()
         layout.addWidget(self.item_threshold_label, 0, 0)
         self.item_settings_widgets['threshold'] = QDoubleSpinBox()
         self.item_settings_widgets['threshold'].setRange(0.5, 1.0); self.item_settings_widgets['threshold'].setSingleStep(0.01); self.item_settings_widgets['threshold'].setValue(0.8)
+        # 修正: 高さ固定を削除
+        # self.item_settings_widgets['threshold'].setMinimumHeight(28) 
         layout.addWidget(self.item_settings_widgets['threshold'], 0, 1)
         
         self.item_interval_label = QLabel()
         layout.addWidget(self.item_interval_label, 0, 2)
         self.item_settings_widgets['interval_time'] = QDoubleSpinBox()
         self.item_settings_widgets['interval_time'].setRange(0.1, 10.0); self.item_settings_widgets['interval_time'].setSingleStep(0.1); self.item_settings_widgets['interval_time'].setValue(1.5)
+        # 修正: 高さ固定を削除
+        # self.item_settings_widgets['interval_time'].setMinimumHeight(28)
         layout.addWidget(self.item_settings_widgets['interval_time'], 0, 3)
         
+        # --- Row 2: Backup & Debounce ---
         self.item_settings_widgets['backup_click'] = QCheckBox()
-        layout.addWidget(self.item_settings_widgets['backup_click'], 1, 0)
+        backup_layout = QHBoxLayout()
+        backup_layout.setContentsMargins(0,0,0,0)
+        backup_layout.addWidget(self.item_settings_widgets['backup_click'])
+        backup_layout.addSpacing(10)
         self.item_settings_widgets['backup_time'] = QDoubleSpinBox()
         self.item_settings_widgets['backup_time'].setRange(1.0, 600.0); self.item_settings_widgets['backup_time'].setSingleStep(1.0); self.item_settings_widgets['backup_time'].setValue(300.0)
-        layout.addWidget(self.item_settings_widgets['backup_time'], 1, 1)
+        self.item_settings_widgets['backup_time'].setFixedWidth(90)
+        # 修正: 高さ固定を削除
+        # self.item_settings_widgets['backup_time'].setMinimumHeight(28)
+        backup_layout.addWidget(self.item_settings_widgets['backup_time'])
+        backup_layout.addStretch()
+        
+        layout.addLayout(backup_layout, 1, 0, 1, 2)
         
         self.item_debounce_label = QLabel()
         layout.addWidget(self.item_debounce_label, 1, 2)
         self.item_settings_widgets['debounce_time'] = QDoubleSpinBox()
         self.item_settings_widgets['debounce_time'].setRange(0.0, 10.0); self.item_settings_widgets['debounce_time'].setSingleStep(0.1); self.item_settings_widgets['debounce_time'].setValue(0.0)
+        # 修正: 高さ固定を削除
+        # self.item_settings_widgets['debounce_time'].setMinimumHeight(28)
         layout.addWidget(self.item_settings_widgets['debounce_time'], 1, 3)
         
+        # --- Row 3: Click Type Grouping ---
         click_type_layout = QHBoxLayout()
+        click_type_layout.setSpacing(10)
+        
+        # Point Click (Single)
         self.item_settings_widgets['point_click'] = QCheckBox()
+        click_type_layout.addWidget(self.item_settings_widgets['point_click'])
+        
+        # Group: Range & Random
+        range_group_frame = QFrame()
+        range_group_frame.setStyleSheet("QFrame { border: 1px solid #cfd8dc; border-radius: 4px; background-color: #ffffff; }")
+        range_group_layout = QHBoxLayout(range_group_frame)
+        range_group_layout.setContentsMargins(8, 4, 8, 4)
+        
         self.item_settings_widgets['range_click'] = QCheckBox()
         self.item_settings_widgets['random_click'] = QCheckBox()
-        click_type_layout.addWidget(self.item_settings_widgets['point_click'])
-        click_type_layout.addWidget(self.item_settings_widgets['range_click'])
-        click_type_layout.addWidget(self.item_settings_widgets['random_click'])
+        range_group_layout.addWidget(self.item_settings_widgets['range_click'])
+        range_group_layout.addWidget(self.item_settings_widgets['random_click'])
+        
+        click_type_layout.addWidget(range_group_frame)
+        click_type_layout.addStretch()
+        
         layout.addLayout(click_type_layout, 2, 0, 1, 4)
         
+        # --- Row 4: Separator ---
         separator = QFrame(); separator.setFrameShape(QFrame.Shape.HLine); separator.setFrameShadow(QFrame.Shadow.Sunken)
         layout.addWidget(separator, 3, 0, 1, 4)
         
-        self.item_settings_widgets['roi_enabled'] = QCheckBox()
-        layout.addWidget(self.item_settings_widgets['roi_enabled'], 4, 0)
+        # --- Row 5: ROI Grouping ---
+        roi_layout = QHBoxLayout()
+        roi_layout.setSpacing(10)
         
-        roi_mode_layout = QHBoxLayout()
+        # ROI Enable (Single)
+        self.item_settings_widgets['roi_enabled'] = QCheckBox()
+        roi_layout.addWidget(self.item_settings_widgets['roi_enabled'])
+        
+        # Fixed (Single)
         self.item_settings_widgets['roi_mode_fixed'] = QRadioButton()
-        self.item_settings_widgets['roi_mode_variable'] = QRadioButton()
         self.roi_mode_group = QButtonGroup(self)
         self.roi_mode_group.addButton(self.item_settings_widgets['roi_mode_fixed'])
+        roi_layout.addWidget(self.item_settings_widgets['roi_mode_fixed'])
+        
+        # Group: Variable & Set Button
+        var_group_frame = QFrame()
+        var_group_frame.setStyleSheet("QFrame { border: 1px solid #cfd8dc; border-radius: 4px; background-color: #ffffff; }")
+        var_group_layout = QHBoxLayout(var_group_frame)
+        var_group_layout.setContentsMargins(8, 4, 8, 4)
+        
+        self.item_settings_widgets['roi_mode_variable'] = QRadioButton()
         self.roi_mode_group.addButton(self.item_settings_widgets['roi_mode_variable'])
-        roi_mode_layout.addWidget(self.item_settings_widgets['roi_mode_fixed'])
-        roi_mode_layout.addWidget(self.item_settings_widgets['roi_mode_variable'])
-        layout.addLayout(roi_mode_layout, 4, 1)
+        
+        # 修正: 可変ラジオボタンとROI設定ボタンの間にスペースを追加
+        var_group_layout.addWidget(self.item_settings_widgets['roi_mode_variable'])
+        var_group_layout.addSpacing(20) # 20px (約2文字分) のスペース
         
         self.item_settings_widgets['set_roi_variable_button'] = QPushButton()
         self.item_settings_widgets['set_roi_variable_button'].setCheckable(True)
-        layout.addWidget(self.item_settings_widgets['set_roi_variable_button'], 4, 2, 1, 2)
+        self.item_settings_widgets['set_roi_variable_button'].setIcon(qta.icon('fa5s.vector-square', color='#37474f'))
         
-        parent_layout.addWidget(self.item_settings_group, 1)
+        # 修正: ボタン幅を固定 (長いテキストが入るサイズ)
+        self.item_settings_widgets['set_roi_variable_button'].setFixedWidth(180) 
+
+        self.item_settings_widgets['set_roi_variable_button'].setStyleSheet("""
+            QPushButton {
+                background-color: #ffffff;
+                border: 1px solid #cfd8dc;
+                border-radius: 4px;
+                font-weight: bold; 
+                color: #37474f;
+                padding: 4px 8px;
+            }
+            QPushButton:hover {
+                background-color: #eceff1;
+                border-color: #b0bec5;
+            }
+            QPushButton:checked {
+                background-color: #cfd8dc; /* 押下状態（ROI設定中）は少し濃いグレー */
+                border-color: #90a4ae;
+            }
+        """)
+        
+        var_group_layout.addWidget(self.item_settings_widgets['set_roi_variable_button'])
+        
+        roi_layout.addWidget(var_group_frame)
+        roi_layout.addStretch()
+        
+        layout.addLayout(roi_layout, 4, 0, 1, 4)
+        
+        parent_layout.addWidget(self.item_settings_group)
 
     def changeEvent(self, event):
         if event.type() == QEvent.PaletteChange or event.type() == QEvent.ThemeChange:
@@ -351,13 +554,11 @@ class UIManager(QMainWindow):
 
         self.set_rec_area_button_main_ui.clicked.connect(self.setRecAreaDialog)
         if self.core_engine:
-            # core_engineへの逆参照セット
             if self.left_panel: self.left_panel.core_engine = self.core_engine
             
             self.clear_rec_area_button_main_ui.clicked.connect(self.core_engine.clear_recognition_area)
             self.core_engine.windowScaleCalculated.connect(self._update_capture_button_state)
 
-        # Item Settings Signals
         self.item_settings_widgets['threshold'].valueChanged.connect(self._emit_settings_for_save)
         self.item_settings_widgets['interval_time'].valueChanged.connect(self._emit_settings_for_save)
         self.item_settings_widgets['backup_time'].valueChanged.connect(self._emit_settings_for_save)
@@ -475,7 +676,7 @@ class UIManager(QMainWindow):
         dialog.exec()
 
     def adjust_initial_size(self):
-        self.setMinimumWidth(0); self.resize(960, 640)
+        self.setMinimumWidth(0); self.resize(1000, 680)
 
     def toggle_minimal_ui_mode(self):
         lm = self.locale_manager.tr; self.is_minimal_mode = not self.is_minimal_mode
@@ -493,13 +694,14 @@ class UIManager(QMainWindow):
             if self.core_engine:
                 self.core_engine.statsUpdated.connect(self.floating_window.on_stats_updated)
 
-            current_status_text = self.status_label.text(); current_status_color = "green"
+            current_status_text = self.status_label.text()
+            current_status_color = "green"
             if current_status_text == lm("status_label_monitoring"): current_status_color = "blue"
             elif current_status_text == lm("status_label_unstable"): current_status_color = "orange"
             elif current_status_text == lm("status_label_idle_error"): current_status_color = "red"
+            
             self.floating_window.update_status(current_status_text, current_status_color); 
             self.floating_window.show(); 
-            self.toggle_minimal_ui_button.setText(lm("minimal_ui_button_stop")); 
             self._update_capture_button_state()
             
         else:
@@ -515,16 +717,15 @@ class UIManager(QMainWindow):
             if 'main' in self.normal_ui_geometries: self.setGeometry(self.normal_ui_geometries['main'])
             
             self.activateWindow(); 
-            self.toggle_minimal_ui_button.setText(lm("minimal_ui_button")); 
             self._update_capture_button_state()
 
     def retranslate_ui(self):
         lm = self.locale_manager.tr
 
         self.setWindowTitle(lm("window_title"))
-        self.header_rec_area_button.setText(lm("recognition_area_button"))
-        self.toggle_minimal_ui_button.setText(lm("minimal_ui_button") if not self.is_minimal_mode else lm("minimal_ui_button_stop"))
-        self.open_image_folder_button.setText(lm("open_image_folder_button"))
+        self.header_rec_area_button.setText(f" {lm('recognition_area_button')}")
+        self.toggle_minimal_ui_button.setText(f" {lm('minimal_ui_button')}")
+        self.open_image_folder_button.setText(f" {lm('open_image_folder_button')}")
         self.open_image_folder_button.setToolTip(lm("open_image_folder_tooltip"))
         self.monitor_button.setToolTip(lm("monitor_button_tooltip"))
 
@@ -533,47 +734,31 @@ class UIManager(QMainWindow):
         else:
              self.status_label.setText(lm("status_label_monitoring"))
 
-        self.capture_image_button.setText(lm("capture_image_button"))
+        self.capture_image_button.setText(f" {lm('capture_image_button')}")
 
-        # Left Panel Retranslation
         if self.left_panel: self.left_panel.retranslate_ui()
-        # App Settings Retranslation
         if self.app_settings_panel: self.app_settings_panel.retranslate_ui()
 
-        # Tabs Titles
         self.preview_tabs.setTabText(self.preview_tabs.indexOf(self.main_preview_widget), lm("tab_preview"))
         
-        # RecArea Tab
         rec_area_tab_index = self.preview_tabs.indexOf(self.rec_area_preview_label.parentWidget())
         if rec_area_tab_index != -1: self.preview_tabs.setTabText(rec_area_tab_index, lm("tab_rec_area"))
-        self.set_rec_area_button_main_ui.setText(lm("recognition_area_button"))
-        self.clear_rec_area_button_main_ui.setText(lm("rec_area_clear_button"))
+        self.set_rec_area_button_main_ui.setText(f" {lm('recognition_area_button')}")
+        self.clear_rec_area_button_main_ui.setText(f" {lm('rec_area_clear_button')}")
         self.rec_area_preview_label.setText(lm("rec_area_preview_text"))
 
-        # Log Tab
         log_tab_index = self.preview_tabs.indexOf(self.log_text.parentWidget())
         if log_tab_index != -1: self.preview_tabs.setTabText(log_tab_index, lm("tab_log"))
 
-        # Auto Scale Tab
-        if self.app_settings_panel and self.app_settings_panel.auto_scale_group:
-            idx_as = self.preview_tabs.indexOf(self.app_settings_panel.auto_scale_group)
-            if idx_as != -1: self.preview_tabs.setTabText(idx_as, lm("tab_auto_scale"))
+        if self.app_settings_panel:
+            if self.app_settings_panel.tab_general_scroll:
+                idx_gen = self.preview_tabs.indexOf(self.app_settings_panel.tab_general_scroll)
+                if idx_gen != -1: self.preview_tabs.setTabText(idx_gen, lm("tab_app_settings"))
+            
+            if self.app_settings_panel.tab_auto_scale_scroll:
+                idx_as = self.preview_tabs.indexOf(self.app_settings_panel.tab_auto_scale_scroll)
+                if idx_as != -1: self.preview_tabs.setTabText(idx_as, lm("tab_auto_scale"))
 
-        # App Settings Tab (Find QScrollArea parent for app_settings_widgets)
-        if self.app_settings_panel and self.app_settings_panel.app_settings_widgets:
-            # Use a reliable widget to find the scroll area tab
-            sample_widget = self.app_settings_panel.app_settings_widgets.get('grayscale_matching')
-            if sample_widget:
-                parent = sample_widget.parentWidget()
-                while parent:
-                    if isinstance(parent, QScrollArea):
-                        idx_app = self.preview_tabs.indexOf(parent)
-                        if idx_app != -1:
-                            self.preview_tabs.setTabText(idx_app, lm("tab_app_settings"))
-                        break
-                    parent = parent.parentWidget()
-
-        # Usage Tab
         usage_tab_index = self.preview_tabs.indexOf(self.usage_text.parentWidget())
         if usage_tab_index != -1: self.preview_tabs.setTabText(usage_tab_index, lm("tab_usage"))
         try:
@@ -586,7 +771,6 @@ class UIManager(QMainWindow):
             else: self.usage_text.setText(f"Usage file not found: {usage_html_path}")
         except Exception as e: self.usage_text.setText(f"Error loading usage file ({usage_html_path_str}): {e}")
 
-        # Item Settings
         self.item_settings_group.setTitle(lm("group_item_settings"))
         self.item_threshold_label.setText(lm("item_setting_threshold"))
         self.item_interval_label.setText(lm("item_setting_interval"))
@@ -605,7 +789,7 @@ class UIManager(QMainWindow):
         self.item_settings_widgets['roi_mode_fixed'].setToolTip(lm("item_setting_roi_mode_fixed_tooltip"))
         self.item_settings_widgets['roi_mode_variable'].setText(lm("item_setting_roi_mode_variable"))
         self.item_settings_widgets['roi_mode_variable'].setToolTip(lm("item_setting_roi_mode_variable_tooltip"))
-        self.item_settings_widgets['set_roi_variable_button'].setText(lm("item_setting_roi_button"))
+        self.item_settings_widgets['set_roi_variable_button'].setText(f" {lm('item_setting_roi_button')}")
         self.item_settings_widgets['set_roi_variable_button'].setToolTip(lm("item_setting_roi_button_tooltip"))
 
         if self.core_engine:
@@ -625,7 +809,6 @@ class UIManager(QMainWindow):
         
     def on_cache_build_finished(self, success: bool):
         lm = self.locale_manager.tr
-        
         if success:
             self.update_image_tree()
             self.set_tree_enabled(True)
@@ -634,7 +817,6 @@ class UIManager(QMainWindow):
             QMessageBox.critical(self, 
                                  lm("error_title_cache_build_failed"), 
                                  lm("error_message_cache_build_failed"))
-        
         self.is_processing_tree_change = False
 
     def on_app_context_changed(self, app_name: str):
@@ -655,7 +837,6 @@ class UIManager(QMainWindow):
         text_color = palette.color(QPalette.ColorRole.WindowText)
         return window_color.lightness() < text_color.lightness()
 
-    # --- 委譲メソッド (Compatibility Wrappers) ---
     def set_tree_enabled(self, enabled: bool):
         if self.left_panel: self.left_panel.image_tree.setEnabled(enabled)
 
@@ -674,7 +855,6 @@ class UIManager(QMainWindow):
         if self.left_panel: return self.left_panel.save_tree_order()
         return {}
 
-    # --- Item Settings Sync Logic ---
     def set_settings_from_data(self, settings_data):
         self.item_settings_widgets['threshold'].blockSignals(True)
         self.item_settings_widgets['interval_time'].blockSignals(True)
@@ -693,16 +873,15 @@ class UIManager(QMainWindow):
             self.item_settings_widgets['debounce_time'].blockSignals(False)
   
     def on_app_settings_changed(self):
-        """
-        CoreEngine (SelectionHandler) からの呼び出しを
-        AppSettingsPanel に転送します。
-        """
         if self.app_settings_panel:
             self.app_settings_panel.on_app_settings_changed()
     
     def toggle_monitoring(self):
-        if self.monitor_button.text() == self.locale_manager.tr("monitor_button_start"): self.startMonitoringRequested.emit()
-        else: self.stopMonitoringRequested.emit()
+        lm = self.locale_manager.tr
+        if not self.core_engine.is_monitoring:
+            self.startMonitoringRequested.emit()
+        else:
+            self.stopMonitoringRequested.emit()
 
     def set_status(self, text_key, color="green"):
         lm = self.locale_manager.tr
@@ -710,31 +889,45 @@ class UIManager(QMainWindow):
         style_color = color
         is_idle = False 
 
+        def set_monitor_btn(icon, text, primary=False):
+            self.monitor_button.setIcon(qta.icon(icon, color='white' if primary else '#5f6368'))
+            self.monitor_button.setText(f" {text}")
+            if primary:
+                self.monitor_button.setStyleSheet("""
+                    QPushButton { background-color: #e53935; color: white; font-weight: bold; border-radius: 4px; border: none; }
+                    QPushButton:hover { background-color: #ef5350; }
+                """)
+            else:
+                self.monitor_button.setStyleSheet("""
+                    QPushButton { background-color: #009688; color: white; font-weight: bold; border-radius: 4px; border: none; }
+                    QPushButton:hover { background-color: #26a69a; }
+                """)
+
         if text_key == "monitoring":
-            self.monitor_button.setText(lm("monitor_button_stop"))
+            set_monitor_btn('fa5s.stop', lm("monitor_button_stop"), primary=True)
             display_text = lm("status_label_monitoring")
-            style_color = "blue"
+            style_color = "#2196f3" 
         elif text_key == "idle":
-            self.monitor_button.setText(lm("monitor_button_start"))
+            set_monitor_btn('fa5s.play', lm("monitor_button_start"), primary=False)
             display_text = lm("status_label_idle")
-            style_color = "green"
+            style_color = "#4caf50" 
             if self.app_settings_panel:
                 self.app_settings_panel.current_best_scale_label.setText(lm("auto_scale_best_scale_default"))
                 self.app_settings_panel.current_best_scale_label.setStyleSheet("color: gray;")
             is_idle = True 
         elif text_key == "unstable":
             display_text = lm("status_label_unstable")
-            style_color = "orange"
+            style_color = "#ff9800" 
         elif text_key == "idle_error":
-            self.monitor_button.setText(lm("monitor_button_start"))
+            set_monitor_btn('fa5s.play', lm("monitor_button_start"), primary=False)
             display_text = lm("status_label_idle_error")
-            style_color = "red"
+            style_color = "#f44336" 
             is_idle = True 
         else:
             display_text = text_key
             
         self.status_label.setText(display_text)
-        self.status_label.setStyleSheet(f"font-weight: bold; color: {style_color};")
+        self.status_label.setStyleSheet(f"font-weight: bold; color: {style_color}; font-size: 14px;")
         
         if self.floating_window:
             self.floating_window.update_status(display_text, style_color)
@@ -781,6 +974,36 @@ class UIManager(QMainWindow):
         if hasattr(self, 'main_capture_button'): 
             self.main_capture_button.setEnabled(enable_capture)
             self.main_capture_button.setToolTip(tooltip)
+            
+            # --- グレーアウト処理 (修正: 通常色をグレーに) ---
+            if enable_capture:
+                # 有効: 通常スタイル
+                self.main_capture_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #ffffff; 
+                        color: #333333;
+                        border: 1px solid #dadce0;
+                        border-radius: 4px;
+                        padding: 6px 15px;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover { background-color: #f1f3f4; }
+                """)
+                # アイコンもグレー (#5f6368)
+                self.main_capture_button.setIcon(qta.icon('fa5s.camera', color='#5f6368'))
+            else:
+                # 無効: 薄いグレー
+                self.main_capture_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #f0f0f0; 
+                        color: #bdbdbd;
+                        border: 1px solid #e0e0e0;
+                        border-radius: 4px;
+                        padding: 6px 15px;
+                        font-weight: bold;
+                    }
+                """)
+                self.main_capture_button.setIcon(qta.icon('fa5s.camera', color='#bdbdbd'))
             
         if self.floating_window and hasattr(self.floating_window, 'capture_button'): 
             self.floating_window.capture_button.setEnabled(enable_capture)

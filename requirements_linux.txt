@@ -7,3 +7,5 @@ psutil
 mss
 pynput
 pyautogui
+qtawesome
+qt-material

@@ -9,3 +9,5 @@ pynput
 pyautogui
 pywin32
 dxcam
+qtawesome
+qt-material

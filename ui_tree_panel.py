@@ -2,16 +2,17 @@
 
 import sys
 import os
-import subprocess
 from pathlib import Path
 from PySide6.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QGridLayout,
     QAbstractItemView, QMessageBox, QInputDialog, QTreeWidgetItem,
     QTreeWidget, QTreeWidgetItemIterator, QApplication, QToolTip, QFileDialog,
-    QLineEdit
+    QLineEdit, QToolButton, QSizePolicy, QWidget
 )
 from PySide6.QtGui import QPixmap, QPainter, QBrush, QColor, QIcon, QAction
-from PySide6.QtCore import Qt, QObject, QTimer
+from PySide6.QtCore import Qt, QObject, QSize
+
+import qtawesome as qta
 
 from image_tree_widget import DraggableTreeWidget
 from dialogs import FolderSettingsDialog
@@ -19,6 +20,7 @@ from dialogs import FolderSettingsDialog
 class LeftPanel(QObject):
     """
     左側パネル（ツリーと操作ボタン）のロジックを管理するクラス
+    モダンUI適用版：配色調整済み
     """
     def __init__(self, ui_manager, parent_layout, config_manager, logger, locale_manager):
         super().__init__(ui_manager)
@@ -26,38 +28,63 @@ class LeftPanel(QObject):
         self.config_manager = config_manager
         self.logger = logger
         self.locale_manager = locale_manager
-        self.core_engine = None # 後でUIManagerからセットされる可能性があります
+        self.core_engine = None 
 
         self.setup_ui(parent_layout)
         self.connect_signals()
 
     def create_colored_icon(self, color):
-        pixmap = QPixmap(16, 16)
+        """ステータス表示用の色付きドットアイコンを生成"""
+        pixmap = QPixmap(14, 14)
         pixmap.fill(Qt.transparent)
         if color != Qt.transparent:
             painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.Antialiasing)
             painter.setBrush(QBrush(color))
             painter.setPen(Qt.NoPen)
-            painter.drawEllipse(4, 4, 8, 8)
+            painter.drawEllipse(2, 2, 10, 10)
             painter.end()
         return QIcon(pixmap)
 
     def setup_ui(self, parent_layout):
         left_frame = QFrame()
         left_layout = QVBoxLayout(left_frame)
+        left_layout.setContentsMargins(10, 10, 10, 10)
+        left_layout.setSpacing(8)
+        
+        # --- ヘッダーエリア ---
+        header_layout = QHBoxLayout()
         
         self.list_title_label = QLabel()
-        left_layout.addWidget(self.list_title_label)
+        font = self.list_title_label.font()
+        font.setPointSize(10)
+        font.setBold(True)
+        self.list_title_label.setFont(font)
+        # 濃いグレー
+        self.list_title_label.setStyleSheet("color: #37474f;") 
+        header_layout.addWidget(self.list_title_label)
         
-        # 順序変更ボタン
-        order_button_frame = QHBoxLayout()
-        self.move_up_button = QPushButton()
-        self.move_down_button = QPushButton()
-        order_button_frame.addWidget(self.move_up_button)
-        order_button_frame.addWidget(self.move_down_button)
-        left_layout.addLayout(order_button_frame)
+        header_layout.addStretch()
         
-        # ツリーウィジェット
+        # 順序変更ボタン (グレー系アイコン)
+        def create_tool_btn(icon_name, tooltip_key):
+            btn = QToolButton()
+            btn.setIcon(qta.icon(icon_name, color='#78909c')) 
+            btn.setIconSize(QSize(14, 14))
+            btn.setFixedSize(24, 24)
+            btn.setAutoRaise(True) 
+            btn.setCursor(Qt.PointingHandCursor)
+            return btn
+
+        self.move_up_button = create_tool_btn('fa5s.arrow-up', "move_up_button")
+        self.move_down_button = create_tool_btn('fa5s.arrow-down', "move_down_button")
+        
+        header_layout.addWidget(self.move_up_button)
+        header_layout.addWidget(self.move_down_button)
+        
+        left_layout.addLayout(header_layout)
+        
+        # --- ツリーウィジェット ---
         self.image_tree = DraggableTreeWidget(self.config_manager)
         self.image_tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.image_tree.setDragDropMode(QAbstractItemView.DragDrop)
@@ -65,63 +92,134 @@ class LeftPanel(QObject):
         self.image_tree.setAcceptDrops(True)
         self.image_tree.setDropIndicatorShown(False)
         self.image_tree.setContextMenuPolicy(Qt.CustomContextMenu)
-        # スタイル設定
+        self.image_tree.setHeaderHidden(True)
+        
+        # 行の高さ調整 (配色はmain.pyのCSSで管理)
         self.image_tree.setStyleSheet("""
-            QTreeWidget {
-                background-color: palette(base);
-                color: palette(text);
-                border: 1px solid darkgray;
-                border-radius: 0px;
-            }
             QTreeWidget::item {
-                color: palette(text);
-            }
-            QTreeWidget::item:selected {
-                background-color: palette(highlight);
-                color: palette(highlightedText);
+                height: 26px;
+                padding: 2px;
             }
         """)
-        self.image_tree.setHeaderHidden(True)
         left_layout.addWidget(self.image_tree)
         
-        # 操作ボタン群
-        button_layout = QGridLayout()
-        self.load_image_button = QPushButton()
-        button_layout.addWidget(self.load_image_button, 0, 0)
+        # --- アクションボタンエリア ---
+        action_layout = QVBoxLayout()
+        action_layout.setSpacing(8)
         
-        self.rename_button = QPushButton()
-        button_layout.addWidget(self.rename_button, 0, 1)
+        def create_action_btn(icon_name, primary=False, danger=False):
+            btn = QPushButton()
+            # アイコン色: Primary/Dangerは白、通常は濃いグレー
+            icon_color = 'white' if (primary or danger) else '#546e7a'
+            btn.setIcon(qta.icon(icon_name, color=icon_color))
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setMinimumHeight(34)
+            
+            if primary:
+                # 画像追加: 緑 (#4caf50)
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #4caf50; 
+                        color: white; 
+                        font-weight: bold;
+                        border-radius: 4px;
+                        border: none;
+                        text-align: left;
+                        padding-left: 15px;
+                    }
+                    QPushButton:hover { background-color: #66bb6a; }
+                """)
+            elif danger:
+                # 削除: オレンジ (#ff9800)
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #ff9800; 
+                        color: white; 
+                        font-weight: bold;
+                        border-radius: 4px;
+                        border: none;
+                        text-align: left;
+                        padding-left: 15px;
+                    }
+                    QPushButton:hover { background-color: #ffa726; }
+                """)
+            else:
+                # その他: 白背景 + グレー枠線 (ライトグリーン廃止)
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #ffffff; 
+                        color: #37474f;
+                        border: 1px solid #cfd8dc;
+                        border-radius: 4px;
+                        text-align: left;
+                        padding-left: 10px;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover { background-color: #f5f5f5; }
+                """)
+            return btn
+
+        # 1. 画像追加 (緑アクセント維持)
+        self.load_image_button = create_action_btn('fa5s.plus', primary=True)
+        action_layout.addWidget(self.load_image_button)
+
+        # 2. 構造管理 (横並び)
+        structure_layout = QHBoxLayout()
+        structure_layout.setSpacing(6)
         
-        self.delete_item_button = QPushButton()
-        button_layout.addWidget(self.delete_item_button, 1, 0)
+        # アイコンのみの小さいボタン (サブ操作用)
+        def create_small_btn(icon_name):
+            btn = QPushButton()
+            btn.setIcon(qta.icon(icon_name, color='#546e7a'))
+            btn.setMinimumHeight(34)
+            btn.setCursor(Qt.PointingHandCursor)
+            # グレー枠線
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #ffffff;
+                    border: 1px solid #cfd8dc;
+                    border-radius: 4px;
+                }
+                QPushButton:hover { background-color: #f5f5f5; }
+            """)
+            return btn
+
+        # フォルダ作成 (通常色)
+        self.create_folder_button = create_action_btn('fa5s.folder-plus')
+        # 削除 (オレンジアクセント維持)
+        self.delete_item_button = create_action_btn('fa5s.trash-alt', danger=True)
         
-        self.create_folder_button = QPushButton()
-        button_layout.addWidget(self.create_folder_button, 1, 1)
+        structure_layout.addWidget(self.create_folder_button)
+        structure_layout.addWidget(self.delete_item_button)
+        action_layout.addLayout(structure_layout)
         
-        self.move_in_button = QPushButton()
-        button_layout.addWidget(self.move_in_button, 2, 0)
+        # 3. 編集・移動 (アイコンのみ)
+        edit_layout = QHBoxLayout()
+        edit_layout.setSpacing(6)
         
-        self.move_out_button = QPushButton()
-        button_layout.addWidget(self.move_out_button, 2, 1)
+        self.rename_button = create_small_btn('fa5s.pen')
+        self.move_in_button = create_small_btn('fa5s.file-import')
+        self.move_out_button = create_small_btn('fa5s.file-export')
         
-        left_layout.addLayout(button_layout)
+        edit_layout.addWidget(self.rename_button)
+        edit_layout.addWidget(self.move_in_button)
+        edit_layout.addWidget(self.move_out_button)
         
-        # パネル追加 (stretch=1)
+        action_layout.addLayout(edit_layout)
+        
+        left_layout.addLayout(action_layout)
         parent_layout.addWidget(left_frame, 1)
 
     def connect_signals(self):
-        # UI Managerへのシグナル転送や、ローカルなスロットへの接続
         self.load_image_button.clicked.connect(self.load_images_dialog)
         self.delete_item_button.clicked.connect(self.on_delete_button_clicked)
         self.move_up_button.clicked.connect(self.move_item_up)
         self.move_down_button.clicked.connect(self.move_item_down)
         
-        # UI Managerのシグナルを直接発火させる
         self.create_folder_button.clicked.connect(self.ui_manager.createFolderRequested.emit)
         self.move_in_button.clicked.connect(self.ui_manager.moveItemIntoFolderRequested.emit)
         self.move_out_button.clicked.connect(self.ui_manager.moveItemOutOfFolderRequested.emit)
         
-        # ツリー自体のシグナル接続
         self.image_tree.itemSelectionChanged.connect(self.on_image_tree_selection_changed)
         self.image_tree.itemClicked.connect(self.on_image_tree_item_clicked)
         self.image_tree.customContextMenuRequested.connect(self.on_tree_context_menu)
@@ -133,16 +231,20 @@ class LeftPanel(QObject):
     def retranslate_ui(self):
         lm = self.locale_manager.tr
         self.list_title_label.setText(lm("list_title"))
-        self.move_up_button.setText(lm("move_up_button"))
-        self.move_down_button.setText(lm("move_down_button"))
-        self.load_image_button.setText(lm("add_image_button"))
-        self.rename_button.setText(lm("rename_button"))
-        self.delete_item_button.setText(lm("delete_item_button"))
-        self.create_folder_button.setText(lm("create_folder_button"))
-        self.move_in_button.setText(lm("move_in_button"))
-        self.move_out_button.setText(lm("move_out_button"))
+        
+        self.move_up_button.setToolTip(lm("move_up_button"))
+        self.move_down_button.setToolTip(lm("move_down_button"))
+        
+        # ボタンテキスト
+        self.load_image_button.setText(f" {lm('add_image_button')}")
+        self.create_folder_button.setText(f" {lm('create_folder_button')}")
+        self.delete_item_button.setText(f" {lm('delete_item_button')}")
+        
+        self.rename_button.setToolTip(lm("rename_button"))
+        self.move_in_button.setToolTip(lm("move_in_button"))
+        self.move_out_button.setToolTip(lm("move_out_button"))
 
-    # --- Logic Methods moved from UIManager ---
+    # --- Logic Methods ---
 
     def _add_items_recursive(self, parent_widget, item_list, expanded_folders, selected_path, lm):
         item_to_reselect = None
@@ -156,15 +258,17 @@ class LeftPanel(QObject):
                 folder_item.setData(0, Qt.UserRole, item_data['path'])
                 folder_item.setFlags(folder_item.flags() | Qt.ItemIsDropEnabled)
                 
-                brush = QBrush(QApplication.palette().text().color())
+                # 文字色: 濃いグレー
+                brush = QBrush(QColor("#263238"))
                 icon_color = Qt.transparent
                 
-                if mode == 'normal': brush = QBrush(QColor("darkgray")); icon_color = QColor("darkgray")
-                elif mode == 'excluded': brush = QBrush(Qt.red); icon_color = Qt.red
-                elif mode == 'cooldown': brush = QBrush(QColor("purple")); icon_color = QColor("purple") 
-                elif mode == 'priority_image': brush = QBrush(Qt.blue); icon_color = Qt.blue
-                elif mode == 'priority_timer': brush = QBrush(Qt.darkGreen); icon_color = Qt.green
-                elif mode == 'priority_sequence': brush = QBrush(Qt.cyan); icon_color = Qt.cyan
+                # モード別インジケータ色
+                if mode == 'normal': icon_color = QColor("#90a4ae")
+                elif mode == 'excluded': brush = QBrush(QColor("#d32f2f")); icon_color = QColor("#d32f2f")
+                elif mode == 'cooldown': brush = QBrush(QColor("#7b1fa2")); icon_color = QColor("#7b1fa2")
+                elif mode == 'priority_image': brush = QBrush(QColor("#1976d2")); icon_color = QColor("#1976d2")
+                elif mode == 'priority_timer': brush = QBrush(QColor("#388e3c")); icon_color = QColor("#388e3c")
+                elif mode == 'priority_sequence': brush = QBrush(QColor("#0097a7")); icon_color = QColor("#0097a7")
                 
                 folder_item.setIcon(0, self.create_colored_icon(icon_color))
                 folder_item.setForeground(0, brush)
@@ -185,6 +289,11 @@ class LeftPanel(QObject):
                 image_item = QTreeWidgetItem(parent_widget, [item_data['name']])
                 image_item.setData(0, Qt.UserRole, item_data['path'])
                 image_item.setIcon(0, self.create_colored_icon(Qt.transparent))
+                
+                # 画像アイテムも視認性の高い色に
+                brush = QBrush(QColor("#37474f"))
+                image_item.setForeground(0, brush)
+                
                 if item_data['path'] == selected_path: item_to_reselect = image_item
         
         return item_to_reselect
@@ -237,7 +346,6 @@ class LeftPanel(QObject):
         if self.ui_manager.is_processing_tree_change or not item: return
         path_str = item.data(0, Qt.UserRole)
         if not path_str: return
-        # フォルダでない場合はプレビュータブへ切り替え
         if not Path(path_str).is_dir(): 
             self.ui_manager.switch_to_preview_tab()
 
@@ -258,7 +366,6 @@ class LeftPanel(QObject):
             current_settings = self.config_manager.load_item_setting(path)
             is_root = (item.parent() is None)
             
-            # ui_manager を親として渡す
             dialog = FolderSettingsDialog(path.name, current_settings, self.locale_manager, is_root, self.ui_manager)
             
             if dialog.exec():

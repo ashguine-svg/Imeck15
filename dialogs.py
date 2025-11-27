@@ -1,15 +1,16 @@
-# dialogs.py (順序優先モード追加版)
+# dialogs.py
 
 import sys
 from PySide6.QtWidgets import (
     QDialog, QPushButton, QVBoxLayout, QHBoxLayout, QLabel, QGroupBox,
     QRadioButton, QButtonGroup, QGridLayout, QSpinBox, QDialogButtonBox,
-    QApplication
+    QApplication, QStyle
 )
-from PySide6.QtGui import QCursor
-from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtGui import QCursor, QIcon
+from PySide6.QtCore import Qt, Signal, QTimer, QSize
 
-# ... (RecAreaSelectionDialog は変更なし) ...
+import qtawesome as qta
+
 class RecAreaSelectionDialog(QDialog):
     selectionMade = Signal(str)
     
@@ -19,32 +20,83 @@ class RecAreaSelectionDialog(QDialog):
         lm = self.locale_manager.tr
         
         self.setWindowTitle(lm("rec_area_dialog_title"))
+        # ツールウィンドウとして設定し、枠を消す
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Popup)
-        self.setFixedSize(150, 140)
+        
+        # スタイル調整: 白背景、グレー枠線、濃い文字色
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #ffffff;
+                border: 1px solid #90a4ae;
+                border-radius: 6px;
+            }
+            QLabel {
+                color: #37474f;
+                font-weight: bold;
+                font-size: 13px;
+                border: none;
+            }
+            QPushButton {
+                text-align: left;
+                padding-left: 15px;
+                border: 1px solid #cfd8dc;
+                border-radius: 4px;
+                background-color: #f5f5f5;
+                color: #37474f;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #eceff1;
+                border-color: #b0bec5;
+            }
+        """)
         
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel(lm("rec_area_dialog_prompt")))
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(10)
+        
+        label = QLabel(lm("rec_area_dialog_prompt"))
+        label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(label)
         
         button_layout = QVBoxLayout() 
-        button_layout.setSpacing(6)
+        button_layout.setSpacing(8)
         
-        self.rect_button = QPushButton(lm("rec_area_dialog_rect_button"))
+        def create_btn(icon_name, text_key, icon_color):
+            btn = QPushButton(f" {lm(text_key)}")
+            btn.setIcon(qta.icon(icon_name, color=icon_color))
+            btn.setIconSize(QSize(20, 20))
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setMinimumHeight(40) 
+            return btn
+        
+        # アイコン色は識別しやすいように色分けを残す
+        self.rect_button = create_btn('fa5s.vector-square', "rec_area_dialog_rect_button", "#ff9800") # オレンジ
         self.rect_button.clicked.connect(lambda: self.on_select("rectangle"))
         button_layout.addWidget(self.rect_button)
         
-        self.window_button = QPushButton(lm("rec_area_dialog_window_button"))
+        self.window_button = create_btn('fa5s.window-maximize', "rec_area_dialog_window_button", "#2196f3") # 青
         self.window_button.clicked.connect(lambda: self.on_select("window"))
         button_layout.addWidget(self.window_button)
 
-        self.fullscreen_button = QPushButton(lm("rec_area_dialog_fullscreen_button"))
+        self.fullscreen_button = create_btn('fa5s.expand', "rec_area_dialog_fullscreen_button", "#4caf50") # 緑
         self.fullscreen_button.clicked.connect(lambda: self.on_select("fullscreen"))
         button_layout.addWidget(self.fullscreen_button)
 
         layout.addLayout(button_layout)
         
+        # キャンセル方法のヒント
+        hint_label = QLabel("(ESC to Cancel)")
+        hint_label.setStyleSheet("color: #90a4ae; font-size: 10px; font-weight: normal; border: none;")
+        hint_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(hint_label)
+        
+        self.setFixedSize(220, 260) 
+        
     def on_select(self, method):
         self.selectionMade.emit(method)
         self.accept()
+
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
             self.reject()
@@ -57,20 +109,51 @@ class FolderSettingsDialog(QDialog):
         lm = self.locale_manager.tr
         
         self.setWindowTitle(lm("folder_dialog_title", folder_name))
+        
+        # ダイアログ全体のスタイル設定 (詳細な配色はmain.pyのCSSも効くが、念のため指定)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #ffffff;
+            }
+            QGroupBox {
+                border: 1px solid #cfd8dc;
+                border-radius: 6px;
+                margin-top: 1.2em;
+                padding-top: 10px;
+                background-color: #fafafa;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+                font-weight: bold;
+                color: #37474f;
+            }
+            QLabel, QRadioButton {
+                color: #37474f;
+            }
+            QSpinBox {
+                min-height: 24px;
+            }
+        """)
+        
         self.layout = QVBoxLayout(self)
+        self.layout.setSpacing(15)
+        self.layout.setContentsMargins(20, 20, 20, 20)
 
         # --- モード選択 ---
         mode_box = QGroupBox(lm("folder_dialog_group_mode"))
+        
         mode_layout = QVBoxLayout()
+        mode_layout.setSpacing(8)
+        
         self.radio_normal = QRadioButton(lm("folder_dialog_radio_normal"))
         self.radio_excluded = QRadioButton(lm("folder_dialog_radio_excluded"))
         self.radio_cooldown = QRadioButton(lm("folder_dialog_radio_cooldown"))
         self.radio_priority_image = QRadioButton(lm("folder_dialog_radio_priority_image"))
         self.radio_priority_timer = QRadioButton(lm("folder_dialog_radio_priority_timer"))
-        # ★ 追加: 順序優先
         self.radio_priority_sequence = QRadioButton(lm("folder_dialog_radio_priority_sequence"))
         
-        # ルートでない場合はタイマー優先を無効化
         if not is_root:
             self.radio_priority_timer.setEnabled(False)
             if current_settings.get('mode') == 'priority_timer':
@@ -82,95 +165,95 @@ class FolderSettingsDialog(QDialog):
         self.mode_group.addButton(self.radio_cooldown, 2)
         self.mode_group.addButton(self.radio_priority_image, 3)
         self.mode_group.addButton(self.radio_priority_timer, 4)
-        self.mode_group.addButton(self.radio_priority_sequence, 5) # ★ ID 5
+        self.mode_group.addButton(self.radio_priority_sequence, 5)
         
         mode_layout.addWidget(self.radio_normal)
         mode_layout.addWidget(self.radio_excluded)
         mode_layout.addWidget(self.radio_cooldown)
         mode_layout.addWidget(self.radio_priority_image)
         mode_layout.addWidget(self.radio_priority_timer)
-        mode_layout.addWidget(self.radio_priority_sequence) # ★ 追加
+        mode_layout.addWidget(self.radio_priority_sequence)
         
         mode_box.setLayout(mode_layout)
         self.layout.addWidget(mode_box)
         
-        # --- クールダウン設定 ---
+        # --- 詳細設定エリア ---
+        details_layout = QVBoxLayout()
+        details_layout.setSpacing(12)
+
+        # ヘルパー: スピンボックス行作成
+        def create_spin_row(label_text, suffix, box_widget):
+            row = QHBoxLayout()
+            lbl = QLabel(label_text)
+            row.addWidget(lbl)
+            spin = QSpinBox()
+            spin.setRange(1, 3600)
+            spin.setSuffix(suffix)
+            # スピンボックスの幅を確保
+            spin.setFixedWidth(100)
+            row.addWidget(spin)
+            row.addStretch()
+            box_widget.setLayout(row)
+            return spin
+
+        # クールダウン
         self.cooldown_box = QGroupBox(lm("folder_dialog_group_cooldown"))
-        cooldown_layout = QGridLayout()
-        cooldown_layout.addWidget(QLabel(lm("folder_dialog_cooldown_time")), 0, 0)
-        self.cooldown_time_spin = QSpinBox()
-        self.cooldown_time_spin.setRange(1, 3600)
-        self.cooldown_time_spin.setSuffix(lm("folder_dialog_suffix_seconds"))
-        cooldown_layout.addWidget(self.cooldown_time_spin, 0, 1)
-        self.cooldown_box.setLayout(cooldown_layout)
-        self.layout.addWidget(self.cooldown_box)
+        self.cooldown_time_spin = create_spin_row(lm("folder_dialog_cooldown_time"), lm("folder_dialog_suffix_seconds"), self.cooldown_box)
+        details_layout.addWidget(self.cooldown_box)
 
-        # --- 画像優先設定 ---
+        # 画像優先
         self.image_priority_box = QGroupBox(lm("folder_dialog_group_image"))
-        image_priority_layout = QGridLayout()
-        image_priority_layout.addWidget(QLabel(lm("folder_dialog_image_timeout")), 0, 0)
-        self.priority_image_timeout_spin = QSpinBox()
-        self.priority_image_timeout_spin.setRange(1, 999)
-        self.priority_image_timeout_spin.setSuffix(lm("folder_dialog_suffix_seconds"))
-        image_priority_layout.addWidget(self.priority_image_timeout_spin, 0, 1)
-        self.image_priority_box.setLayout(image_priority_layout)
-        self.layout.addWidget(self.image_priority_box)
+        self.priority_image_timeout_spin = create_spin_row(lm("folder_dialog_image_timeout"), lm("folder_dialog_suffix_seconds"), self.image_priority_box)
+        details_layout.addWidget(self.image_priority_box)
 
-        # --- タイマー優先設定 ---
+        # タイマー優先
         self.timer_priority_box = QGroupBox(lm("folder_dialog_group_timer"))
-        timer_layout = QGridLayout()
-        timer_layout.addWidget(QLabel(lm("folder_dialog_timer_interval")), 0, 0)
-        self.interval_spin = QSpinBox()
-        self.interval_spin.setRange(1, 999)
-        self.interval_spin.setSuffix(lm("folder_dialog_suffix_minutes_interval"))
-        timer_layout.addWidget(self.interval_spin, 0, 1)
+        t_layout = QGridLayout()
+        t_layout.setVerticalSpacing(10)
         
-        timer_layout.addWidget(QLabel(lm("folder_dialog_timer_timeout")), 1, 0)
-        self.timeout_spin = QSpinBox()
-        self.timeout_spin.setRange(1, 999)
-        self.timeout_spin.setSuffix(lm("folder_dialog_suffix_minutes_timeout"))
-        timer_layout.addWidget(self.timeout_spin, 1, 1)
-        self.timer_priority_box.setLayout(timer_layout)
-        self.layout.addWidget(self.timer_priority_box)
+        t_layout.addWidget(QLabel(lm("folder_dialog_timer_interval")), 0, 0)
+        self.interval_spin = QSpinBox(); self.interval_spin.setRange(1, 999); self.interval_spin.setSuffix(lm("folder_dialog_suffix_minutes_interval"))
+        self.interval_spin.setFixedWidth(100)
+        t_layout.addWidget(self.interval_spin, 0, 1)
+        
+        t_layout.addWidget(QLabel(lm("folder_dialog_timer_timeout")), 1, 0)
+        self.timeout_spin = QSpinBox(); self.timeout_spin.setRange(1, 999); self.timeout_spin.setSuffix(lm("folder_dialog_suffix_minutes_timeout"))
+        self.timeout_spin.setFixedWidth(100)
+        t_layout.addWidget(self.timeout_spin, 1, 1)
+        
+        # 列の伸縮調整
+        t_layout.setColumnStretch(2, 1) 
+        self.timer_priority_box.setLayout(t_layout)
+        details_layout.addWidget(self.timer_priority_box)
 
-        # --- ★ 順序優先設定 (新規) ---
-        # タイマー設定と似ていますが、「1枚あたりの待機時間」を設定します
+        # 順序優先
         self.sequence_priority_box = QGroupBox(lm("folder_dialog_group_sequence"))
-        sequence_layout = QGridLayout()
-        sequence_layout.addWidget(QLabel(lm("folder_dialog_sequence_interval")), 0, 0)
-        self.sequence_interval_spin = QSpinBox()
-        self.sequence_interval_spin.setRange(1, 300) # 最大5分待機
-        self.sequence_interval_spin.setSuffix(lm("folder_dialog_suffix_seconds"))
-        sequence_layout.addWidget(self.sequence_interval_spin, 0, 1)
-        self.sequence_priority_box.setLayout(sequence_layout)
-        self.layout.addWidget(self.sequence_priority_box)
+        self.sequence_interval_spin = create_spin_row(lm("folder_dialog_sequence_interval"), lm("folder_dialog_suffix_seconds"), self.sequence_priority_box)
+        details_layout.addWidget(self.sequence_priority_box)
 
-        # --- 表示制御 ---
+        self.layout.addLayout(details_layout)
+
+        # --- 表示制御接続 ---
         self.radio_cooldown.toggled.connect(self.cooldown_box.setEnabled)
         self.radio_priority_image.toggled.connect(self.image_priority_box.setEnabled)
         self.radio_priority_timer.toggled.connect(self.timer_priority_box.setEnabled)
-        # ★ 追加
         self.radio_priority_sequence.toggled.connect(self.sequence_priority_box.setEnabled)
         
         # --- ツールチップ ---
-        cooldown_tooltip = lm("folder_dialog_tooltip_cooldown")
-        self.radio_cooldown.setToolTip(cooldown_tooltip)
-        self.cooldown_box.setToolTip(cooldown_tooltip)
+        self.radio_cooldown.setToolTip(lm("folder_dialog_tooltip_cooldown"))
+        self.radio_priority_image.setToolTip(lm("folder_dialog_tooltip_image"))
+        self.radio_priority_timer.setToolTip(lm("folder_dialog_tooltip_timer"))
+        self.radio_priority_sequence.setToolTip(lm("folder_dialog_tooltip_sequence"))
 
-        image_tooltip = lm("folder_dialog_tooltip_image")
-        self.radio_priority_image.setToolTip(image_tooltip)
-        self.image_priority_box.setToolTip(image_tooltip)
-
-        timer_tooltip = lm("folder_dialog_tooltip_timer")
-        self.radio_priority_timer.setToolTip(timer_tooltip)
-        self.timer_priority_box.setToolTip(timer_tooltip)
-        
-        # ★ 追加
-        sequence_tooltip = lm("folder_dialog_tooltip_sequence")
-        self.radio_priority_sequence.setToolTip(sequence_tooltip)
-        self.sequence_priority_box.setToolTip(sequence_tooltip)
-
+        # --- ボタン ---
         self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        # ボタンのスタイル調整
+        self.buttons.setStyleSheet("""
+            QPushButton {
+                min-width: 80px;
+                padding: 6px;
+            }
+        """)
         self.buttons.accepted.connect(self.accept)
         self.buttons.rejected.connect(self.reject)
         self.layout.addWidget(self.buttons)
@@ -179,45 +262,33 @@ class FolderSettingsDialog(QDialog):
 
     def load_settings(self, settings):
         mode = settings.get('mode', 'normal')
-        if mode == 'excluded':
-            self.radio_excluded.setChecked(True)
-        elif mode == 'cooldown':
-            self.radio_cooldown.setChecked(True)
-        elif mode == 'priority_image':
-            self.radio_priority_image.setChecked(True)
-        elif mode == 'priority_timer':
-            self.radio_priority_timer.setChecked(True)
-        elif mode == 'priority_sequence': # ★ 追加
-            self.radio_priority_sequence.setChecked(True)
-        else:
-            self.radio_normal.setChecked(True)
+        if mode == 'excluded': self.radio_excluded.setChecked(True)
+        elif mode == 'cooldown': self.radio_cooldown.setChecked(True)
+        elif mode == 'priority_image': self.radio_priority_image.setChecked(True)
+        elif mode == 'priority_timer': self.radio_priority_timer.setChecked(True)
+        elif mode == 'priority_sequence': self.radio_priority_sequence.setChecked(True)
+        else: self.radio_normal.setChecked(True)
         
         self.cooldown_time_spin.setValue(settings.get('cooldown_time', 30))
         self.priority_image_timeout_spin.setValue(settings.get('priority_image_timeout', 10))
         self.interval_spin.setValue(settings.get('priority_interval', 10))
         self.timeout_spin.setValue(settings.get('priority_timeout', 5))
-        # ★ 追加: デフォルト3秒
         self.sequence_interval_spin.setValue(settings.get('sequence_interval', 3)) 
         
-        # 初期状態の有効/無効設定
+        # 初期状態反映
         self.cooldown_box.setEnabled(mode == 'cooldown')
         self.image_priority_box.setEnabled(mode == 'priority_image')
         self.timer_priority_box.setEnabled(mode == 'priority_timer')
-        self.sequence_priority_box.setEnabled(mode == 'priority_sequence') # ★ 追加
+        self.sequence_priority_box.setEnabled(mode == 'priority_sequence')
 
     def get_settings(self):
         mode_id = self.mode_group.checkedId()
         mode = 'normal'
-        if mode_id == 1:
-            mode = 'excluded'
-        elif mode_id == 2:
-            mode = 'cooldown'
-        elif mode_id == 3:
-            mode = 'priority_image'
-        elif mode_id == 4:
-            mode = 'priority_timer'
-        elif mode_id == 5: # ★ 追加
-            mode = 'priority_sequence'
+        if mode_id == 1: mode = 'excluded'
+        elif mode_id == 2: mode = 'cooldown'
+        elif mode_id == 3: mode = 'priority_image'
+        elif mode_id == 4: mode = 'priority_timer'
+        elif mode_id == 5: mode = 'priority_sequence'
             
         return {
             'mode': mode,
@@ -225,10 +296,10 @@ class FolderSettingsDialog(QDialog):
             'priority_image_timeout': self.priority_image_timeout_spin.value(),
             'priority_interval': self.interval_spin.value(),
             'priority_timeout': self.timeout_spin.value(),
-            'sequence_interval': self.sequence_interval_spin.value() # ★ 追加
+            'sequence_interval': self.sequence_interval_spin.value()
         }
 
-# ... (InitializationDialog は変更なし) ...
+
 class InitializationDialog(QDialog):
     def __init__(self, core_engine, logger, locale_manager, parent=None):
         super().__init__(parent)
@@ -247,7 +318,7 @@ class InitializationDialog(QDialog):
         label.setStyleSheet("color: white; font-size: 14px; font-weight: bold; background-color: transparent;")
         layout.addWidget(label, 0, Qt.AlignmentFlag.AlignCenter)
         
-        self.setStyleSheet("background-color: rgba(0, 0, 0, 180); border-radius: 10px; padding: 10px;")
+        self.setStyleSheet("background-color: rgba(0, 0, 0, 180); border-radius: 10px; padding: 20px;")
         
         QTimer.singleShot(50, self.apply_workaround_and_close)
 
