@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 import os
 import psutil
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QObject, Signal, Slot, Qt
 from PySide6.QtWidgets import QMessageBox
 from pathlib import Path
 from pynput import mouse
