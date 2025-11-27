@@ -161,71 +161,76 @@ The module structure of this application was refined through pair programming wi
 
 ```mermaid
 graph TD
-    subgraph UILayer
+    subgraph UILayer [UI Layer]
         A[main.py] -- "Launch" --> B[ui.py]
-        B -- "Uses" --> B1[image_tree_widget.py]
+        
+        %% UI Composition
+        B -- "Composes (Left)" --> B_Tree[ui_tree_panel.py]
+        B -- "Composes (Right)" --> B_Set[ui_app_settings.py]
+        
+        %% UI Dependencies
+        B_Tree -- "Uses" --> B1[image_tree_widget.py]
         B -- "Uses" --> B2[preview_mode_manager.py]
         B -- "Uses" --> B3[floating_window.py]
         B -- "Uses" --> B4[dialogs.py]
+        B -- "Uses" --> B5[monitor.py]
     end
 
-    subgraph CoreLogicLayer
-        C(core.py) --- C1(monitoring_states.py)
-        C --- D(template_manager.py)
-        C --- E(matcher.py)
-        C --- F(action.py)
+    subgraph CoreLogicLayer [Core Logic Layer]
+        C(core.py) -- "Delegates Loop" --> C_Mon(core_monitoring.py)
+        C -- "Delegates Selection" --> C_Sel(core_selection.py)
+        
+        C_Mon -.-> C1(monitoring_states.py)
+        C -- "Builds Cache" --> D(template_manager.py)
+        C_Mon -- "Matching Task" --> E(matcher.py)
+        C -- "Action Request" --> F(action.py)
     end
 
-    subgraph HardwareSystemInteraction
+    subgraph HardwareSystemInteraction [System Interaction]
         G[capture.py]
-        F --- H[Mouse/Keyboard]
-        G --- I[Screen]
+        F -- "Click/Type" --> H[Mouse/Keyboard]
+        G -- "Grab Frame" --> I[Screen]
     end
 
-    subgraph DataConfiguration
+    subgraph DataConfiguration [Data & Config]
         J[config.py]
         L[locale_manager.py]
-        K[Images & Config JSON]
+        M[environment_tracker.py]
+        K[(Images & JSON)]
 
-        D --- J
-        C --- J
-        B -- "Load Config" --> J
-        B -- "Localization" --> L
-        C -- "Localization" --> L
-        J --- K
+        D -.-> J
+        C -.-> J
+        B -.-> L
+        J <--> K
+        C_Sel -.-> M
     end
 
-    %% Connections
-    B -- "Events (Start/Stop/Settings)" --> C
-    C -- "UI Updates (Log/Preview/Status)" --> B
-
-    C -- "Capture Request" --> G
-    G -- "Captured Image" --> C
-
-    C -- "Template Matching" --> E
-    E -- "Match Result" --> C
-
-    C -- "Execute Action" --> F
-    
-    C -- "Build Cache Request" --> D
-
-    C1 -.-> C
+    %% Cross-Layer Connections
+    B <--> |"Signals / Slots"| C
+    C_Mon -- "Request Capture" --> G
+    C_Sel -- "Request Capture" --> G
 ```
 
 ### Module Descriptions
 
 | Layer | File | Description |
 | :--- | :--- | :--- |
-| **UI Layer** | **`main.py`** | **Launcher.** Starts the app and initializes major components (`UIManager`, `CoreEngine`). |
-| | **`ui.py` (UIManager)** | **Main Window.** Manages layout, tabs, and buttons. Integrates sub-modules (`image_tree_widget`, `preview_mode_manager`) and relays signals to `CoreEngine`. |
-| | **`image_tree_widget.py`** | **Tree View Logic.** Handles the list display of images, Drag & Drop operations, and item reordering. |
-| | **`preview_mode_manager.py`** | **Preview Logic.** Manages the image preview display, click point/range settings, and ROI drawing logic. |
-| | `floating_window.py` / `dialogs.py` | Minimal mode UI and various popup dialogs. |
-| **Core Logic** | **`core.py`** | **The Brain.** Controls the main loop. Receives UI commands, coordinates specialized modules (`capture`, `matcher`), and reports results. |
-| | **`monitoring_states.py`** | **State Machine.** Handles complex monitoring logic (Normal Scan, Priority Mode, Backup Countdown) as distinct classes. |
-| | **`template_manager.py`** | **Image Prep.** Loads image files and prepares cached data (scaling, ROI cropping) for the matcher. |
-| | **`matcher.py`** | **Vision System.** Compares screen captures against template images to find matches and calculate confidence. |
-| | **`action.py`** | **Executor.** Performs physical mouse clicks and window activation based on `core.py` instructions. |
-| **Hardware** | **`capture.py`** | **Camera.** Captures the screen or specific windows. Uses `dxcam` (Win) or `mss` (Linux). |
-| **Data** | **`config.py`** | **Storage.** Reads/Writes image paths, settings, and application configurations to JSON files. |
-| | **`locale_manager.py`** | **Translator.** Manages app text and translates it based on JSON files in the `locales` folder. |
+| **UI Layer** | **`main.py`** | **Launcher.** Starts the application, ensures single-instance locking, and initializes the `UIManager`. |
+| | **`ui.py` (UIManager)** | **Main Controller.** Acts as the central coordinator for the UI. Manages the main window layout and delegates logic to sub-panels (`LeftPanel`, `AppSettingsPanel`). |
+| | **`ui_tree_panel.py`** | **Tree Panel Logic.** Manages the left-side panel, including the image tree, item operations (rename/delete/move), and folder structure. |
+| | **`ui_app_settings.py`** | **Settings Panel Logic.** Manages the "App Settings" and "Auto Scale" tabs, handling configuration changes and UI state dependencies. |
+| | **`image_tree_widget.py`** | **Custom Widget.** Implements the draggable `QTreeWidget` logic for reordering images and nesting folders. |
+| | **`preview_mode_manager.py`** | **Preview Logic.** Handles image preview rendering and interactive drawing (ROI selection, click points) on the UI. |
+| | `monitor.py` | **Log Viewer.** Displays the real-time application log window. |
+| | `floating_window.py` | **Minimal UI.** A compact floating window for controlling the app during monitoring. |
+| **Core Logic** | **`core.py`** | **Signal Hub.** The central communication hub. Manages thread pools, connects UI signals to logic, and holds the application state. |
+| | **`core_monitoring.py`** | **Monitoring Loop.** Runs the infinite monitoring thread. Handles frame capture timing, ECO mode, and delegates matching to the current State. |
+| | **`core_selection.py`** | **Selection Handler.** Manages the logic for selecting the recognition area (Rectangle, Window, Fullscreen) and saving reference images. |
+| | **`monitoring_states.py`** | **State Machine.** Defines behavior for different modes: `Idle`, `Priority` (Image/Timer), `Sequence`, and `Countdown`. |
+| | **`template_manager.py`** | **Cache Builder.** Loads images from disk and generates multi-scale template caches for OpenCV. |
+| | **`matcher.py`** | **Vision Algorithm.** The mathematical core. Performs Template Matching (Normal/Strict Color) and calculates confidence scores. |
+| | **`action.py`** | **Executor.** Handles window activation and sends physical mouse clicks. |
+| **Hardware** | **`capture.py`** | **Screen Grabber.** Captures screen frames using `dxcam` (Windows/NVIDIA) or `mss` (Cross-platform). |
+| **Data** | **`config.py`** | **File I/O.** Manages reading/writing of `app_config.json` and per-image settings files. |
+| | **`environment_tracker.py`** | **Environment Info.** Tracks screen resolution, DPI, and app titles to ensure settings match the current environment. |
+| | **`locale_manager.py`** | **Localization.** Loads translation JSON files and provides localized strings for the UI and Logs. |
