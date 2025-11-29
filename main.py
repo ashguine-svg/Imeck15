@@ -108,11 +108,6 @@ def main():
         except Exception as e:
             print(f"[WARN] Failed to call SetProcessDPIAware(): {e}")
 
-    if hasattr(Qt, 'AA_EnableHighDpiScaling'):
-        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-    if hasattr(Qt, 'AA_UseHighDpiPixmaps'):
-        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
-
     app = QApplication.instance() or QApplication(sys.argv)
     
     # --- テーマ適用 ---
@@ -125,7 +120,7 @@ def main():
     try:
         apply_stylesheet(app, theme='light_blue.xml', extra=extra)
         
-        # ★ 配色カスタマイズ CSS (修正版) ★
+        # ★ 配色カスタマイズ CSS (修正版: ブランチライン表示) ★
         custom_style = """
             /* 基本文字色 */
             QWidget {
@@ -181,7 +176,7 @@ def main():
                 border: 1px solid #546e7a;
             }
 
-            /* --- ツリービュー (矢印表示のため branch 設定を削除) --- */
+            /* --- ツリービュー (色変更のみ実施) --- */
             QTreeWidget {
                 color: #263238;
                 background-color: #ffffff;
@@ -190,6 +185,60 @@ def main():
                 border: 1px solid #cfd8dc;
             }
             
+            /* ブランチラインの基本設定 */
+            QTreeWidget::branch {
+                background: palette(base);
+            }
+
+            /* 縦線（siblings がある場合） */
+            QTreeWidget::branch:has-siblings:!adjoins-item {
+                border-image: none;
+                /* 色を #b0bec5 から transparent に変更 */
+                border-left: 1px solid transparent;
+            }
+
+            /* L字型（siblings があり、アイテムに隣接） */
+            QTreeWidget::branch:has-siblings:adjoins-item {
+                border-image: none;
+                /* 色を #b0bec5 から transparent に変更 */
+                border-left: 1px solid transparent;
+                border-top: 1px solid transparent;
+            }
+
+            /* 終端L字型（siblings なし、アイテムに隣接） */
+            QTreeWidget::branch:!has-children:!has-siblings:adjoins-item {
+                border-image: none;
+                /* 色を #b0bec5 から transparent に変更 */
+                border-left: 1px solid transparent;
+                border-top: 1px solid transparent;
+            }
+
+            /* 閉じた状態の矢印（▶）の左側の線 */
+            QTreeWidget::branch:has-children:!has-siblings:closed,
+            QTreeWidget::branch:closed:has-children:has-siblings {
+                border-image: none;
+                /* 色を #b0bec5 から transparent に変更 */
+                border-left: 1px solid transparent;
+            }
+
+            /* 開いた状態の矢印（▼）の左側の線 */
+            QTreeWidget::branch:open:has-children:!has-siblings,
+            QTreeWidget::branch:open:has-children:has-siblings {
+                border-image: none;
+                /* 色を #b0bec5 から transparent に変更 */
+                border-left: 1px solid transparent;
+            }
+
+            /* 矢印インジケーター（閉じた状態: ▶） */
+            QTreeWidget::branch:has-children:closed {
+                background: palette(base);
+            }
+
+            /* 矢印インジケーター（開いた状態: ▼） */
+            QTreeWidget::branch:has-children:open {
+                background: palette(base);
+            }
+
             /* 選択行のハイライト */
             QTreeWidget::item:selected {
                 background-color: #eceff1;
@@ -202,7 +251,6 @@ def main():
             QScrollBar:vertical {
                 background: #f5f5f5;
                 width: 12px;
-                margin: 0px;
             }
             QScrollBar::handle:vertical {
                 background: #90a4ae;

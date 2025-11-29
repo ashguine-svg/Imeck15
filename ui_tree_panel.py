@@ -9,8 +9,10 @@ from PySide6.QtWidgets import (
     QTreeWidget, QTreeWidgetItemIterator, QApplication, QToolTip, QFileDialog,
     QLineEdit, QToolButton, QSizePolicy, QWidget
 )
-from PySide6.QtGui import QPixmap, QPainter, QBrush, QColor, QIcon, QAction
-from PySide6.QtCore import Qt, QObject, QSize
+# ★ QImage, QPixmap, QPainter 等をインポート
+from PySide6.QtGui import QPixmap, QImage, QPainter, QBrush, QColor, QIcon, QAction
+# ★★★ 修正: QRect をインポートに追加 ★★★
+from PySide6.QtCore import Qt, QObject, QSize, QRect
 
 import qtawesome as qta
 
@@ -20,7 +22,6 @@ from dialogs import FolderSettingsDialog
 class LeftPanel(QObject):
     """
     左側パネル（ツリーと操作ボタン）のロジックを管理するクラス
-    モダンUI適用版：配色調整済み
     """
     def __init__(self, ui_manager, parent_layout, config_manager, logger, locale_manager):
         super().__init__(ui_manager)
@@ -33,18 +34,60 @@ class LeftPanel(QObject):
         self.setup_ui(parent_layout)
         self.connect_signals()
 
+    # ★★★ QtAwesome対策: 安全なアイコン生成ラッパー ★★★
+    def _safe_icon(self, icon_name, color=None):
+        try:
+            if color:
+                base_icon = qta.icon(icon_name, color=color)
+            else:
+                base_icon = qta.icon(icon_name)
+            
+            # メモリ上のQImageに描画して静的化
+            image = QImage(24, 24, QImage.Format_ARGB32_Premultiplied)
+            image.fill(Qt.transparent)
+            
+            painter = QPainter()
+            if painter.begin(image):
+                try:
+                    # ここで QRect が必要
+                    base_icon.paint(painter, QRect(0, 0, 24, 24))
+                finally:
+                    painter.end()
+            
+            return QIcon(QPixmap.fromImage(image))
+
+        except Exception as e:
+            print(f"[WARN] QtAwesome rendering failed for {icon_name}: {e}")
+            return QIcon()
+
     def create_colored_icon(self, color):
         """ステータス表示用の色付きドットアイコンを生成"""
-        pixmap = QPixmap(14, 14)
-        pixmap.fill(Qt.transparent)
-        if color != Qt.transparent:
-            painter = QPainter(pixmap)
-            painter.setRenderHint(QPainter.Antialiasing)
-            painter.setBrush(QBrush(color))
-            painter.setPen(Qt.NoPen)
-            painter.drawEllipse(2, 2, 10, 10)
-            painter.end()
-        return QIcon(pixmap)
+        size = 14
+        image = QImage(size, size, QImage.Format_ARGB32_Premultiplied)
+        image.fill(Qt.transparent)
+
+        should_draw = False
+        if isinstance(color, Qt.GlobalColor):
+            if color != Qt.transparent:
+                should_draw = True
+        elif isinstance(color, QColor):
+            if color.alpha() > 0:
+                should_draw = True
+        else:
+            should_draw = True
+
+        if should_draw:
+            painter = QPainter()
+            if painter.begin(image): 
+                try:
+                    painter.setRenderHint(QPainter.Antialiasing)
+                    painter.setBrush(QBrush(color))
+                    painter.setPen(Qt.NoPen)
+                    painter.drawEllipse(2, 2, 10, 10)
+                finally:
+                    painter.end()
+        
+        return QIcon(QPixmap.fromImage(image))
 
     def setup_ui(self, parent_layout):
         left_frame = QFrame()
@@ -60,16 +103,15 @@ class LeftPanel(QObject):
         font.setPointSize(10)
         font.setBold(True)
         self.list_title_label.setFont(font)
-        # 濃いグレー
         self.list_title_label.setStyleSheet("color: #37474f;") 
         header_layout.addWidget(self.list_title_label)
         
         header_layout.addStretch()
         
-        # 順序変更ボタン (グレー系アイコン)
         def create_tool_btn(icon_name, tooltip_key):
             btn = QToolButton()
-            btn.setIcon(qta.icon(icon_name, color='#78909c')) 
+            # 修正: _safe_icon を使用
+            btn.setIcon(self._safe_icon(icon_name, color='#78909c')) 
             btn.setIconSize(QSize(14, 14))
             btn.setFixedSize(24, 24)
             btn.setAutoRaise(True) 
@@ -94,7 +136,6 @@ class LeftPanel(QObject):
         self.image_tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.image_tree.setHeaderHidden(True)
         
-        # 行の高さ調整 (配色はmain.pyのCSSで管理)
         self.image_tree.setStyleSheet("""
             QTreeWidget::item {
                 height: 26px;
@@ -109,14 +150,13 @@ class LeftPanel(QObject):
         
         def create_action_btn(icon_name, primary=False, danger=False):
             btn = QPushButton()
-            # アイコン色: Primary/Dangerは白、通常は濃いグレー
             icon_color = 'white' if (primary or danger) else '#546e7a'
-            btn.setIcon(qta.icon(icon_name, color=icon_color))
+            # 修正: _safe_icon を使用
+            btn.setIcon(self._safe_icon(icon_name, color=icon_color))
             btn.setCursor(Qt.PointingHandCursor)
             btn.setMinimumHeight(34)
             
             if primary:
-                # 画像追加: 緑 (#4caf50)
                 btn.setStyleSheet("""
                     QPushButton {
                         background-color: #4caf50; 
@@ -130,7 +170,6 @@ class LeftPanel(QObject):
                     QPushButton:hover { background-color: #66bb6a; }
                 """)
             elif danger:
-                # 削除: オレンジ (#ff9800)
                 btn.setStyleSheet("""
                     QPushButton {
                         background-color: #ff9800; 
@@ -144,7 +183,6 @@ class LeftPanel(QObject):
                     QPushButton:hover { background-color: #ffa726; }
                 """)
             else:
-                # その他: 白背景 + グレー枠線 (ライトグリーン廃止)
                 btn.setStyleSheet("""
                     QPushButton {
                         background-color: #ffffff; 
@@ -159,21 +197,18 @@ class LeftPanel(QObject):
                 """)
             return btn
 
-        # 1. 画像追加 (緑アクセント維持)
         self.load_image_button = create_action_btn('fa5s.plus', primary=True)
         action_layout.addWidget(self.load_image_button)
 
-        # 2. 構造管理 (横並び)
         structure_layout = QHBoxLayout()
         structure_layout.setSpacing(6)
         
-        # アイコンのみの小さいボタン (サブ操作用)
         def create_small_btn(icon_name):
             btn = QPushButton()
-            btn.setIcon(qta.icon(icon_name, color='#546e7a'))
+            # 修正: _safe_icon を使用
+            btn.setIcon(self._safe_icon(icon_name, color='#546e7a'))
             btn.setMinimumHeight(34)
             btn.setCursor(Qt.PointingHandCursor)
-            # グレー枠線
             btn.setStyleSheet("""
                 QPushButton {
                     background-color: #ffffff;
@@ -184,16 +219,14 @@ class LeftPanel(QObject):
             """)
             return btn
 
-        # フォルダ作成 (通常色)
         self.create_folder_button = create_action_btn('fa5s.folder-plus')
-        # 削除 (オレンジアクセント維持)
         self.delete_item_button = create_action_btn('fa5s.trash-alt', danger=True)
         
         structure_layout.addWidget(self.create_folder_button)
         structure_layout.addWidget(self.delete_item_button)
         action_layout.addLayout(structure_layout)
         
-        # 3. 編集・移動 (アイコンのみ)
+        # 3. 編集・移動
         edit_layout = QHBoxLayout()
         edit_layout.setSpacing(6)
         
@@ -235,7 +268,6 @@ class LeftPanel(QObject):
         self.move_up_button.setToolTip(lm("move_up_button"))
         self.move_down_button.setToolTip(lm("move_down_button"))
         
-        # ボタンテキスト
         self.load_image_button.setText(f" {lm('add_image_button')}")
         self.create_folder_button.setText(f" {lm('create_folder_button')}")
         self.delete_item_button.setText(f" {lm('delete_item_button')}")
@@ -243,8 +275,6 @@ class LeftPanel(QObject):
         self.rename_button.setToolTip(lm("rename_button"))
         self.move_in_button.setToolTip(lm("move_in_button"))
         self.move_out_button.setToolTip(lm("move_out_button"))
-
-    # --- Logic Methods ---
 
     def _add_items_recursive(self, parent_widget, item_list, expanded_folders, selected_path, lm):
         item_to_reselect = None
@@ -258,11 +288,9 @@ class LeftPanel(QObject):
                 folder_item.setData(0, Qt.UserRole, item_data['path'])
                 folder_item.setFlags(folder_item.flags() | Qt.ItemIsDropEnabled)
                 
-                # 文字色: 濃いグレー
                 brush = QBrush(QColor("#263238"))
                 icon_color = Qt.transparent
                 
-                # モード別インジケータ色
                 if mode == 'normal': icon_color = QColor("#90a4ae")
                 elif mode == 'excluded': brush = QBrush(QColor("#d32f2f")); icon_color = QColor("#d32f2f")
                 elif mode == 'cooldown': brush = QBrush(QColor("#7b1fa2")); icon_color = QColor("#7b1fa2")
@@ -290,7 +318,6 @@ class LeftPanel(QObject):
                 image_item.setData(0, Qt.UserRole, item_data['path'])
                 image_item.setIcon(0, self.create_colored_icon(Qt.transparent))
                 
-                # 画像アイテムも視認性の高い色に
                 brush = QBrush(QColor("#37474f"))
                 image_item.setForeground(0, brush)
                 

@@ -298,6 +298,8 @@ class AppSettingsPanel(QObject):
         self.lw_mode_preset_label = QLabel()
         preset_layout.addWidget(self.lw_mode_preset_label)
         self.app_settings_widgets['lightweight_mode_preset'] = QComboBox()
+        # ★ 幅を広げる修正 (文字切れ防止のため200px程度確保)
+        self.app_settings_widgets['lightweight_mode_preset'].setMinimumWidth(200)
         preset_layout.addWidget(self.app_settings_widgets['lightweight_mode_preset'])
         preset_layout.addStretch()
         lw_layout.addLayout(preset_layout)

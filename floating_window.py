@@ -3,8 +3,9 @@
 from PySide6.QtWidgets import (
     QDialog, QPushButton, QHBoxLayout, QLabel, QSpacerItem, QSizePolicy, QApplication, QStyle
 )
-from PySide6.QtGui import QPainter, QColor, QFont
-from PySide6.QtCore import Qt, Signal, QPoint, QEvent, QSize
+# ★★★ 修正: QRect をインポートに追加 ★★★
+from PySide6.QtGui import QPainter, QColor, QFont, QPen, QIcon, QPixmap, QImage
+from PySide6.QtCore import Qt, Signal, QPoint, QEvent, QSize, QRect
 
 import qtawesome as qta
 
@@ -36,7 +37,6 @@ class FloatingWindow(QDialog):
 
         self.offset = None
 
-        # --- 高さ計算 (OSのタイトルバーに合わせる) ---
         try:
             title_bar_height = self.style().pixelMetric(QStyle.PM_TitleBarHeight)
             if title_bar_height < 24: title_bar_height = 24
@@ -46,27 +46,24 @@ class FloatingWindow(QDialog):
 
         self.setFixedHeight(title_bar_height)
         
-        # ボタンサイズ計算
         v_margin = 2
         button_size = title_bar_height - (v_margin * 2)
         
-        # --- レイアウト ---
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(8, 0, 8, 0)
         main_layout.setSpacing(6)
         
         self.setWindowTitle(lm("float_window_title"))
         
-        # --- ボタン生成ヘルパー ---
         def create_float_btn(icon_name, tooltip_key, color='white'):
             btn = QPushButton()
-            btn.setIcon(qta.icon(icon_name, color=color))
+            # 修正: _safe_icon を使用
+            btn.setIcon(self._safe_icon(icon_name, color=color))
             btn.setIconSize(QSize(int(button_size * 0.6), int(button_size * 0.6)))
             btn.setFixedSize(button_size, button_size)
             btn.setToolTip(lm(tooltip_key))
             btn.setCursor(Qt.PointingHandCursor)
             
-            # 背景透明でホバー時のみ白く光る
             btn.setStyleSheet(f"""
                 QPushButton {{
                     background-color: transparent;
@@ -82,20 +79,12 @@ class FloatingWindow(QDialog):
             """)
             return btn
 
-        # 1. 操作ボタン群
-        self.start_button = create_float_btn('fa5s.play', "float_tooltip_start", color='#4caf50') # 緑 (アクセント)
-        self.stop_button = create_float_btn('fa5s.stop', "float_tooltip_stop", color='#f44336') # 赤 (アクセント)
-        
-        # キャプチャボタン: グレーに変更 (要望対応)
+        self.start_button = create_float_btn('fa5s.play', "float_tooltip_start", color='#4caf50')
+        self.stop_button = create_float_btn('fa5s.stop', "float_tooltip_stop", color='#f44336')
         self.capture_button = create_float_btn('fa5s.camera', "float_tooltip_capture", color='#bdbdbd') 
-        
-        # 認識範囲: オレンジ (アクセント)
         self.set_rec_area_button = create_float_btn('fa5s.crop', "float_tooltip_rec_area", color='#ff9800') 
-        
-        # 閉じるボタン: グレー
         self.close_button = create_float_btn('fa5s.times', "float_tooltip_close", color='#9e9e9e')
 
-        # 2. テキストラベル
         label_font = self.font()
         label_font.setPixelSize(int(title_bar_height * 0.45))
         label_font.setBold(True)
@@ -118,7 +107,6 @@ class FloatingWindow(QDialog):
         self.clicks_label.setFont(label_font)
         self.clicks_label.setStyleSheet(text_style)
         
-        # タイマー系
         self.backup_timer_label = QLabel("BC: --s")
         self.backup_timer_label.setFont(label_font)
         self.backup_timer_label.setStyleSheet("color: #ffcc80; background-color: transparent; margin: 0 4px;")
@@ -129,19 +117,17 @@ class FloatingWindow(QDialog):
         self.priority_timer_label.setStyleSheet("color: #a5d6a7; background-color: transparent; margin: 0 4px;")
         self.priority_timer_label.setVisible(False)
 
-        # 3. 配置
         main_layout.addWidget(self.start_button)
         main_layout.addWidget(self.stop_button)
         main_layout.addWidget(self.capture_button)
         main_layout.addWidget(self.set_rec_area_button)
         
-        # 区切り線
         line = QLabel("|")
         line.setStyleSheet("color: #757575; font-weight: bold;")
         main_layout.addWidget(line)
         
         main_layout.addWidget(self.status_label)
-        main_layout.addStretch() # スペーサー
+        main_layout.addStretch() 
         
         main_layout.addWidget(self.cpu_label)
         main_layout.addWidget(self.fps_label)
@@ -152,12 +138,10 @@ class FloatingWindow(QDialog):
         
         main_layout.addWidget(self.close_button)
 
-        # イベントフィルタ
         buttons_list = [self.start_button, self.stop_button, self.capture_button, self.set_rec_area_button, self.close_button]
         for btn in buttons_list:
             btn.installEventFilter(self)
 
-        # シグナル接続
         self.start_button.clicked.connect(self.startMonitoringRequested)
         self.stop_button.clicked.connect(self.stopMonitoringRequested)
         self.capture_button.clicked.connect(self.captureImageRequested)
@@ -165,6 +149,32 @@ class FloatingWindow(QDialog):
         self.set_rec_area_button.clicked.connect(self.setRecAreaRequested)
         
         self.resize(600, title_bar_height)
+
+    # ★★★ QtAwesome対策: 安全なアイコン生成ラッパー ★★★
+    def _safe_icon(self, icon_name, color=None):
+        try:
+            if color:
+                base_icon = qta.icon(icon_name, color=color)
+            else:
+                base_icon = qta.icon(icon_name)
+            
+            # メモリ上のQImageに描画して静的化
+            image = QImage(24, 24, QImage.Format_ARGB32_Premultiplied)
+            image.fill(Qt.transparent)
+            
+            painter = QPainter()
+            if painter.begin(image):
+                try:
+                    # ここで QRect が必要
+                    base_icon.paint(painter, QRect(0, 0, 24, 24))
+                finally:
+                    painter.end()
+            
+            return QIcon(QPixmap.fromImage(image))
+
+        except Exception as e:
+            print(f"[WARN] QtAwesome rendering failed for {icon_name}: {e}")
+            return QIcon()
 
     def eventFilter(self, watched_object, event):
         if (event.type() == QEvent.Type.MouseButtonPress or event.type() == QEvent.Type.MouseButtonDblClick) and \
@@ -202,21 +212,22 @@ class FloatingWindow(QDialog):
         self.status_label.setStyleSheet(f"color: {hex_color}; background-color: transparent; font-weight: bold; margin: 0 4px;")
 
     def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        painter.setPen(Qt.NoPen)
-        # 背景色: 濃いグレー
-        painter.setBrush(QColor(33, 33, 33, 230))
-        
-        rect = self.rect()
-        radius = 4.0 
-        painter.drawRoundedRect(rect, radius, radius)
-        
-        # アクセントバー (左端) - Tealではなくグレーに変更するか迷いますが、
-        # アプリの基調色として少し残すか、完全グレーにするか。
-        # ここでは目立たないグレーにしておきます。
-        painter.setBrush(QColor(158, 158, 158)) 
-        painter.drawRoundedRect(0, 0, 4, rect.height(), 2, 2)
+        painter = QPainter()
+        if painter.begin(self):
+            try:
+                painter.setRenderHint(QPainter.Antialiasing)
+                painter.setPen(Qt.NoPen)
+                # 背景色: 濃いグレー
+                painter.setBrush(QColor(33, 33, 33, 230))
+                
+                rect = self.rect()
+                radius = 4.0 
+                painter.drawRoundedRect(rect, radius, radius)
+                
+                painter.setBrush(QColor(158, 158, 158)) 
+                painter.drawRoundedRect(0, 0, 4, rect.height(), 2, 2)
+            finally:
+                painter.end()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:

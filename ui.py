@@ -126,6 +126,37 @@ class UIManager(QMainWindow):
         QTimer.singleShot(100, self.adjust_initial_size)
         QTimer.singleShot(0, lambda: self.update_image_preview(None, None))
         QTimer.singleShot(0, self._update_capture_button_state)
+
+    # ★★★ 修正: QtAwesomeアイコンをQImageに焼き付けて静的化する ★★★
+    def _safe_icon(self, icon_name, color=None, size=None):
+        try:
+            # 1. qtawesomeでアイコンオブジェクト生成
+            if color:
+                base_icon = qta.icon(icon_name, color=color)
+            else:
+                base_icon = qta.icon(icon_name)
+            
+            # 2. メモリ上のQImageに描画 (Type 3 - 安全)
+            # サイズ指定がなければデフォルト24x24
+            s = size if size else QSize(24, 24)
+            image = QImage(s, QImage.Format_ARGB32_Premultiplied)
+            image.fill(Qt.transparent)
+            
+            painter = QPainter()
+            if painter.begin(image):
+                try:
+                    # アイコンをQImageに描画
+                    base_icon.paint(painter, QRect(0, 0, s.width(), s.height()))
+                finally:
+                    painter.end()
+            
+            # 3. 焼き付けた画像からQIconを生成して返す
+            # これにより、以降の再描画でqtawesome内部のQPainter(QPixmap)が呼ばれるのを防ぐ
+            return QIcon(QPixmap.fromImage(image))
+
+        except Exception as e:
+            print(f"[WARN] QtAwesome rendering failed for {icon_name}: {e}")
+            return QIcon()
             
     def open_image_folder(self):
         folder_path = str(self.config_manager.base_dir)
@@ -185,8 +216,9 @@ class UIManager(QMainWindow):
         
         def create_header_btn(icon_name, text_key, checkable=False, primary=False):
             btn = QPushButton()
-            color = 'white' if primary else '#5f6368' # 通常時はグレー
-            btn.setIcon(qta.icon(icon_name, color=color))
+            color = 'white' if primary else '#5f6368' 
+            # 修正: _safe_icon を使用 (サイズ指定)
+            btn.setIcon(self._safe_icon(icon_name, color=color, size=QSize(18, 18)))
             btn.setIconSize(QSize(18, 18))
             
             if primary:
@@ -235,7 +267,6 @@ class UIManager(QMainWindow):
         self.toggle_minimal_ui_button = create_header_btn('fa5s.window-minimize', "minimal_ui_button")
         header_layout.addWidget(self.toggle_minimal_ui_button)
         
-        # ★★★ 修正: カメラアイコンをグレー系に統一 ★★★
         self.capture_image_button = create_header_btn('fa5s.camera', "capture_image_button")
         self.capture_image_button.clicked.connect(self.captureImageRequested.emit)
         header_layout.addWidget(self.capture_image_button)
@@ -279,7 +310,7 @@ class UIManager(QMainWindow):
                 background-color: #ffffff; 
                 color: #37474f; 
                 font-weight: bold;
-                border-bottom: 2px solid #37474f; /* グレー系のアクセント */
+                border-bottom: 2px solid #37474f;
             }
             QTabBar::tab:hover {
                 background-color: #e0f2f1;
@@ -310,9 +341,8 @@ class UIManager(QMainWindow):
         
         buttons_layout = QHBoxLayout()
         self.set_rec_area_button_main_ui = QPushButton()
-        # アイコン色をグレー系に指定
-        self.set_rec_area_button_main_ui.setIcon(qta.icon('fa5s.crop', color='#546e7a'))
-        # スタイルシートでテーマ色を上書き (グレー系)
+        # 修正: _safe_icon を使用
+        self.set_rec_area_button_main_ui.setIcon(self._safe_icon('fa5s.crop', color='#546e7a'))
         self.set_rec_area_button_main_ui.setStyleSheet("""
             QPushButton {
                 background-color: #ffffff;
@@ -326,9 +356,8 @@ class UIManager(QMainWindow):
         """)
         
         self.clear_rec_area_button_main_ui = QPushButton()
-        # アイコン色をグレー系に指定
-        self.clear_rec_area_button_main_ui.setIcon(qta.icon('fa5s.times', color='#546e7a'))
-        # スタイルシートでテーマ色を上書き (グレー系)
+        # 修正: _safe_icon を使用
+        self.clear_rec_area_button_main_ui.setIcon(self._safe_icon('fa5s.times', color='#546e7a'))
         self.clear_rec_area_button_main_ui.setStyleSheet("""
             QPushButton {
                 background-color: #ffffff;
@@ -406,24 +435,18 @@ class UIManager(QMainWindow):
         layout.setVerticalSpacing(12)
         layout.setHorizontalSpacing(15)
         
-        # --- Row 1: Threshold & Interval ---
         self.item_threshold_label = QLabel()
         layout.addWidget(self.item_threshold_label, 0, 0)
         self.item_settings_widgets['threshold'] = QDoubleSpinBox()
         self.item_settings_widgets['threshold'].setRange(0.5, 1.0); self.item_settings_widgets['threshold'].setSingleStep(0.01); self.item_settings_widgets['threshold'].setValue(0.8)
-        # 修正: 高さ固定を削除
-        # self.item_settings_widgets['threshold'].setMinimumHeight(28) 
         layout.addWidget(self.item_settings_widgets['threshold'], 0, 1)
         
         self.item_interval_label = QLabel()
         layout.addWidget(self.item_interval_label, 0, 2)
         self.item_settings_widgets['interval_time'] = QDoubleSpinBox()
         self.item_settings_widgets['interval_time'].setRange(0.1, 10.0); self.item_settings_widgets['interval_time'].setSingleStep(0.1); self.item_settings_widgets['interval_time'].setValue(1.5)
-        # 修正: 高さ固定を削除
-        # self.item_settings_widgets['interval_time'].setMinimumHeight(28)
         layout.addWidget(self.item_settings_widgets['interval_time'], 0, 3)
         
-        # --- Row 2: Backup & Debounce ---
         self.item_settings_widgets['backup_click'] = QCheckBox()
         backup_layout = QHBoxLayout()
         backup_layout.setContentsMargins(0,0,0,0)
@@ -432,8 +455,6 @@ class UIManager(QMainWindow):
         self.item_settings_widgets['backup_time'] = QDoubleSpinBox()
         self.item_settings_widgets['backup_time'].setRange(1.0, 600.0); self.item_settings_widgets['backup_time'].setSingleStep(1.0); self.item_settings_widgets['backup_time'].setValue(300.0)
         self.item_settings_widgets['backup_time'].setFixedWidth(90)
-        # 修正: 高さ固定を削除
-        # self.item_settings_widgets['backup_time'].setMinimumHeight(28)
         backup_layout.addWidget(self.item_settings_widgets['backup_time'])
         backup_layout.addStretch()
         
@@ -443,19 +464,14 @@ class UIManager(QMainWindow):
         layout.addWidget(self.item_debounce_label, 1, 2)
         self.item_settings_widgets['debounce_time'] = QDoubleSpinBox()
         self.item_settings_widgets['debounce_time'].setRange(0.0, 10.0); self.item_settings_widgets['debounce_time'].setSingleStep(0.1); self.item_settings_widgets['debounce_time'].setValue(0.0)
-        # 修正: 高さ固定を削除
-        # self.item_settings_widgets['debounce_time'].setMinimumHeight(28)
         layout.addWidget(self.item_settings_widgets['debounce_time'], 1, 3)
         
-        # --- Row 3: Click Type Grouping ---
         click_type_layout = QHBoxLayout()
         click_type_layout.setSpacing(10)
         
-        # Point Click (Single)
         self.item_settings_widgets['point_click'] = QCheckBox()
         click_type_layout.addWidget(self.item_settings_widgets['point_click'])
         
-        # Group: Range & Random
         range_group_frame = QFrame()
         range_group_frame.setStyleSheet("QFrame { border: 1px solid #cfd8dc; border-radius: 4px; background-color: #ffffff; }")
         range_group_layout = QHBoxLayout(range_group_frame)
@@ -471,25 +487,20 @@ class UIManager(QMainWindow):
         
         layout.addLayout(click_type_layout, 2, 0, 1, 4)
         
-        # --- Row 4: Separator ---
         separator = QFrame(); separator.setFrameShape(QFrame.Shape.HLine); separator.setFrameShadow(QFrame.Shadow.Sunken)
         layout.addWidget(separator, 3, 0, 1, 4)
         
-        # --- Row 5: ROI Grouping ---
         roi_layout = QHBoxLayout()
         roi_layout.setSpacing(10)
         
-        # ROI Enable (Single)
         self.item_settings_widgets['roi_enabled'] = QCheckBox()
         roi_layout.addWidget(self.item_settings_widgets['roi_enabled'])
         
-        # Fixed (Single)
         self.item_settings_widgets['roi_mode_fixed'] = QRadioButton()
         self.roi_mode_group = QButtonGroup(self)
         self.roi_mode_group.addButton(self.item_settings_widgets['roi_mode_fixed'])
         roi_layout.addWidget(self.item_settings_widgets['roi_mode_fixed'])
         
-        # Group: Variable & Set Button
         var_group_frame = QFrame()
         var_group_frame.setStyleSheet("QFrame { border: 1px solid #cfd8dc; border-radius: 4px; background-color: #ffffff; }")
         var_group_layout = QHBoxLayout(var_group_frame)
@@ -498,15 +509,13 @@ class UIManager(QMainWindow):
         self.item_settings_widgets['roi_mode_variable'] = QRadioButton()
         self.roi_mode_group.addButton(self.item_settings_widgets['roi_mode_variable'])
         
-        # 修正: 可変ラジオボタンとROI設定ボタンの間にスペースを追加
         var_group_layout.addWidget(self.item_settings_widgets['roi_mode_variable'])
-        var_group_layout.addSpacing(20) # 20px (約2文字分) のスペース
+        var_group_layout.addSpacing(20) 
         
         self.item_settings_widgets['set_roi_variable_button'] = QPushButton()
         self.item_settings_widgets['set_roi_variable_button'].setCheckable(True)
-        self.item_settings_widgets['set_roi_variable_button'].setIcon(qta.icon('fa5s.vector-square', color='#37474f'))
-        
-        # 修正: ボタン幅を固定 (長いテキストが入るサイズ)
+        # 修正: _safe_icon を使用
+        self.item_settings_widgets['set_roi_variable_button'].setIcon(self._safe_icon('fa5s.vector-square', color='#37474f'))
         self.item_settings_widgets['set_roi_variable_button'].setFixedWidth(180) 
 
         self.item_settings_widgets['set_roi_variable_button'].setStyleSheet("""
@@ -523,7 +532,7 @@ class UIManager(QMainWindow):
                 border-color: #b0bec5;
             }
             QPushButton:checked {
-                background-color: #cfd8dc; /* 押下状態（ROI設定中）は少し濃いグレー */
+                background-color: #cfd8dc;
                 border-color: #90a4ae;
             }
         """)
@@ -890,7 +899,8 @@ class UIManager(QMainWindow):
         is_idle = False 
 
         def set_monitor_btn(icon, text, primary=False):
-            self.monitor_button.setIcon(qta.icon(icon, color='white' if primary else '#5f6368'))
+            # 修正: _safe_icon を使用
+            self.monitor_button.setIcon(self._safe_icon(icon, color='white' if primary else '#5f6368'))
             self.monitor_button.setText(f" {text}")
             if primary:
                 self.monitor_button.setStyleSheet("""
@@ -967,7 +977,8 @@ class UIManager(QMainWindow):
         
         tooltip = ""
         if not is_rec_area_set:
-            tooltip = self.locale_manager.tr("warn_capture_disabled_no_area")
+            # ★ 修正: 認識範囲未設定時のツールチップキーを変更
+            tooltip = self.locale_manager.tr("warn_capture_disabled_scale")
         elif is_disabled_by_scale:
             tooltip = self.locale_manager.tr("warn_capture_disabled_scale")
             
@@ -977,7 +988,6 @@ class UIManager(QMainWindow):
             
             # --- グレーアウト処理 (修正: 通常色をグレーに) ---
             if enable_capture:
-                # 有効: 通常スタイル
                 self.main_capture_button.setStyleSheet("""
                     QPushButton {
                         background-color: #ffffff; 
@@ -989,10 +999,9 @@ class UIManager(QMainWindow):
                     }
                     QPushButton:hover { background-color: #f1f3f4; }
                 """)
-                # アイコンもグレー (#5f6368)
-                self.main_capture_button.setIcon(qta.icon('fa5s.camera', color='#5f6368'))
+                # 修正: _safe_icon を使用
+                self.main_capture_button.setIcon(self._safe_icon('fa5s.camera', color='#5f6368'))
             else:
-                # 無効: 薄いグレー
                 self.main_capture_button.setStyleSheet("""
                     QPushButton {
                         background-color: #f0f0f0; 
@@ -1003,7 +1012,8 @@ class UIManager(QMainWindow):
                         font-weight: bold;
                     }
                 """)
-                self.main_capture_button.setIcon(qta.icon('fa5s.camera', color='#bdbdbd'))
+                # 修正: _safe_icon を使用
+                self.main_capture_button.setIcon(self._safe_icon('fa5s.camera', color='#bdbdbd'))
             
         if self.floating_window and hasattr(self.floating_window, 'capture_button'): 
             self.floating_window.capture_button.setEnabled(enable_capture)
