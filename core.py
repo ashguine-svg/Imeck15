@@ -1,6 +1,7 @@
 # core.py
 # アプリケーションの統括、シグナル定義、状態管理を担当
 # (core_monitoring.py と core_selection.py を統合)
+# ★★★ 仕様書v1.1準拠: マウス中ボタンクイックキャプチャ (画面外補正 + UI非表示対応) ★★★
 
 import sys
 import threading
@@ -10,7 +11,7 @@ import numpy as np
 import os
 import psutil
 from PySide6.QtCore import QObject, Signal, Slot, Qt
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QMessageBox, QApplication # ★ QApplicationを追加
 from pathlib import Path
 from pynput import mouse
 from concurrent.futures import ThreadPoolExecutor
@@ -28,6 +29,13 @@ from monitoring_states import IdleState, PriorityState, CountdownState, Sequence
 # ★ 分割したモジュールをインポート
 from core_monitoring import MonitoringProcessor
 from core_selection import SelectionHandler
+
+# ★★★ Windows用GUIライブラリのインポート (動的キャプチャ用) ★★★
+if sys.platform == 'win32':
+    try:
+        import win32gui
+    except ImportError:
+        pass
 
 OPENCL_AVAILABLE = False
 OPENCL_STATUS_MESSAGE = ""
@@ -70,6 +78,9 @@ class CoreEngine(QObject):
     
     # 画像保存完了シグナル
     saveImageCompleted = Signal(bool, str)
+
+    # ★★★ 追加: クイックキャプチャ要求用のシグナル ★★★
+    quickCaptureRequested = Signal()
 
     def __init__(self, ui_manager, capture_manager, config_manager, logger, locale_manager):
         super().__init__()
@@ -153,6 +164,9 @@ class CoreEngine(QObject):
         # 自身のシグナル接続
         self.startMonitoringRequested.connect(self.start_monitoring)
         self.stopMonitoringRequested.connect(self.stop_monitoring)
+
+        # ★★★ 追加: クイックキャプチャシグナルを処理メソッドに接続 ★★★
+        self.quickCaptureRequested.connect(self._perform_quick_capture)
 
         self.app_config = self.ui_manager.app_config
         self.current_window_scale = None
@@ -358,6 +372,13 @@ class CoreEngine(QObject):
         self.mouse_listener = None
 
     def _on_global_click(self, x, y, button, pressed):
+        # ★★★ 追加: 中ボタンクリックの検知ロジック ★★★
+        if pressed and button == mouse.Button.middle:
+            # 認識範囲が設定されている場合のみ反応する
+            if self.recognition_area is not None:
+                self.quickCaptureRequested.emit()
+            return
+
         if button == mouse.Button.right and pressed:
             current_time = time.time()
             if self.click_timer: self.click_timer.cancel(); self.click_timer = None
@@ -371,6 +392,101 @@ class CoreEngine(QObject):
         if self.right_click_count == 2: self.logger.log("log_right_click_double"); self.stopMonitoringRequested.emit()
         self.right_click_count = 0; self.click_timer = None
 
+    # ★★★ 追加: クイックキャプチャの実装 (仕様書v1.1準拠 + UI映り込み防止 + 画面外補正) ★★★
+    @Slot()
+    def _perform_quick_capture(self):
+        """
+        中ボタンクリック時に実行されるクイックキャプチャ処理。
+        UIを隠し、監視停止後にキャプチャを実行します。
+        """
+        self.logger.log("[DEBUG] Quick capture triggered via Middle Click.")
+        
+        # 1. 安全のため監視を停止
+        if self.is_monitoring:
+            self.logger.log("log_capture_while_monitoring") 
+            self.stop_monitoring()
+            self.logger.log("log_capture_proceed_after_stop")
+
+        # 2. UIを隠す処理
+        if self.ui_manager:
+            if self.ui_manager.is_minimal_mode:
+                if self.ui_manager.floating_window:
+                    self.ui_manager.floating_window.hide()
+            else:
+                self.ui_manager.hide()
+            
+            # OSのウィンドウ描画更新を待つ
+            QApplication.processEvents()
+            time.sleep(0.2) 
+
+        # 3. キャプチャ領域の決定
+        capture_region = None # デフォルトは全画面
+        
+        # --- A. Windows動的キャプチャ (GetClientRectによる正確な中身取得) ---
+        if self.target_hwnd and sys.platform == 'win32':
+            try:
+                # 枠を除いたクライアント領域を取得
+                client_rect = win32gui.GetClientRect(self.target_hwnd)
+                left, top = win32gui.ClientToScreen(self.target_hwnd, (0, 0))
+                right = left + client_rect[2]
+                bottom = top + client_rect[3]
+                
+                # ★★★ 画面外はみ出し補正 (Clamp) ★★★
+                screen = QApplication.primaryScreen()
+                if screen:
+                    geo = screen.geometry()
+                    screen_w = geo.width()
+                    screen_h = geo.height()
+                    
+                    # 0未満にならないように、かつ画面最大を超えないように補正
+                    left = max(0, left)
+                    top = max(0, top)
+                    right = min(screen_w, right)
+                    bottom = min(screen_h, bottom)
+
+                w = right - left
+                h = bottom - top
+                
+                if w > 0 and h > 0:
+                    capture_region = (left, top, right, bottom)
+                    self.logger.log(f"[DEBUG] Window Mode (Clamped Dynamic Area): {capture_region}")
+                else:
+                    self.logger.log("[WARN] Target window is off-screen or invalid.")
+            except Exception as e:
+                self.logger.log(f"[WARN] Failed to get dynamic window rect: {e}")
+
+        # --- B. 静的座標フォールバック (Linux/Mac または Win取得失敗時) ---
+        # まだ領域が決まっておらず、かつ「ウインドウモード」である場合
+        if capture_region is None and self.recognition_area is not None:
+            # EnvironmentTrackerがアプリ名を保持していれば「ウインドウモード」と判断できる
+            is_window_mode = (self.environment_tracker.recognition_area_app_title is not None)
+            
+            if is_window_mode:
+                # 設定時に取得済みの座標を使用する
+                capture_region = self.recognition_area
+                self.logger.log(f"[DEBUG] Window Mode (Static): Using registered area {capture_region}")
+            else:
+                # アプリ名がない＝[四角]または[全体]モード ＝ 全画面キャプチャ(None)のまま
+                self.logger.log("[DEBUG] Rect/Fullscreen Mode: Defaulting to Full Screen")
+
+        # 4. キャプチャ実行
+        try:
+            # 監視停止後かつUI非表示中なので、安全にキャプチャを実行できる
+            captured_image = self.capture_manager.capture_frame(region=capture_region)
+            
+            if captured_image is not None and captured_image.size > 0:
+                # 成功時: プレビューへ送信 (UI側でダイアログ表示 & UI復帰)
+                self.capturedImageReadyForPreview.emit(captured_image)
+            else:
+                # 失敗時: エラー通知とUIの手動復帰
+                self.logger.log("log_capture_failed")
+                self.captureFailedSignal.emit()
+                self.selectionProcessFinished.emit()
+                
+        except Exception as e:
+            self.logger.log("error_message_capture_save_failed", str(e))
+            self.captureFailedSignal.emit()
+            self.selectionProcessFinished.emit()
 
     # --- Cleanup ---
     def cleanup(self):

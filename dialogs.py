@@ -137,13 +137,17 @@ class FolderSettingsDialog(QDialog):
             }
         """)
         
+        # --- ▼▼▼ 修正箇所: メインレイアウトの構築変更 ▼▼▼ ---
         self.layout = QVBoxLayout(self)
         self.layout.setSpacing(15)
         self.layout.setContentsMargins(20, 20, 20, 20)
 
-        # --- モード選択 ---
+        # 左右分割用の水平レイアウトを作成
+        h_container = QHBoxLayout()
+        h_container.setSpacing(20) # 左右の間隔
+
+        # --- 【左列】モード選択 ---
         mode_box = QGroupBox(lm("folder_dialog_group_mode"))
-        
         mode_layout = QVBoxLayout()
         mode_layout.setSpacing(8)
         
@@ -174,10 +178,15 @@ class FolderSettingsDialog(QDialog):
         mode_layout.addWidget(self.radio_priority_timer)
         mode_layout.addWidget(self.radio_priority_sequence)
         
-        mode_box.setLayout(mode_layout)
-        self.layout.addWidget(mode_box)
+        # 下に空白を入れて上詰めにする
+        mode_layout.addStretch()
         
-        # --- 詳細設定エリア ---
+        mode_box.setLayout(mode_layout)
+        
+        # 左列にモードボックスを追加 (幅の比率を少し小さめに)
+        h_container.addWidget(mode_box, 1)
+        
+        # --- 【右列】詳細設定エリア ---
         details_layout = QVBoxLayout()
         details_layout.setSpacing(12)
 
@@ -231,7 +240,15 @@ class FolderSettingsDialog(QDialog):
         self.sequence_interval_spin = create_spin_row(lm("folder_dialog_sequence_interval"), lm("folder_dialog_suffix_seconds"), self.sequence_priority_box)
         details_layout.addWidget(self.sequence_priority_box)
 
-        self.layout.addLayout(details_layout)
+        # 下に空白を入れて上詰めにする
+        details_layout.addStretch()
+
+        # 右列に詳細レイアウトを追加 (幅の比率を少し大きめに)
+        h_container.addLayout(details_layout, 2)
+
+        # メインレイアウトに左右コンテナを追加
+        self.layout.addLayout(h_container)
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
         # --- 表示制御接続 ---
         self.radio_cooldown.toggled.connect(self.cooldown_box.setEnabled)

@@ -681,7 +681,42 @@ class UIManager(QMainWindow):
     def setRecAreaDialog(self):
         dialog = RecAreaSelectionDialog(self.locale_manager, self)
         dialog.selectionMade.connect(self._handle_rec_area_selection)
-        dialog.move(QCursor.pos())
+        
+        # --- 表示位置の計算ロジック (上下判定・UIモード別処理) ---
+        cursor_pos = QCursor.pos()
+        screen = QApplication.screenAt(cursor_pos)
+        if not screen:
+            screen = QApplication.primaryScreen()
+            
+        screen_rect = screen.geometry()
+        screen_center_y = screen_rect.center().y()
+        
+        # ダイアログの高さ (dialogs.pyで setFixedSize されている値)
+        dialog_height = dialog.height()
+        
+        final_pos = cursor_pos
+
+        # 2. 押された位置の判定はメインUIと最小UIで別処理にする
+        if self.is_minimal_mode:
+            # --- 最小UIモードの場合 ---
+            # 1. 画面中央より上なら左上起点、下なら左下起点
+            if cursor_pos.y() < screen_center_y:
+                # 上半分: そのまま (左上起点)
+                final_pos = cursor_pos
+            else:
+                # 下半分: Y座標を高さ分マイナス (左下起点)
+                final_pos = QPoint(cursor_pos.x(), cursor_pos.y() - dialog_height)
+        else:
+            # --- メインUIモードの場合 ---
+            # 1. 画面中央より上なら左上起点、下なら左下起点
+            if cursor_pos.y() < screen_center_y:
+                # 上半分: そのまま (左上起点)
+                final_pos = cursor_pos
+            else:
+                # 下半分: Y座標を高さ分マイナス (左下起点)
+                final_pos = QPoint(cursor_pos.x(), cursor_pos.y() - dialog_height)
+        
+        dialog.move(final_pos)
         dialog.exec()
 
     def adjust_initial_size(self):

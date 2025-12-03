@@ -1,252 +1,252 @@
 {
     "language_name": "العربية (السعودية)",
-    "window_title": "Imeck15 v1.6.5.2 إصدار متعدد اللغات",
+    "window_title": "Imeck15 v1.6.5.2 Multilingual",
     "monitor_button_start": "بدء المراقبة",
     "monitor_button_stop": "إيقاف المراقبة",
-    "monitor_button_tooltip": "بدء المراقبة.<br>انقر بزر الماوس الأيمن مرتين للإيقاف، وثلاث مرات للبدء",
+    "monitor_button_tooltip": "monitor_button_tooltip",
     "performance_monitor_button": "الأداء",
     "recognition_area_button": "تعيين منطقة التعرف",
-    "minimal_ui_button": "وضع واجهة المستخدم المصغرة",
-    "minimal_ui_button_stop": "إيقاف واجهة المستخدم المصغرة",
-    "open_image_folder_button": "مجلد الصور",
-    "open_image_folder_tooltip": "افتح المجلد حيث يتم حفظ الصور المسجلة",
+    "minimal_ui_button": "الوضع الأدنى لواجهة المستخدم",
+    "minimal_ui_button_stop": "أوقف الوضع الأدنى لواجهة المستخدم",
+    "open_image_folder_button": "صورة مجلد",
+    "open_image_folder_tooltip": "open_image_folder_tooltip",
     "status_label_idle": "خامل",
-    "status_label_monitoring": "جاري المراقبة...",
-    "status_label_unstable": "شاشة غير مستقرة",
+    "status_label_monitoring": "مراقبة...",
+    "status_label_unstable": "الشاشة غير مستقرة",
     "list_title": "الصور المسجلة",
-    "move_up_button": "▲ للأعلى",
-    "move_down_button": "▼ للأسفل",
+    "move_up_button": "▲ نقل للأعلى",
+    "move_down_button": "▼ نقل للأسفل",
     "add_image_button": "إضافة صورة",
     "capture_image_button": "التقاط صورة",
-    "delete_item_button": "حذف المحدد",
+    "delete_item_button": "حذف التحديد",
     "create_folder_button": "إنشاء مجلد",
-    "move_in_button": "نقل إلى مجلد",
+    "move_in_button": "نقل إلى المجلد",
     "move_out_button": "نقل خارج المجلد",
-    "tab_preview": "معاينة الصورة",
+    "tab_preview": "صورة معاينة",
     "tab_rec_area": "منطقة التعرف",
     "rec_area_clear_button": "مسح",
-    "rec_area_preview_text": "معاينة منطقة التعرف",
-    "tab_log": "السجل",
-    "tab_auto_scale": "التحجيم التلقائي",
-    "auto_scale_use_window": "استخدام أساس مقياس النافذة",
-    "auto_scale_use_window_tooltip": "تشغيل: يطبق المقياس الأمثل الذي تم الحصول عليه من النافذة أو البحث على القالب.<br>إيقاف: يعطل تصحيح المقياس ويحاول دائمًا التعرف بالحجم الأصلي للصورة (1.0x).",
-    "auto_scale_enable_search": "تمكين البحث التلقائي متعدد المقاييس",
+    "rec_area_preview_text": "منطقة التعرف معاينة",
+    "tab_log": "سجل",
+    "tab_auto_scale": "التكبير التلقائي",
+    "auto_scale_use_window": "إشارة حجم النافذة",
+    "auto_scale_use_window_tooltip": "auto_scale_use_window_tooltip",
+    "auto_scale_enable_search": "تفعيل البحث التلقائي متعدد المقاييس",
     "auto_scale_center": "المركز:",
     "auto_scale_range": "النطاق (±):",
     "auto_scale_steps": "الخطوات:",
     "auto_scale_info_default": "بحث: ---",
-    "auto_scale_info_searching": "بحث: %s ... %s",
+    "auto_scale_info_searching": "auto_scale_info_searching",
     "auto_scale_info_disabled": "معطل",
-    "auto_scale_best_scale_default": "المقياس الأمثل: ---",
-    "auto_scale_best_scale_found": "المقياس الأمثل: %sx",
-    "auto_scale_window_scale_found": "المقياس المحسوب: %sx",
-    "auto_scale_desc": "<b>معيار مقياس النافذة:</b><br>عندما يتم تعيين منطقة التعرف على نافذة، يتم حساب عامل القياس تلقائيًا من حجمها الأساسي وتطبيقه كمقياس.<br>عندما يكون القياس نشطًا، قد تنخفض دقة التعرف. إذا فشل التعرف على الصور، يرجى خفض عتبة دقة التعرف.",
-    "tab_app_settings": "إعدادات التطبيق",
-    "app_setting_grayscale": "البحث بتدرج الرمادي (سريع)",
-    "app_setting_grayscale_desc": "<b>الإيجابيات:</b> معالجة أسرع، يتجاهل اختلافات اللون الطفيفة.<br><b>السلبيات:</b> لا يمكنه التمييز بين الصور ذات الشكل المتماثل والألوان المختلفة.",
+    "auto_scale_best_scale_default": "الحجم الأمثل: ---",
+    "auto_scale_best_scale_found": "auto_scale_best_scale_found",
+    "auto_scale_window_scale_found": "auto_scale_window_scale_found",
+    "auto_scale_desc": "auto_scale_desc",
+    "tab_app_settings": "تطبيق الإعدادات",
+    "app_setting_grayscale": "رمادي البحث (سريع)",
+    "app_setting_grayscale_desc": "app_setting_grayscale_desc",
     "app_setting_dxcam": "استخدام DXCam",
-    "app_setting_dxcam_desc": "<b>الإيجابيات:</b> طريقة التقاط سريعة مع تحميل منخفض لوحدة المعالجة المركزية (CPU)، قوية في عرض الألعاب.<br><b>السلبيات:</b> قد لا تعمل مع بعض التطبيقات أو بيئات الكمبيوتر.",
-    "app_setting_eco_mode": "وضع التوفير (Eco Mode)",
-    "app_setting_eco_mode_desc": "إذا لم يتم العثور على أي صورة مطابقة لمدة 5 ثوانٍ بعد النقر، ينتقل إلى المراقبة منخفضة التردد (مرة واحدة في الثانية) لتقليل تحميل وحدة المعالجة المركزية.",
-    "app_setting_frame_skip": "تخطي الإطارات:",
-    "app_setting_frame_skip_desc": "<b>الإيجابيات:</b> زيادة القيمة تقلل من تحميل وحدة المعالجة المركزية (CPU).<br><b>السلبيات:</b> استجابة أبطأ لتغيرات الشاشة المفاجئة.",
-    "app_setting_opencl": "استخدام OpenCL (تسريع GPU)",
-    "app_setting_opencl_desc": "<b>الإيجابيات:</b> يستخدم وحدة معالجة الرسومات (GPU) لتسريع معالجة الصور. يقلل من تحميل وحدة المعالجة المركزية (CPU) ويحسن الأداء، خاصة للشاشات عالية الدقة أو التعرف على الصور الكبيرة.<br><b>السلبيات:</b> قد يضيف حملًا إضافيًا طفيفًا لبعض العمليات. قد تحدث مشكلات في التوافق مع برامج تشغيل GPU.<br><br><font color='red'><b>[ملاحظة]</b> إذا واجهت عدم استقرار مع أخطاء مثل <code>amdgpu_cs_query_fence_status failed</code> في بيئات Linux أو عند استخدامها مع ألعاب معينة، قم <b>بإيقاف تشغيل</b> هذا الخيار.</font>",
-    "app_setting_stability_group": "التحقق من استقرار الشاشة",
-    "app_setting_stability_enable": "تمكين",
-    "app_setting_stability_threshold": "العتبة (Threshold):",
-    "app_setting_stability_desc": "يكتشف عرض الشاشة أو التأثيرات ويوقف النقرات حتى تصبح الشاشة مستقرة.<br>تزيد القيمة من اعتبار التغييرات الأكبر في الشاشة على أنها 'مستقرة'.",
-    "app_setting_lw_mode_group": "الوضع الخفيف (Lightweight Mode)",
-    "app_setting_lw_mode_enable": "تمكين الوضع الخفيف",
-    "app_setting_lw_mode_preset": "إعداد مسبق:",
+    "app_setting_dxcam_desc": "app_setting_dxcam_desc",
+    "app_setting_eco_mode": "وضع خفيف",
+    "app_setting_eco_mode_desc": "app_setting_eco_mode_desc",
+    "app_setting_frame_skip": "تخطي الإطار:",
+    "app_setting_frame_skip_desc": "app_setting_frame_skip_desc",
+    "app_setting_opencl": "app_setting_opencl",
+    "app_setting_opencl_desc": "app_setting_opencl_desc",
+    "app_setting_stability_group": "شاشة التحقق من الاستقرار",
+    "app_setting_stability_enable": "تفعيل",
+    "app_setting_stability_threshold": "العتبة:",
+    "app_setting_stability_desc": "app_setting_stability_desc",
+    "app_setting_lw_mode_group": "وضع خفيف",
+    "app_setting_lw_mode_enable": "تفعيل وضع خفيف",
+    "app_setting_lw_mode_preset": "مسبق الضبط:",
     "app_setting_lw_mode_preset_standard": "قياسي",
-    "app_setting_lw_mode_preset_performance": "الأداء",
+    "app_setting_lw_mode_preset_performance": "أداء",
     "app_setting_lw_mode_preset_ultra": "فائق",
-    "app_setting_lw_mode_desc": "<b>قياسي:</b> الإعداد الافتراضي (المقياس: 0.5x، التخطي: +5)<br><b>الأداء:</b> أداء أعلى من القياسي (المقياس: 0.4x، التخطي: +20)<br><b>فائق:</b> يحاول أقصى تخفيف للتحميل، ولكنه قد لا يعمل في بعض البيئات (المقياس: 0.3x، التخطي: +25)<br><br><b>ملاحظة:</b> تمكين الوضع الخفيف يعطل ميزة التحجيم التلقائي.",
+    "app_setting_lw_mode_desc": "app_setting_lw_mode_desc",
     "app_setting_language_label": "اللغة:",
-    "tab_usage": "الاستخدام",
+    "tab_usage": "استعمال",
     "usage_html_path": "locales/usage_ar.html",
-    "group_item_settings": "الإعدادات لكل صورة",
-    "item_setting_threshold": "العتبة (Threshold):",
-    "item_setting_interval": "الفاصل الزمني (ثانية):",
-    "item_setting_backup_click": "نقرة احتياطية",
-    "item_setting_debounce": "منع الارتداد (ثانية):",
-    "item_setting_debounce_tooltip": "عندما تتطابق نفس الصورة بشكل متتابع، يتم تمديد وقت الانتظار للنقرة الثانية إلى 'الفاصل الزمني + وقت منع الارتداد'.<br>هذا يخلق فرصة للصور الأخرى ذات الفواصل الزمنية الأطول للنقر عليها أولاً.",
-    "item_setting_point_click": "نقرة نقطة",
-    "item_setting_point_click_tooltip": "عيّن نقطة واحدة على صورة المعاينة كإحداثي للنقرة.",
-    "item_setting_range_click": "نقرة نطاق",
-    "item_setting_range_click_tooltip": "عيّن نطاقًا مستطيلًا على صورة المعاينة وانقر على مركزه أو موقع عشوائي بداخله.",
-    "item_setting_random_click": "عشوائي في النطاق",
-    "item_setting_random_click_tooltip": "إذا تم تمكين نقرة النطاق، فإنه يحدد إحداثي النقرة عشوائيًا ضمن النطاق.",
-    "item_setting_roi_enable": "تمكين منطقة الاهتمام (ROI)",
-    "item_setting_roi_enable_tooltip": "تمكين منطقة الاهتمام (ROI) يقيد هدف البحث بالمنطقة المحددة.<br>هذا يسمح بمطابقة أسرع ويقلل من عبء المعالجة مقارنة بالبحث في الشاشة بأكملها.<br><br>・ثابت: يعيّن تلقائيًا منطقة 200x200 بكسل متمركزة حول إحداثي النقر كـ ROI.<br>・متغير: اسحب على المعاينة لتعيين منطقة البحث بحرية.",
+    "group_item_settings": "لكل صورة الإعدادات",
+    "item_setting_threshold": "دقة التعرف:",
+    "item_setting_interval": "الفترة (ثواني):",
+    "item_setting_backup_click": "احتياطي انقر",
+    "item_setting_debounce": "تأخير (ثواني):",
+    "item_setting_debounce_tooltip": "item_setting_debounce_tooltip",
+    "item_setting_point_click": "1 نقطة انقر",
+    "item_setting_point_click_tooltip": "item_setting_point_click_tooltip",
+    "item_setting_range_click": "نطاق انقر",
+    "item_setting_range_click_tooltip": "item_setting_range_click_tooltip",
+    "item_setting_random_click": "نطاق داخل عشوائي",
+    "item_setting_random_click_tooltip": "item_setting_random_click_tooltip",
+    "item_setting_roi_enable": "تفعيل منطقة الاهتمام",
+    "item_setting_roi_enable_tooltip": "item_setting_roi_enable_tooltip",
     "item_setting_roi_mode_fixed": "ثابت",
-    "item_setting_roi_mode_fixed_tooltip": "يستخدم نطاقًا ثابتًا بحجم 200x200 بكسل متمركزًا حول إحداثي النقر المحدد كمنطقة اهتمام (ROI).",
+    "item_setting_roi_mode_fixed_tooltip": "item_setting_roi_mode_fixed_tooltip",
     "item_setting_roi_mode_variable": "متغير",
-    "item_setting_roi_mode_variable_tooltip": "اسحب على المعاينة لتعيين نطاق بحث عشوائي.",
-    "item_setting_roi_button": "تعيين منطقة ROI",
-    "item_setting_roi_button_active": "جاري تعيين ROI (اضغط مرة أخرى للإنهاء)",
-    "item_setting_roi_button_tooltip": "عيّن منطقة التعرف (ROI) للصورة.<br>أثناء التعيين، تكون إحداثيات النقر ورسومات النطاق نسبية إلى ROI.<br>اضغط مرة أخرى لتحرير الإعداد.",
-    "log_open_folder": "تم فتح مجلد الصور: %s",
-    "log_error_open_folder": "تعذر فتح مجلد الصور: %s",
+    "item_setting_roi_mode_variable_tooltip": "item_setting_roi_mode_variable_tooltip",
+    "item_setting_roi_button": "تعيين منطقة الاهتمام",
+    "item_setting_roi_button_active": "تعيين منطقة الاهتمام (اضغط مرة أخرى للإنهاء)",
+    "item_setting_roi_button_tooltip": "item_setting_roi_button_tooltip",
+    "log_open_folder": "log_open_folder",
+    "log_error_open_folder": "log_error_open_folder",
     "error_title_open_folder": "خطأ",
-    "error_message_open_folder": "تعذر فتح المجلد:<br>%s",
-    "folder_item_prefix": "📁 %s",
-    "image_item_prefix": "  %s",
-    "preview_folder_selected": "تم تحديد المجلد",
-    "preview_default_text": "معاينة الصورة",
-    "context_menu_info_mode": "({mode})",
-    "context_menu_info_mode_unset": "غير معين",
-    "context_menu_info_mode_point": "نقرة نقطة",
-    "context_menu_info_mode_range_random": "عشوائي في النطاق",
-    "context_menu_info_mode_range": "نقرة نطاق",
-    "context_menu_info_threshold": "العتبة %s",
-    "context_menu_info_interval": "الفاصل الزمني %s ثانية",
+    "error_message_open_folder": "error_message_open_folder",
+    "folder_item_prefix": "folder_item_prefix",
+    "image_item_prefix": "image_item_prefix",
+    "preview_folder_selected": "مجلد مختار",
+    "preview_default_text": "صورة معاينة",
+    "context_menu_info_mode": "context_menu_info_mode",
+    "context_menu_info_mode_unset": "غير محدد",
+    "context_menu_info_mode_point": "1 نقطة انقر",
+    "context_menu_info_mode_range_random": "نطاق داخل عشوائي",
+    "context_menu_info_mode_range": "نطاق انقر",
+    "context_menu_info_threshold": "context_menu_info_threshold",
+    "context_menu_info_interval": "context_menu_info_interval",
     "context_menu_info_size_error": "خطأ في التحميل",
-    "context_menu_info_size": "حجم الصورة (بكسل) %s x %s",
-    "context_menu_info_error": "خطأ في المعلومات: %s",
+    "context_menu_info_size": "context_menu_info_size",
+    "context_menu_info_error": "context_menu_info_error",
     "warn_delete_title": "تحذير",
-    "warn_delete_no_selection": "الرجاء تحديد العناصر المراد حذفها.",
-    "confirm_delete_title": "تأكيد الحذف",
-    "confirm_delete_message": "هل تريد حقًا حذف %s عنصر (%s)؟<br>(إذا كان مجلدًا، فسيتم حذف جميع الملفات بداخله أيضًا)",
-    "load_images_dialog_title": "حدد الصور",
-    "load_images_dialog_filter": "ملفات الصور (*.png *.jpg *.jpeg *.bmp)",
-    "base_size_prompt_title": "تأكيد الحجم الأساسي",
-    "base_size_prompt_message": "النافذة '%s'<br><br>هل تريد تذكر الحجم الحالي لهذه النافذة كحجم أساسي (مقياس 1.0x)؟",
-    "apply_scale_prompt_title": "تأكيد تطبيق المقياس",
-    "apply_scale_prompt_message": "مقياس منطقة التعرف هو %sx.<br>هل تريد تمكين التحجيم بهذا العامل؟",
+    "warn_delete_no_selection": "warn_delete_no_selection",
+    "confirm_delete_title": "حذف تأكيد",
+    "confirm_delete_message": "confirm_delete_message",
+    "load_images_dialog_title": "صورة تحديد",
+    "load_images_dialog_filter": "load_images_dialog_filter",
+    "base_size_prompt_title": "الحجم الأساسي تأكيد",
+    "base_size_prompt_message": "base_size_prompt_message",
+    "apply_scale_prompt_title": "تطبيق حجم تأكيد",
+    "apply_scale_prompt_message": "apply_scale_prompt_message",
     "error_already_running_title": "خطأ في بدء التشغيل",
-    "error_already_running_text": "برنامج Imeck15 قيد التشغيل بالفعل.",
-    "init_dialog_error_not_found": "خطأ: لم يتم العثور على InitializationDialog.",
-    "init_dialog_error_exec": "خطأ أثناء تنفيذ مربع حوار التهيئة: %s",
-    "log_info_cores": "أنوية المعالج المنطقية: %s، خيوط التعرف: %s (الحد الأقصى %s)",
-    "log_warn_set_foreground_failed": "تحذير: فشل في إحضار النافذة إلى المقدمة. يرجع هذا عادةً إلى مواصفات نظام التشغيل وعادةً لا يمثل مشكلة.",
-    "log_warn_activate_window_error": "تحذير: خطأ غير متوقع أثناء تنشيط النافذة: %s",
-    "log_linux_workaround_error_manager": "خطأ في حل تجميد واجهة المستخدم في Linux: لم يتم العثور على UIManager.",
-    "log_linux_workaround_skip": "حل تجميد واجهة المستخدم في Linux: يتم التخطي لأن مربع الاختيار OpenCL معطل.",
-    "log_linux_workaround_start": "حل تجميد واجهة المستخدم في Linux: محاكاة تفاعل واجهة المستخدم لإعادة تهيئة OpenCL.",
-    "log_linux_workaround_complete": "اكتملت محاكاة واجهة المستخدم. تمت استعادة حالة OpenCL إلى '%s'.",
-    "log_linux_workaround_status_enabled": "ممكن",
+    "error_already_running_text": "Imeck15 قيد التشغيل بالفعل",
+    "init_dialog_error_not_found": "init_dialog_error_not_found",
+    "init_dialog_error_exec": "init_dialog_error_exec",
+    "log_info_cores": "log_info_cores",
+    "log_warn_set_foreground_failed": "log_warn_set_foreground_failed",
+    "log_warn_activate_window_error": "log_warn_activate_window_error",
+    "log_linux_workaround_error_manager": "log_linux_workaround_error_manager",
+    "log_linux_workaround_skip": "log_linux_workaround_skip",
+    "log_linux_workaround_start": "log_linux_workaround_start",
+    "log_linux_workaround_complete": "log_linux_workaround_complete",
+    "log_linux_workaround_status_enabled": "مفعل",
     "log_linux_workaround_status_disabled": "معطل",
-    "log_linux_workaround_error": "حدث خطأ أثناء تنفيذ حل تجميد واجهة المستخدم في Linux: %s",
-    "log_right_click_triple": "تم الكشف عن نقرة زر الماوس الأيمن ثلاث مرات: بدء المراقبة.",
-    "log_right_click_double": "تم الكشف عن نقرة زر الماوس الأيمن مرتين: إيقاف المراقبة.",
-    "log_error_listener_start": "خطأ: فشل في بدء تشغيل مستمع الماوس العام: %s",
-    "log_warn_listener_stop": "تحذير: حدث خطأ أثناء إيقاف مستمع الماوس: %s",
-    "log_cache_build_error": "حدث خطأ أثناء إنشاء ذاكرة التخزين المؤقت: %s",
-    "log_item_deleted": "تم حذف '%s'.",
-    "log_item_delete_failed": "فشل في حذف '%s': %s",
+    "log_linux_workaround_error": "log_linux_workaround_error",
+    "log_right_click_triple": "log_right_click_triple",
+    "log_right_click_double": "log_right_click_double",
+    "log_error_listener_start": "log_error_listener_start",
+    "log_warn_listener_stop": "log_warn_listener_stop",
+    "log_cache_build_error": "log_cache_build_error",
+    "log_item_deleted": "log_item_deleted",
+    "log_item_delete_failed": "log_item_delete_failed",
     "error_title_delete_failed": "خطأ",
-    "error_message_delete_failed": "فشل في حذف %s عناصر.",
-    "log_folder_settings_changed": "تم تغيير إعدادات المجلد. إعادة بناء ذاكرة التخزين المؤقت.",
+    "error_message_delete_failed": "error_message_delete_failed",
+    "log_folder_settings_changed": "log_folder_settings_changed",
     "create_folder_title": "إنشاء مجلد",
-    "create_folder_prompt": "أدخل اسم المجلد الجديد:",
-    "create_folder_success": "تم إنشاء المجلد '%s'.",
+    "create_folder_prompt": "الرجاء إدخال اسم المجلد الجديد:",
+    "create_folder_success": "create_folder_success",
     "error_title_create_folder": "خطأ",
     "warn_move_item_no_selection": "تحذير",
-    "warn_move_item_no_selection_text": "الرجاء تحديد الصور لنقلها.",
+    "warn_move_item_no_selection_text": "warn_move_item_no_selection_text",
     "warn_move_item_not_image": "تحذير",
-    "warn_move_item_not_image_text": "يمكن نقل ملفات الصور في المستوى الأعلى فقط إلى المجلدات.",
+    "warn_move_item_not_image_text": "warn_move_item_not_image_text",
     "info_move_item_no_folder": "معلومات",
-    "info_move_item_no_folder_text": "لا توجد مجلدات وجهة. قم بإنشاء مجلد أولاً.",
-    "move_item_dialog_title": "حدد المجلد",
-    "move_item_dialog_prompt": "إلى أي مجلد تريد النقل؟",
-    "log_move_item_failed": "فشل النقل: %s",
+    "info_move_item_no_folder_text": "info_move_item_no_folder_text",
+    "move_item_dialog_title": "مجلد تحديد",
+    "move_item_dialog_prompt": "أي مجلد تريد وضعه فيه؟",
+    "log_move_item_failed": "log_move_item_failed",
     "error_title_move_item_failed": "خطأ في النقل",
-    "error_message_move_item_failed": "فشل في نقل %s عناصر.<br>السبب: %s",
+    "error_message_move_item_failed": "error_message_move_item_failed",
     "warn_move_out_no_selection": "تحذير",
-    "warn_move_out_no_selection_text": "الرجاء تحديد صورة لنقلها خارج المجلد.",
+    "warn_move_out_no_selection_text": "warn_move_out_no_selection_text",
     "warn_move_out_not_in_folder": "تحذير",
-    "warn_move_out_not_in_folder_text": "الرجاء تحديد ملف صورة داخل مجلد.",
+    "warn_move_out_not_in_folder_text": "warn_move_out_not_in_folder_text",
     "error_title_move_out_failed": "خطأ",
-    "log_image_load_failed": "فشل في تحميل الصورة: %s، خطأ: %s",
-    "log_image_decode_failed": "فشل في فك تشفير ملف الصورة.",
-    "log_settings_saved": "تم حفظ الإعدادات '%s'.",
-    "log_images_added": "تمت إضافة %s صور.",
-    "log_order_saved": "تم حفظ ترتيب العناصر.",
-    "log_warn_save_order_failed": "تحذير: لم يتم العثور على save_tree_order في UIManager. لن يتم حفظ الترتيب.",
-    "log_error_save_order": "خطأ أثناء حفظ الترتيب: %s",
-    "log_opencl_set": "تم تعيين OpenCL إلى %s.",
-    "log_opencl_rebuild": "إعادة بناء ذاكرة التخزين المؤقت لعكس تغيير الإعداد.",
-    "log_opencl_error": "حدث خطأ أثناء تغيير إعدادات OpenCL: %s",
-    "log_app_config_changed": "تم تغيير إعدادات التطبيق: الالتقاط=%s، الوضع الخفيف=%s(%s)، المقياس الفعلي=%s، التخطي الفعلي=%s، OpenCL=%s",
-    "warn_rec_area_not_set_title": "لم يتم تعيين منطقة التعرف",
-    "warn_rec_area_not_set_text": "الرجاء تعيين منطقة التعرف أولاً.<br>يمكنك تعيينها من زر 'تعيين منطقة التعرف' في الرأس.",
-    "log_monitoring_started": "بدأت المراقبة.",
-    "log_monitoring_stopped": "توقفت المراقبة.",
-    "log_eco_mode_standby": "وضع التوفير (Eco Mode) في وضع الاستعداد...",
-    "log_capture_failed": "فشل التقاط الشاشة.",
-    "log_umat_convert_failed": "فشل تحويل لقطة الشاشة إلى UMat: %s",
-    "log_eco_mode_resumed": "تم الكشف عن الصورة، استئناف المراقبة العادية من وضع التوفير.",
-    "log_error_monitoring_loop": "حدث خطأ في حلقة المراقبة: %s",
-    "log_stability_check_skip_size": "التحقق من الاستقرار: يتم التخطي بسبب صغر منطقة الاهتمام (ROI) (افتراض الاستقرار)",
-    "log_stability_check_history_low": "التحقق من الاستقرار: سجل غير كافٍ %s/%s",
-    "log_stability_check_debug": "التحقق من الاستقرار:<br>  التجزئة الحالية: %s<br>  أقدم تجزئة:  %s<br>  الفرق:   %s (العتبة: %s)",
-    "log_stability_hold_click": "إيقاف النقر لأن الشاشة غير مستقرة.",
-    "log_backup_click_failed_capture": "فشلت النقرة الاحتياطية: تعذر التقاط الشاشة.",
-    "log_backup_click_failed_umat": "فشل تحويل UMat أثناء النقرة الاحتياطية: %s",
-    "log_backup_click_failed_cache": "فشلت النقرة الاحتياطية: '%s' ليس في ذاكرة التخزين المؤقت.",
-    "log_backup_click_failed_not_found": "فشلت النقرة الاحتياطية: لم يتم العثور على '%s'.",
-    "log_best_scale_found": "تم العثور على المقياس الأمثل: %s @ %sx (الثقة: %s)",
-    "log_rec_area_set_rect": "تم تعيين منطقة التعرف على تحديد مستطيل. لن يتم حساب المقياس.",
-    "log_rec_area_set_window": "الرجاء تحديد نافذة... (مفتاح ESC للإلغاء)",
-    "log_selection_cancelled": "تم إلغاء تحديد المنطقة.",
-    "log_selection_cancelled_key": "تم إلغاء تحديد النافذة بواسطة لوحة المفاتيح.",
-    "log_window_invalid_rect": "منطقة النافذة المحسوبة غير صالحة: (%s,%s,%s,%s).",
-    "log_window_get_rect_failed": "فشل في الحصول على منطقة النافذة: %s",
-    "log_linux_tool_not_found": "خطأ: لم يتم العثور على %s.",
-    "log_linux_window_invalid_rect": "منطقة النافذة المحسوبة غير صالحة.",
-    "log_linux_window_get_rect_failed": "فشل في الحصول على منطقة النافذة على نظام Linux: %s",
-    "log_window_base_size_saved": "تم حفظ الحجم الأساسي للنافذة '%s'.",
-    "log_window_scale_calc": "مقياس النافذة '%s': %sx (تم تصحيحه إلى 1.0)",
-    "log_error_base_size_process": "خطأ في معالجة استجابة الحجم الأساسي: %s",
-    "log_window_scale_applied": "تطبيق مقياس النافذة %s.",
-    "log_window_scale_not_applied": "لم يتم تطبيق مقياس النافذة المحسوب %sx.",
-    "log_error_apply_scale_process": "خطأ في معالجة استجابة تطبيق المقياس: %s",
-    "log_rec_area_set": "تم تعيين منطقة التعرف: %s",
-    "dialog_filename_prompt_title": "أدخل اسم الملف",
-    "dialog_filename_prompt_text": "أدخل اسم الملف للحفظ:",
+    "log_image_load_failed": "log_image_load_failed",
+    "log_image_decode_failed": "log_image_decode_failed",
+    "log_settings_saved": "log_settings_saved",
+    "log_images_added": "log_images_added",
+    "log_order_saved": "log_order_saved",
+    "log_warn_save_order_failed": "log_warn_save_order_failed",
+    "log_error_save_order": "log_error_save_order",
+    "log_opencl_set": "log_opencl_set",
+    "log_opencl_rebuild": "log_opencl_rebuild",
+    "log_opencl_error": "log_opencl_error",
+    "log_app_config_changed": "log_app_config_changed",
+    "warn_rec_area_not_set_title": "warn_rec_area_not_set_title",
+    "warn_rec_area_not_set_text": "warn_rec_area_not_set_text",
+    "log_monitoring_started": "بدء المراقبة",
+    "log_monitoring_stopped": "إيقاف المراقبة",
+    "log_eco_mode_standby": "وضع خفيف في وضع الاستعداد...",
+    "log_capture_failed": "فشل التقاط الشاشة",
+    "log_umat_convert_failed": "log_umat_convert_failed",
+    "log_eco_mode_resumed": "log_eco_mode_resumed",
+    "log_error_monitoring_loop": "log_error_monitoring_loop",
+    "log_stability_check_skip_size": "log_stability_check_skip_size",
+    "log_stability_check_history_low": "log_stability_check_history_low",
+    "log_stability_check_debug": "log_stability_check_debug",
+    "log_stability_hold_click": "log_stability_hold_click",
+    "log_backup_click_failed_capture": "log_backup_click_failed_capture",
+    "log_backup_click_failed_umat": "log_backup_click_failed_umat",
+    "log_backup_click_failed_cache": "log_backup_click_failed_cache",
+    "log_backup_click_failed_not_found": "log_backup_click_failed_not_found",
+    "log_best_scale_found": "log_best_scale_found",
+    "log_rec_area_set_rect": "log_rec_area_set_rect",
+    "log_rec_area_set_window": "log_rec_area_set_window",
+    "log_selection_cancelled": "log_selection_cancelled",
+    "log_selection_cancelled_key": "log_selection_cancelled_key",
+    "log_window_invalid_rect": "log_window_invalid_rect",
+    "log_window_get_rect_failed": "log_window_get_rect_failed",
+    "log_linux_tool_not_found": "log_linux_tool_not_found",
+    "log_linux_window_invalid_rect": "log_linux_window_invalid_rect",
+    "log_linux_window_get_rect_failed": "log_linux_window_get_rect_failed",
+    "log_window_base_size_saved": "log_window_base_size_saved",
+    "log_window_scale_calc": "log_window_scale_calc",
+    "log_error_base_size_process": "log_error_base_size_process",
+    "log_window_scale_applied": "log_window_scale_applied",
+    "log_window_scale_not_applied": "log_window_scale_not_applied",
+    "log_error_apply_scale_process": "log_error_apply_scale_process",
+    "log_rec_area_set": "log_rec_area_set",
+    "dialog_filename_prompt_title": "ملف اسم إدخال",
+    "dialog_filename_prompt_text": "सहेजने के लिए फ़ाइल नाम दर्ज करें:",
     "error_title_zenity_missing": "خطأ",
-    "error_message_zenity_missing": "مطلوب 'zenity'.",
-    "zenity_title": "أدخل اسم الملف",
-    "zenity_text": "أدخل اسم الملف للحفظ (بدون امتداد):",
+    "error_message_zenity_missing": "error_message_zenity_missing",
+    "zenity_title": "ملف اسم إدخال",
+    "zenity_text": "सहेजने के लिए फ़ाइल नाम दर्ज करें (कोई एक्सटेंशन नहीं):",
     "error_title_zenity_failed": "خطأ",
-    "error_message_zenity_failed": "فشل استدعاء Zenity:<br>%s",
+    "error_message_zenity_failed": "error_message_zenity_failed",
     "error_title_capture_prepare_failed": "خطأ",
-    "error_message_capture_prepare_failed": "خطأ في التحضير لحفظ الصورة:<br>%s",
+    "error_message_capture_prepare_failed": "error_message_capture_prepare_failed",
     "warn_title_capture_failed": "خطأ",
-    "warn_message_capture_failed": "فشل التقاط الصورة.",
+    "warn_message_capture_failed": "warn_message_capture_failed",
     "error_title_capture_save_failed": "خطأ",
-    "error_message_capture_save_failed": "خطأ في حفظ الصورة:<br>%s",
-    "confirm_overwrite_title": "تأكيد الكتابة فوق",
-    "confirm_overwrite_message": "'%s' موجود بالفعل. هل تريد الكتابة فوقه؟",
-    "log_image_saved": "تم حفظ الصورة: %s",
-    "log_image_save_failed": "فشل في حفظ الصورة:<br>%s",
+    "error_message_capture_save_failed": "error_message_capture_save_failed",
+    "confirm_overwrite_title": "فوق كتابة تأكيد",
+    "confirm_overwrite_message": "confirm_overwrite_message",
+    "log_image_saved": "log_image_saved",
+    "log_image_save_failed": "log_image_save_failed",
     "error_title_image_save_failed": "خطأ",
-    "log_rec_area_cleared": "تم مسح منطقة التعرف.",
+    "log_rec_area_cleared": "log_rec_area_cleared",
     "rec_area_dialog_title": "تعيين منطقة التعرف",
-    "rec_area_dialog_prompt": "حدد طريقة التعيين:",
-    "rec_area_dialog_rect_button": "تحديد مستطيل",
-    "rec_area_dialog_window_button": "تحديد نافذة",
-    "folder_dialog_title": "إعدادات المجلد: %s",
-    "folder_dialog_group_mode": "وضع تشغيل المجلد",
+    "rec_area_dialog_prompt": "تحديد طريقة الإعداد:",
+    "rec_area_dialog_rect_button": "مستطيل الإعداد",
+    "rec_area_dialog_window_button": "نافذة الإعداد",
+    "folder_dialog_title": "folder_dialog_title",
+    "folder_dialog_group_mode": "مجلد تشغيل وضع",
     "folder_dialog_radio_normal": "عادي (مراقب)",
-    "folder_dialog_radio_excluded": "إيقاف البحث (غير مراقب)",
-    "folder_dialog_radio_priority_image": "أولوية التعرف على الصورة",
-    "folder_dialog_radio_priority_timer": "أولوية المؤقت",
-    "folder_dialog_group_image": "تفاصيل أولوية التعرف على الصورة",
-    "folder_dialog_image_timeout": "وقت تعطيل وضع الأولوية:",
-    "folder_dialog_suffix_seconds": " ثانية",
-    "folder_dialog_group_timer": "تفاصيل أولوية المؤقت",
-    "folder_dialog_timer_interval": "الفاصل الزمني حتى التنشيط:",
-    "folder_dialog_suffix_minutes_interval": " دقيقة",
-    "folder_dialog_timer_timeout": "وقت تعطيل وضع الأولوية:",
-    "folder_dialog_suffix_minutes_timeout": " دقيقة",
-    "folder_dialog_tooltip_image": "<b>تفاصيل وضع أولوية التعرف على الصورة:</b><br>إذا تم العثور على <b>صورة واحدة على الأقل</b> تابعة لهذا المجلد على الشاشة، يدخل هذا المجلد في وضع الأولوية.<br>يتم تعطيل وضع الأولوية تحت أي من الشرطين التاليين:<br><ul><li>تم النقر على <b>جميع الصور</b> في هذا المجلد مرة واحدة.</li><li>لم يتم العثور على أي صور من هذا المجلد طوال مدة <b>'وقت تعطيل وضع الأولوية'</b>.</li></ul>",
-    "folder_dialog_tooltip_timer": "<b>تفاصيل وضع أولوية المؤقت:</b><br>بعد انقضاء <b>'الفاصل الزمني حتى التنشيط'</b> المحدد، سيتم البحث فقط عن الصور الموجودة في هذا المجلد بشكل تفضيلي.<br>يتم تعطيل وضع الأولوية بعد انقضاء <b>'وقت تعطيل وضع الأولوية'</b>.<br>يتم إعادة تعيين مؤقت التنشيط عند النقر على صورة في هذا المجلد.",
-    "init_dialog_title": "جاري التهيئة",
-    "init_dialog_text": "جاري تنفيذ التهيئة النهائية...",
-    "float_window_title": "Imeck15 واجهة مستخدم مصغرة",
+    "folder_dialog_radio_excluded": "توقف البحث (مستبعد)",
+    "folder_dialog_radio_priority_image": "صورة تعرف أولوية",
+    "folder_dialog_radio_priority_timer": "مؤقت مع أولوية",
+    "folder_dialog_group_image": "صورة تعرف أولوية الإعدادات التفصيلية",
+    "folder_dialog_image_timeout": "وقت تحرير وضع الأولوية:",
+    "folder_dialog_suffix_seconds": " ثواني",
+    "folder_dialog_group_timer": "مؤقت مع أولوية الإعدادات التفصيلية",
+    "folder_dialog_timer_interval": "الفاصل الزمني قبل التنشيط:",
+    "folder_dialog_suffix_minutes_interval": " دقائق",
+    "folder_dialog_timer_timeout": "وقت تحرير وضع الأولوية:",
+    "folder_dialog_suffix_minutes_timeout": " دقائق",
+    "folder_dialog_tooltip_image": "folder_dialog_tooltip_image",
+    "folder_dialog_tooltip_timer": "folder_dialog_tooltip_timer",
+    "init_dialog_title": "جار التهيئة",
+    "init_dialog_text": "إجراء التهيئة النهائية...",
+    "float_window_title": "Imeck15 Minimal UI",
     "float_button_start": "▶",
     "float_button_stop": "■",
     "float_button_capture": "●",
@@ -255,35 +255,35 @@
     "float_button_close": "×",
     "float_label_perf_default": "---% ---fps",
     "float_label_status_default": "خامل",
-    "float_tooltip_start": "بدء المراقبة<br>النقر المزدوج الأيمن للإيقاف<br>النقر الثلاثي الأيمن للبدء",
-    "float_tooltip_stop": "إيقاف المراقبة",
-    "float_tooltip_capture": "التقاط صورة",
-    "float_tooltip_rec_area": "تعيين منطقة التعرف",
-    "float_tooltip_toggle_ui": "إظهار/إخفاء واجهة المستخدم الرئيسية",
-    "float_tooltip_close": "الخروج من وضع واجهة المستخدم المصغرة",
-    "float_perf_format": "{cpu:.0f}% {fps:.0f}fps",
-    "monitor_window_title": "شاشة الأداء",
-    "monitor_button_toggle": "بدء/إيقاف المراقبة",
-    "monitor_button_toggle_tooltip": "انقر بزر الماوس الأيمن مرتين للإيقاف، وثلاث مرات لبدء المراقبة",
-    "monitor_button_rec_area": "تعيين منطقة التعرف",
-    "monitor_label_perf_default": "CPU: --%  الذاكرة: --MB  الإطارات: --.-  النقرات: 0  وقت التشغيل: 00:00:00",
-    "monitor_perf_format": "CPU: {cpu:.1f}%  الذاكرة: {mem:.1f}MB  الإطارات: {fps:.1f}  النقرات: {clicks}  وقت التشغيل: {h:02d}:{m:02d}:{s:02d}",
-    "monitor_backup_countdown": "(النسخ الاحتياطي في: {s:.0f}ثانية)",
-    "monitor_log_error": "خطأ في تحديث معلومات الأداء: %s",
-    "log_activate_window_success": "تم تنشيط النافذة '%s'.",
-    "log_activate_window_failed": "تمت محاولة تنشيط النافذة '%s'، ولكن قد تكون فشلت.",
-    "log_activate_window_error": "خطأ أثناء تنشيط النافذة: %s",
-    "log_warn_click_out_of_bounds": "تحذير: إحداثيات النقر المحسوبة (%s، %s) قريبة جدًا من حافة الشاشة، جاري إلغاء النقر.",
+    "float_tooltip_start": "float_tooltip_start",
+    "float_tooltip_stop": "float_tooltip_stop",
+    "float_tooltip_capture": "float_tooltip_capture",
+    "float_tooltip_rec_area": "float_tooltip_rec_area",
+    "float_tooltip_toggle_ui": "float_tooltip_toggle_ui",
+    "float_tooltip_close": "float_tooltip_close",
+    "float_perf_format": "float_perf_format",
+    "monitor_window_title": "monitor_window_title",
+    "monitor_button_toggle": "monitor_button_toggle",
+    "monitor_button_toggle_tooltip": "monitor_button_toggle_tooltip",
+    "monitor_button_rec_area": "monitor_button_rec_area",
+    "monitor_label_perf_default": "monitor_label_perf_default",
+    "monitor_perf_format": "monitor_perf_format",
+    "monitor_backup_countdown": "monitor_backup_countdown",
+    "monitor_log_error": "monitor_log_error",
+    "log_activate_window_success": "log_activate_window_success",
+    "log_activate_window_failed": "log_activate_window_failed",
+    "log_activate_window_error": "log_activate_window_error",
+    "log_warn_click_out_of_bounds": "log_warn_click_out_of_bounds",
     "log_click_success_full": "نقرة: %s @(%s، %s) ثقة:%s%s",
-    "log_click_success_scale": " مقياس:%s",
-    "log_pyautogui_failsafe": "تم تشغيل ميزة الأمان PyAutoGUI. ربما قام المستخدم بتحريك الماوس إلى زاوية الشاشة، أو قد يكون حساب الإحداثيات إشكاليًا.",
-    "log_click_error": "خطأ أثناء تنفيذ النقرة: %s",
-    "log_cleanup_start": "[معلومات] بدء تنظيف ملفات JSON اليتيمة...",
-    "log_cleanup_deleted": "[تنظيف] تم حذف ملف JSON يتيم: %s",
-    "log_cleanup_error_delete": "[خطأ] فشل في حذف ملف JSON: %s، خطأ: %s",
-    "log_cleanup_error_general": "[خطأ] خطأ غير متوقع أثناء عملية التنظيف: %s",
-    "log_cleanup_complete_deleted": "[معلومات] اكتمل التنظيف. تم حذف %s ملف JSON يتيم.",
-    "log_cleanup_complete_none": "[معلومات] اكتمل التنظيف. لم يتم العثور على ملفات JSON يتيمة.",
+    "log_click_success_scale": "log_click_success_scale",
+    "log_pyautogui_failsafe": "log_pyautogui_failsafe",
+    "log_click_error": "log_click_error",
+    "log_cleanup_start": "log_cleanup_start",
+    "log_cleanup_deleted": "log_cleanup_deleted",
+    "log_cleanup_error_delete": "log_cleanup_error_delete",
+    "log_cleanup_error_general": "log_cleanup_error_general",
+    "log_cleanup_complete_deleted": "log_cleanup_complete_deleted",
+    "log_cleanup_complete_none": "log_cleanup_complete_none",
     "log_app_config_load_error": "خطأ في تحميل إعدادات التطبيق: %s",
     "log_app_config_save_error": "خطأ في حفظ إعدادات التطبيق: %s",
     "log_window_scales_load_error": "خطأ في تحميل إعدادات مقياس أساس النافذة: %s",
@@ -299,30 +299,30 @@
     "log_move_item_error_exists": "ملف/مجلد بنفس الاسم موجود بالفعل في الوجهة: %s",
     "log_move_item_success": "تم نقل '%s' إلى '%s'.",
     "log_move_item_error_general": "حدث خطأ أثناء النقل: %s",
-    "log_dxcam_available": "[معلومات] الواجهة الخلفية لالتقاط DXCam متاحة.",
-    "log_dxcam_unavailable": "[معلومات] لم يتم العثور على DXCam أو win32api مفقود. جاري الرجوع إلى الواجهة الخلفية لالتقاط MSS.",
-    "log_non_windows_mss": "[معلومات] يعمل على نظام تشغيل غير Windows. جاري استخدام الواجهة الخلفية لالتقاط MSS.",
-    "log_dxcam_init": "[معلومات] جاري تهيئة DXCam باستخدام الشاشة الأساسية الافتراضية...",
-    "log_dxcam_init_failed_instance": "[تحذير] فشل إنشاء مثيل DXCam. جاري الرجوع إلى MSS.",
-    "log_dxcam_init_success": "[معلومات] تم تهيئة DXCam بنجاح.",
-    "log_dxcam_resolution": "[معلومات] دقة الشاشة المستهدفة: %sx%s",
-    "log_dxcam_resolution_failed": "[تحذير] تعذر تحديد دقة الشاشة المستهدفة عند التهيئة. قد يشير هذا إلى مشكلة.",
-    "log_dxcam_init_failed_general": "[تحذير] فشلت تهيئة DXCam: %s. جاري الرجوع إلى MSS.",
-    "log_mss_priming": "[معلومات] جاري تجهيز مثيل MSS على سلسلة التعليمات الرئيسية...",
-    "log_mss_priming_success": "[معلومات] نجح تجهيز MSS.",
-    "log_mss_priming_failed": "[تحذير] فشل في تجهيز مثيل MSS على سلسلة التعليمات الرئيسية: %s",
-    "log_dxcam_release": "[معلومات] جاري تحرير مثيل DXCam الموجود...",
-    "log_dxcam_release_error": "[تحذير] خطأ في تحرير مثيل DXCam: %s",
-    "log_dxcam_init_attempt": "[معلومات] جاري محاولة تهيئة DXCam...",
-    "log_dxcam_init_success_resolution": "[معلومات] تم تهيئة DXCam بنجاح. الدقة: %sx%s",
-    "log_dxcam_init_warn_no_frame": "[تحذير] تم تهيئة DXCam، ولكن تعذر الحصول على الإطار الأولي.",
-    "log_dxcam_init_error_critical": "[خطأ] خطأ فادح أثناء تهيئة DXCam: %s. جاري الرجوع إلى MSS.",
-    "log_capture_method_set": "[معلومات] تم تعيين طريقة الالتقاط الآن على: %s",
-    "log_dxcam_missing_recreate": "[تحذير] كان مثيل DXCam مفقودًا. جاري محاولة إعادة إنشائه...",
-    "log_dxcam_grab_failed": "[تحذير] فشل DXCam.grab() (أعاد None).",
-    "log_dxcam_switching_to_mss": "[تحذير] فشل DXCam بشكل متكرر. جاري التبديل إلى MSS لهذه الجلسة.",
-    "log_mss_invalid_region": "[تحذير] تم طلب التقاط MSS بحجم منطقة غير صالح.",
-    "log_mss_no_monitor": "[خطأ] لم يتمكن MSS من العثور على شاشة أساسية.",
+    "log_dxcam_available": "log_dxcam_available",
+    "log_dxcam_unavailable": "log_dxcam_unavailable",
+    "log_non_windows_mss": "log_non_windows_mss",
+    "log_dxcam_init": "log_dxcam_init",
+    "log_dxcam_init_failed_instance": "log_dxcam_init_failed_instance",
+    "log_dxcam_init_success": "log_dxcam_init_success",
+    "log_dxcam_resolution": "log_dxcam_resolution",
+    "log_dxcam_resolution_failed": "log_dxcam_resolution_failed",
+    "log_dxcam_init_failed_general": "log_dxcam_init_failed_general",
+    "log_mss_priming": "log_mss_priming",
+    "log_mss_priming_success": "log_mss_priming_success",
+    "log_mss_priming_failed": "log_mss_priming_failed",
+    "log_dxcam_release": "log_dxcam_release",
+    "log_dxcam_release_error": "log_dxcam_release_error",
+    "log_dxcam_init_attempt": "[INFO] DXCam को आरंभ करने का प्रयास...",
+    "log_dxcam_init_success_resolution": "[INFO] تم تهيئة DXCam بنجاح. الدقة: %sx%s",
+    "log_dxcam_init_warn_no_frame": " ma non è stato possibile catturare il frame iniziale.",
+    "log_dxcam_init_error_critical": "[ERROR] خطأ فادح أثناء تهيئة DXCam: %s. الرجوع إلى MSS.",
+    "log_capture_method_set": "[INFO] تم تعيين طريقة الالتقاط الآن على: %s",
+    "log_dxcam_missing_recreate": "[WARN] DXCam उदाहरण गायब था। फिर से बनाने का प्रयास...",
+    "log_dxcam_grab_failed": "[WARN] فشلت DXCam.grab() (أعادت None).",
+    "log_dxcam_switching_to_mss": "[WARN] فشلت DXCam مرارًا وتكرارًا. التبديل إلى MSS لهذه الجلسة.",
+    "log_mss_invalid_region": "[WARN] تم طلب التقاط MSS بحجم منطقة غير صالح.",
+    "log_mss_no_monitor": "[ERROR] لم يتمكن MSS من العثور على شاشة عرض أساسية.",
     "log_capture_error": "خطأ في الالتقاط باستخدام %s (المنطقة: %s): %s",
     "log_dxcam_critical_error_switching": "[تحذير] واجه DXCam خطأ فادحًا. جاري التبديل إلى MSS لهذه الجلسة.",
     "log_dxcam_cleanup": "[معلومات] تم تحرير موارد DXCam.",
@@ -344,7 +344,7 @@
     "log_priority_image_completed": "انتهت مراقبة أولوية التعرف على الصورة للمجلد '%s'. (اكتملت)",
     "log_countdown_started": "تم الكشف عن الصورة الاحتياطية '%s'. بدء العد التنازلي لمدة %s ثانية.",
     "log_countdown_cancelled": "تم الكشف عن صورة عادية، جاري إلغاء العد التنازلي الاحتياطي.",
-    "log_countdown_executing": "انقضت %s ثانية. جاري تنفيذ النقرة الاحتياطية.",
+    "log_countdown_executing": "%s ثانية انقضت. تنفيذ نقرة الاحتياطي.",
     "warn_capture_disabled_scale": "لن تتطابق الصور التي تم التقاطها أثناء التحجيم التلقائي.<br>يرجى التقاط الصور بمقياس 1.0x.",
     "rename_button": "إعادة تسمية",
     "warn_rename_title": "خطأ في إعادة التسمية",
@@ -366,15 +366,15 @@
     "app_setting_strict_color_desc": "يمنع التعرف غير الصحيح على الألوان المختلفة. سيتم تعطيله تلقائيًا إذا تم تمكين وضع التدرج الرمادي أو OpenCL (GPU).",
     "log_screen_resolution_changed": "تم اكتشاف تغيير في دقة الشاشة أو DPI. جاري مسح منطقة التعرف.",
     "log_screen_geometry_listener_attached": "[INFO] تم إرفاق مستمع تغيير الدقة بالشاشة الأساسية.",
-    "log_screen_geometry_listener_failed": "[WARN] فشل في الحصول على الشاشة الأساسية. لم يتم إرفاق مستمع تغيير الدقة.",
-    "log_screen_geometry_listener_error": "[ERROR] خطأ أثناء إرفاق مستمع تغيير الدقة: %s",
-    "log_reinitializing_capture_backend": "[INFO] إعادة تهيئة خلفية الالتقاط (%s) بسبب تغيير الدقة...",
-    "log_error_reinitialize_capture": "[ERROR] خطأ أثناء إعادة تهيئة خلفية الالتقاط: %s",
-    "log_warn_display_reinitializing": "[WARN] قيد المعالجة حاليًا تغيير إعدادات العرض (الدقة/DPI). يرجى الانتظار حتى يكتمل.",
-    "log_warn_display_reinitializing_monitor_loop": "[WARN] معالجة تغيير إعداد العرض... إيقاف حلقة المراقبة مؤقتًا.",
-    "log_mss_instance_closed": "[INFO] تم إغلاق مثيل التقاط MSS الحالي.",
-    "log_mss_close_error": "[WARN] حدث خطأ أثناء إغلاق مثيل MSS الحالي: %s",
-    "log_capture_failed_limit_reached": "लगातार 10 कैप्चर विफलताओं के बाद निगरानी स्वचालित रूप से बंद हो गई।",
+    "log_screen_geometry_listener_failed": "log_screen_geometry_listener_failed",
+    "log_screen_geometry_listener_error": "log_screen_geometry_listener_error",
+    "log_reinitializing_capture_backend": "log_reinitializing_capture_backend",
+    "log_error_reinitialize_capture": "log_error_reinitialize_capture",
+    "log_warn_display_reinitializing": "log_warn_display_reinitializing",
+    "log_warn_display_reinitializing_monitor_loop": "log_warn_display_reinitializing_monitor_loop",
+    "log_mss_instance_closed": "log_mss_instance_closed",
+    "log_mss_close_error": "log_mss_close_error",
+    "log_capture_failed_limit_reached": "log_capture_failed_limit_reached",
     "status_label_idle_error": "خطأ (متوقف)",
     "error_title_cache_build_failed": "خطأ في إنشاء ذاكرة التخزين المؤقت",
     "error_message_cache_build_failed": "فشل في إعادة بناء ذاكرة التخزين المؤقت للصور. ستظل واجهة المستخدم مقفلة للسلامة. يرجى التحقق من ملفات الصور التالفة وإعادة تشغيل التطبيق.",
@@ -386,17 +386,25 @@
     "warn_capture_fullscreen_title": "التسجيل غير مسموح به",
     "warn_capture_fullscreen_text": "لا يمكن استخدام وضع \"ملء الشاشة\" لتسجيل الصورة (الالتقاط).",
     "log_error_get_primary_screen_geo": "فشل في الحصول على هندسة الشاشة الأساسية: %s",
-    "folder_dialog_radio_cooldown": "التهدئة عند النقر",
-    "folder_dialog_group_cooldown": "إعدادات التهدئة عند النقر",
-    "folder_dialog_cooldown_time": "وقت التوقف بعد النقر:",
-    "folder_dialog_tooltip_cooldown": "<b>تفاصيل وضع التهدئة عند النقر:</b><br>إذا تم النقر فوق <b>أي صورة واحدة</b> في هذا المجلد، فسيتم <b>تعطيل البحث (تجاهل)</b> للمجلد بالكامل للوقت المحدد.<br>استخدم هذا عندما لا تكون المجموعة مطلوبة لفترة من الوقت بعد تنفيذ إجراء واحد.",
-    "log_folder_cooldown_started": "بدأ التهدئة للمجلد '%s' (%s ثانية)",
-    "auto_scale_search_desc": "<b>بحث تلقائي متعدد المقاييس:</b><br>استخدمه عندما يختلف حجم الصورة المسجلة قليلاً عن الهدف الفعلي (على سبيل المثال، اختلافات عرض الخطوط).<br>يبحث عن طريق تقسيم النطاق من مقياس \"المركز\" بمقدار \"النطاق (±)\" إلى \"خطوات\".<br>*زيادة الخطوات ستزيد من حمل وحدة المعالجة المركزية.",
-    "folder_dialog_radio_priority_sequence": "أولوية تسلسلية",
-    "folder_dialog_group_sequence": "إعدادات الأولوية التسلسلية",
-    "folder_dialog_sequence_interval": "الفاصل الزمني للخطوة:",
-    "folder_dialog_tooltip_sequence": "<b>وضع الأولوية التسلسلية:</b><br>عند تطابق الصورة الأولى في هذا المجلد، يدخل النظام في وضع التسلسل.<br>سيبحث عن الصور التالية (B، C، D...) واحدة تلو الأخرى.<br>لكل صورة، ينتظر/يبحث خلال 'الفاصل الزمني للخطوة' المحدد قبل الانتقال قسراً إلى الصورة التالية.",
+    "folder_dialog_radio_cooldown": "فترة تهدئة عند الإصابة",
+    "folder_dialog_group_cooldown": "فترة تهدئة عند الإصابة الإعدادات التفصيلية",
+    "folder_dialog_cooldown_time": "وقت التوقف بعد النقر",
+    "folder_dialog_tooltip_cooldown": "folder_dialog_tooltip_cooldown",
+    "log_folder_cooldown_started": "log_folder_cooldown_started",
+    "auto_scale_search_desc": "auto_scale_search_desc",
+    "folder_dialog_radio_priority_sequence": "أولوية التسلسل (التسلسل)",
+    "folder_dialog_group_sequence": "أولوية التسلسل الإعدادات التفصيلية",
+    "folder_dialog_sequence_interval": "وقت الانتظار لكل خطوة",
+    "folder_dialog_tooltip_sequence": "folder_dialog_tooltip_sequence",
     "log_sequence_started": "تم بدء وضع الأولوية التسلسلية. الخطوات المتبقية: %s",
     "log_sequence_next_step": "خطوة التسلسل: البحث عن '%s'",
-    "log_sequence_completed": "اكتمل وضع الأولوية التسلسلية."
+    "log_sequence_completed": "اكتمل وضع الأولوية التسلسلية.",
+    "capture_image_tooltip": "لقطة الشاشة<br>F10 لقطة النافذة",
+    "log_click_success": "log_click_success",
+    "log_capture_hotkey_rect_fullscreen": "log_capture_hotkey_rect_fullscreen",
+    "log_capture_hotkey_window_capture": "log_capture_hotkey_window_capture",
+    "log_error_hotkey_listener": "log_error_hotkey_listener",
+    "warn_capture_no_window_target": "warn_capture_no_window_target",
+    "log_warn_window_activation_failed_for_capture": "log_warn_window_activation_failed_for_capture",
+    "log_error_hotkey_window_capture": "log_error_hotkey_window_capture"
 }
