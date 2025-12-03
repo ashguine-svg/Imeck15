@@ -1,0 +1,19 @@
+The message "pynput Copyright (C) 2015-2021 Moses Palmér License: LGPLv3... This software uses pynput, which is licensed under the LGPLv3. You may replace the pynput libraries with your own version" is a standard licensing notice. This is used when a piece of software relies on pynput, a Python library for controlling and monitoring input devices. 
+Here's a breakdown of the key elements of the notice:
+pynput
+pynput is a Python library that enables programs to control and monitor a computer's mouse and keyboard. The notice informs the user that this specific software includes pynput as a component. 
+Copyright (C) 2015-2021 Moses Palmér
+Copyright (C): This is the copyright symbol, asserting ownership of the intellectual property.
+2015-2021: The years indicate the period during which the software was under development and subject to copyright.
+Moses Palmér: This is the name of the author and copyright holder of the pynput library. 
+License: LGPLv3 (GNU Lesser General Public License v3)
+LGPLv3: This is the version 3 of the GNU Lesser General Public License, a type of open-source software license.
+Permissive with some restrictions: The LGPLv3 is a "weak copyleft" license. This means it is less restrictive than the standard GNU General Public License (GPL).
+Dynamic linking: A major feature of LGPLv3 is that it allows the licensed code (like the pynput library) to be used in proprietary (closed-source) software, as long as it is linked dynamically. This means that if you use pynput in your application, your application does not also have to be open-source.
+Modifications must be open: However, if you modify the pynput source code itself and distribute your modified version, the changes you made must also be released under the LGPLv3 or a compatible license. 
+"You may replace the pynput libraries with your own version."
+This phrase is a direct result of the LGPLv3's terms. It reinforces the user's right to:
+Modify the library: The license grants the freedom to obtain, modify, and use the source code.
+Link against a modified version: Users can replace the original pynput library with their own modified version and have it still function with the application. This is a core feature of the LGPL, designed to protect the user's ability to run and modify the software they receive. 
+
+GitHub: https://github.com/moses-palmer/pynput

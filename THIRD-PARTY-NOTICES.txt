@@ -1,0 +1,51 @@
+■ Imeck15 - サードパーティライセンス表記 (Third-Party Notices)
+
+このアプリケーションは、以下のサードパーティ製ライブラリを使用しています。
+各ライブラリのライセンス条文の全文は、同梱の "licenses" フォルダをご参照ください。
+
+This application incorporates software developed by third parties. 
+The full license text for each library can be found in the "licenses" folder.
+
+----------------------------------------------------------------
+
+- PySide6
+  Copyright (C) 2020 The Qt Company Ltd.
+  License: LGPLv3 (GNU Lesser General Public License v3)
+  This software uses PySide6, which is licensed under the LGPLv3. You may replace the PySide6 libraries with your own version.
+
+- opencv-python
+  Copyright (C) 2000-2022, Intel Corporation, all rights reserved.
+  License: Apache License 2.0
+
+- pynput
+  Copyright (C) 2015-2021 Moses Palmér
+  License: LGPLv3 (GNU Lesser General Public License v3)
+  This software uses pynput, which is licensed under the LGPLv3. You may replace the pynput libraries with your own version.
+
+- mss
+  Copyright (c) 2013-2025 MSS team
+  License: MIT License
+
+- numpy
+  Copyright (c) 2005-2022, NumPy Developers.
+  License: BSD 3-Clause License
+
+- pyautogui
+  Copyright (c) 2014, Al Sweigart
+  License: BSD 3-Clause License
+
+- psutil
+  Copyright (c) 2009, Giampaolo Rodola'. All rights reserved.
+  License: BSD 3-Clause License
+
+- ImageHash
+  Copyright (c) 2013, Johannes Buchner
+  License: BSD 2-Clause License
+
+- dxcam
+  Copyright (c) 2022 Raodrive
+  License: MIT License
+
+- pywin32
+  Copyright (c) 2000-2021, Mark Hammond and others.
+  License: Python Software Foundation License (PSFL)

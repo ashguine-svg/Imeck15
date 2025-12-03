@@ -1,0 +1,16 @@
+The phrase "PySide6 Copyright (C) 2020 The Qt Company Ltd. License: LGPLv3 (GNU Lesser General Public License v3)" identifies PySide6 as official Python bindings for the Qt framework and describes its licensing. 
+PySide6 basics
+What it is: PySide6 provides access to the full Qt 6.0+ framework for creating cross-platform graphical user interface (GUI) applications with Python.
+Developer: The official developer is The Qt Company Ltd., the same entity that maintains the C++ Qt framework. 
+License details (LGPLv3)
+PySide6 is released under a dual license model, offering both commercial and open-source options. The prompt specifies the open-source option, the GNU Lesser General Public License version 3 (LGPLv3). 
+The LGPLv3 is a "weaker" copyleft license than the standard GNU General Public License (GPLv3). This allows developers to use and distribute PySide6 for both free and commercial applications without being required to release their own application's source code under the same license. 
+Key obligations under the LGPLv3 include:
+Attribution: You must provide a copy of the license and clearly state that your application uses PySide6.
+Source code availability: You must provide a copy of the PySide6 source code to your customers. However, you are not obligated to provide the source code for your own proprietary application.
+Modification transparency: If you make any changes to the PySide6 source code itself, you must make the source code for those modifications available.
+Re-linking mechanism: If your application is statically linked with PySide6, you must provide a way for the end-user to re-link your application with a modified version of the PySide6 library. 
+Commercial license option
+For those who do not wish to comply with the LGPLv3's obligations or who need access to commercial-only features, The Qt Company offers a separate commercial license. The commercial license is typically the recommended option for closed-source or non-open-source projects. 
+
+sourcecord 

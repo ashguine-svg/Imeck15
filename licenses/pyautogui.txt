@@ -1,0 +1,8 @@
+The Python library PyAutoGUI is released under the permissive BSD 3-Clause License. The copyright for the library belongs to Al Sweigart, as indicated by the "Copyright (c) 2014, Al Sweigart" notice. 
+What is the BSD 3-Clause License?
+The BSD 3-Clause License is an open-source license that allows for great freedom in using and distributing software. It is also known as the "New" or "Revised" BSD License. 
+Key conditions of this license include:
+Source code distribution: If you redistribute the source code, you must keep the original copyright notice, the list of conditions, and the license's disclaimer.
+Binary distribution: If you redistribute the software in binary form (such as a compiled executable), you must reproduce the copyright notice, the list of conditions, and the disclaimer in the documentation.
+Non-endorsement clause: You may not use the name of the copyright holder (in this case, Al Sweigart) or the project's contributors to endorse or promote derived products without prior written permission.
+Disclaimer of liability: The license includes a standard disclaimer stating that the software is provided "as is" and without any warranty. 

@@ -1,0 +1,12 @@
+DXcam is a high-performance screen capture library for Windows with a license owned by Raodrive. The Copyright (c) 2022 Raodrive and License: MIT License text you submitted represents the copyright and license information for the DXcam project. 
+Here is a breakdown of that information:
+DXcam: The name of the software library, which is capable of capturing screens at high speeds on Windows.
+Copyright (c) 2022 Raodrive: This statement indicates that Raodrive is the original author and copyright holder of the software as of the year 2022.
+License: MIT License: This specifies that DXcam is open-source software distributed under the MIT license. 
+What the MIT License means for users
+The MIT License is one of the most permissive and widely used open-source licenses. It grants users a high degree of freedom with the software, as long as they include the original copyright and license notice in any copies or substantial portions of the software. 
+Under the MIT License, you have the right to:
+Use the software for any purpose, including commercial projects.
+Modify the source code.
+Distribute the original or modified versions of the software.
+Sublicense or sell copies of the software. 
