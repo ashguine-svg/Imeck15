@@ -1,6 +1,7 @@
 # core_selection.py
 # 認識範囲選択、ウィンドウ検出、画像保存処理を担当
 # ★★★ 修正: capture_image_for_registration 追加、cv2保存+シグナル通知 ★★★
+# ★★★ (拡張) ライフサイクル管理機能のトリガー (コンテキストアタッチ) を追加 ★★★
 
 import sys
 import shutil
@@ -70,6 +71,8 @@ class SelectionHandler:
             if not self.core._is_capturing_for_registration: 
                 self.core.target_hwnd = None; self.core.current_window_scale = None; self.core.windowScaleCalculated.emit(0.0); self.logger.log("log_rec_area_set_rect")
                 self.core.environment_tracker.on_rec_area_set("rectangle")
+                # コンテキストクリア
+                self.core.clear_recognition_area()
             else: 
                 self.logger.log("log_capture_area_set_rect")
                 try:
@@ -143,6 +146,8 @@ class SelectionHandler:
                 self.core.windowScaleCalculated.emit(0.0)
                 self.core.environment_tracker.on_rec_area_set("fullscreen")
                 self.core.appContextChanged.emit(None)
+                # コンテキストクリア
+                self.core.clear_recognition_area()
                 
                 self.core._areaSelectedForProcessing.emit(fullscreen_rect)
             
@@ -258,6 +263,9 @@ class SelectionHandler:
                 self.core._areaSelectedForProcessing.emit(rect)
                 return
 
+            # Linuxの場合もHWND（ウィンドウID）をセット
+            self.core.target_hwnd = int(window_id)
+
             self.core._pending_window_info = {"title": title, "dims": {'width': width, 'height': height}, "rect": rect}
             if title and title not in self.config_manager.load_window_scales(): self.core.askToSaveWindowBaseSizeSignal.emit(title)
             else: self.process_base_size_prompt_response(save_as_base=False)
@@ -274,6 +282,11 @@ class SelectionHandler:
             self.core.environment_tracker.on_rec_area_set("window", title)
             self.core.appContextChanged.emit(title) 
             
+            # --- ▼▼▼ 拡張: ライフサイクル管理コンテキストのアタッチ ▼▼▼ ---
+            if self.core.target_hwnd:
+                self.core._attach_session_context(self.core.target_hwnd, title)
+            # --- ▲▲▲ 追加完了 ▲▲▲ ---
+
             if save_as_base:
                 scales_data = self.core.config_manager.load_window_scales(); scales_data[title] = current_dims; self.core.config_manager.save_window_scales(scales_data); self.core.current_window_scale = 1.0; self.logger.log("log_window_base_size_saved", title); self.core.windowScaleCalculated.emit(1.0); self.core._areaSelectedForProcessing.emit(rect)
             elif title and title in (scales_data := self.core.config_manager.load_window_scales()):

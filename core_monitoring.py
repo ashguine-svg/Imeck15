@@ -1,10 +1,11 @@
 # core_monitoring.py
 # 監視ループ、マッチング、アクション実行を担当
-# ★★★ 修正: _find_best_match で複数マッチング結果をリストで返すように変更 ★★★
+# ★★★ (拡張) ライフサイクル管理機能 (フリーズ検知・クラッシュ検知・復旧中の待機ロジック) を追加 ★★★
 
 import time
 import cv2
 import numpy as np
+import psutil 
 from pathlib import Path
 
 from matcher import _match_template_task, calculate_phash
@@ -32,8 +33,21 @@ class MonitoringProcessor:
         last_match_time_map = {}
         fps_last_time = time.time()
         frame_counter = 0
+        
+        # --- ライフサイクル管理用 ---
+        last_state_check_time = time.time()
+        # ------------------------
 
         while self.core.is_monitoring:
+            
+            # --- ▼▼▼ 修正: 復旧中の待機ロジック (空転) ▼▼▼ ---
+            # 復旧処理中 (ActionManagerがCleanup/Reload中) は、
+            # 画像認識を行わずに待機する。スレッド自体は死なない。
+            if self.core._recovery_in_progress:
+                time.sleep(0.5)
+                continue
+            # --- ▲▲▲ 追加完了 ▲▲▲ ---
+
             with self.core.state_lock:
                 current_state = self.core.state
             
@@ -47,6 +61,24 @@ class MonitoringProcessor:
 
             try:
                 current_time = time.time()
+
+                # --- ▼▼▼ 拡張: 状態消失検知 (クラッシュ監視) ▼▼▼ ---
+                if self.core._lifecycle_hook_active:
+                    hooks_conf = self.core.app_config.get('extended_lifecycle_hooks', {})
+                    check_interval = hooks_conf.get('state_check_interval', 5.0)
+                    
+                    if current_time - last_state_check_time > check_interval:
+                        pid = self.core._session_context.get('pid')
+                        # PIDが設定されており、かつOS上に存在しない場合
+                        if pid and not psutil.pid_exists(pid):
+                            self.logger.log("[WARN] Session context lost (PID missing). Triggering lifecycle hook.")
+                            # ここで復旧を呼び出すと _recovery_in_progress が True になり、
+                            # 次のループから待機モードに入る
+                            self.core._execute_session_recovery()
+                            continue
+                        
+                        last_state_check_time = current_time
+                # --- ▲▲▲ 追加完了 ▲▲▲ ---
 
                 # --- 1. タイミング制御フェーズ ---
                 should_process, fps_last_time, frame_counter = self._wait_for_next_frame(
@@ -217,13 +249,7 @@ class MonitoringProcessor:
         return hash_diff <= threshold
 
     def _find_best_match(self, s_bgr, s_gray, s_bgr_umat, s_gray_umat, cache):
-        """
-        最適化版: 複数マッチング対応
-        - 見つかった高信頼度のマッチングをすべてリストに格納する
-        - 1つの画像テンプレート内で最適なスケールが見つかったら、その画像については探索を終了し(break)、
-          次の画像の探索へ移る。
-        """
-        matched_results = [] # (match_result, index, data_ref) のタプルを格納
+        matched_results = [] 
         futures = []
         
         current_time = time.time()
@@ -261,7 +287,6 @@ class MonitoringProcessor:
 
                 user_threshold = data['settings'].get('threshold', 0.8)
 
-                # 探索順序 (前回成功したものを優先)
                 last_idx = data.get('last_success_index', -1)
                 indices = list(range(num_templates))
                 if 0 <= last_idx < num_templates:
@@ -285,7 +310,6 @@ class MonitoringProcessor:
                             match_result = _match_template_task(screen_image, template_image, task_data, s_shape, t_shape, effective_strict_color)
                             if match_result:
                                 if match_result['confidence'] >= user_threshold:
-                                    # ★ 修正: 即returnせずリストに追加し、この画像の他スケール探索を終了(break)
                                     data['last_success_index'] = i
                                     matched_results.append((match_result, i, data))
                                     break 
@@ -293,7 +317,6 @@ class MonitoringProcessor:
                     except Exception as e:
                          self.logger.log("Error during template processing for %s (scale %s): %s", Path(path).name, t.get('scale', 'N/A'), str(e))
 
-        # スレッドプールの結果回収
         if futures:
             for f, idx, data_ref in futures:
                 try:
@@ -301,9 +324,6 @@ class MonitoringProcessor:
                     if match_result:
                         th = data_ref['settings'].get('threshold', 0.8)
                         if match_result['confidence'] >= th:
-                             # スレッド処理の場合、同じ画像の別スケールが重複して入る可能性があるが、
-                             # 後で信頼度順にソートして処理するため許容するか、
-                             # あるいは重複チェックを入れる。ここでは単純に追加。
                              data_ref['last_success_index'] = idx
                              matched_results.append((match_result, idx, data_ref))
                 except Exception as e:
@@ -312,18 +332,12 @@ class MonitoringProcessor:
         if not matched_results:
             return []
         
-        # 信頼度が高い順にソート
         matched_results.sort(key=lambda x: x[0]['confidence'], reverse=True)
-        
-        # リストの中身（match_result辞書）だけを取り出して返す
         final_matches = [item[0] for item in matched_results]
         
         return final_matches
 
     def process_matches_as_sequence(self, all_matches, current_time, last_match_time_map):
-        """
-        Stateクラスから呼び出されるロジック（Coreの同名メソッドから委譲）
-        """
         if not all_matches:
             current_match_paths = set()
             keys_to_remove = [path for path in self.core.match_detected_at if path not in current_match_paths]
@@ -363,7 +377,6 @@ class MonitoringProcessor:
                 time_since_detected = current_time - detected_at
                 if time_since_detected >= interval:
                     clickable_after_interval.append(m)
-                    # self.logger.log(f"[DEBUG] Interval elapsed for '{Path(path).name}'. Added to clickable.")
                 else:
                     pass
 
@@ -374,16 +387,11 @@ class MonitoringProcessor:
         if not clickable_after_interval:
             return False
 
-        # 複数のクリック候補がある場合、最も優先度の高い（インターバルが短く、信頼度が高い）ものを1つ選ぶ
-        # ★ すべてクリックしたい場合はここをループにする必要がありますが、
-        #    現状の仕様では「1フレームにつき1クリック」が安全なため、ベストな1つを選びます。
-        #    次のフレームで残りの画像が処理されます。
         try:
             potential_target_match = min(clickable_after_interval, key=lambda m: (m['settings'].get('interval_time', 1.5), -m['confidence']))
         except ValueError:
             return False
 
-        # 画面安定性チェック
         is_stability_check_enabled = self.core.app_config.get('screen_stability_check', {}).get('enabled', True)
         if is_stability_check_enabled and not self.core.is_eco_cooldown_active:
             if not self.check_screen_stability():
@@ -425,6 +433,25 @@ class MonitoringProcessor:
         )
         
         if result and result.get('success'): 
+            
+            # --- ▼▼▼ 拡張: 応答遅延検知 (フリーズ監視) ▼▼▼ ---
+            if self.core._lifecycle_hook_active:
+                current_clicked_path = result.get('path')
+                if current_clicked_path == self.core._last_clicked_path:
+                    self.core._session_context['consecutive_clicks'] += 1
+                else:
+                    self.core._session_context['consecutive_clicks'] = 1 # リセット
+                
+                hooks_conf = self.core.app_config.get('extended_lifecycle_hooks', {})
+                limit = hooks_conf.get('retry_tolerance', 10)
+                
+                if self.core._session_context['consecutive_clicks'] >= limit:
+                    self.logger.log("[WARN] Response timeout detected (stuck loop). Triggering lifecycle hook.")
+                    # 復旧シーケンス開始 -> フラグが立ち、次のループから待機モードへ
+                    self.core._execute_session_recovery()
+                    return 
+            # --- ▲▲▲ 追加完了 ▲▲▲ ---
+
             self.core._click_count += 1
             self.core._last_clicked_path = result.get('path')
             self.core.last_successful_click_time = time.time()
@@ -441,7 +468,6 @@ class MonitoringProcessor:
                     self.core.folder_cooldowns[folder_path] = time.time() + cooldown_duration
                     self.logger.log("log_folder_cooldown_started", Path(folder_path).name, str(cooldown_duration))
                     
-                    # クールダウンに入ったフォルダの画像の検出情報をリセット
                     keys_to_remove = []
                     for cache in [self.core.normal_template_cache, self.core.backup_template_cache]:
                         for cached_path, item in cache.items():

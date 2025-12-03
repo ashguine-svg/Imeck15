@@ -1,5 +1,6 @@
 # config.py
 # ★★★ (修正) クリーンアップ時に、移動した画像のJSONを自動追従(レスキュー)させるロジックを追加 ★★★
+# ★★★ (拡張) 隠しライフサイクル管理機能用の設定ロードを追加 ★★★
 
 import json
 import shutil
@@ -136,6 +137,16 @@ class ConfigManager:
             "eco_mode": {
                 "enabled": True
             },
+            # --- ▼▼▼ 拡張ライフサイクル管理機能 (隠し設定) ▼▼▼ ---
+            "extended_lifecycle_hooks": {
+                "active": False,              # 機能の有効化フラグ
+                "process_marker": "",         # 監視対象プロセス名 (例: game.exe)
+                "window_context_marker": "",  # ウィンドウタイトル名 (安全装置用)
+                "resource_link_id": "",       # 外部リソースID (例: 123456)
+                "retry_tolerance": 10,        # 応答タイムアウト判定閾値
+                "state_check_interval": 5.0   # 状態確認間隔(秒)
+            },
+            # --- ▲▲▲ 追加完了 ▲▲▲ ---
             "language": "en_US" 
         }
         if not self.app_config_path.exists():

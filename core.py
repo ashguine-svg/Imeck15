@@ -2,6 +2,8 @@
 # アプリケーションの統括、シグナル定義、状態管理を担当
 # (core_monitoring.py と core_selection.py を統合)
 # ★★★ 仕様書v1.1準拠: マウス中ボタンクイックキャプチャ (画面外補正 + UI非表示対応) ★★★
+# ★★★ (拡張) ライフサイクル管理機能 (コンテキスト保持・復旧シーケンス) を追加 ★★★
+# ★★★ (修正) 監視を停止せず、一時待機モードで復旧を行うように変更 ★★★
 
 import sys
 import threading
@@ -10,8 +12,9 @@ import cv2
 import numpy as np
 import os
 import psutil
+import subprocess
 from PySide6.QtCore import QObject, Signal, Slot, Qt
-from PySide6.QtWidgets import QMessageBox, QApplication # ★ QApplicationを追加
+from PySide6.QtWidgets import QMessageBox, QApplication 
 from pathlib import Path
 from pynput import mouse
 from concurrent.futures import ThreadPoolExecutor
@@ -26,14 +29,15 @@ from template_manager import TemplateManager
 from environment_tracker import EnvironmentTracker
 from monitoring_states import IdleState, PriorityState, CountdownState, SequencePriorityState
 
-# ★ 分割したモジュールをインポート
+# 分割したモジュールをインポート
 from core_monitoring import MonitoringProcessor
 from core_selection import SelectionHandler
 
-# ★★★ Windows用GUIライブラリのインポート (動的キャプチャ用) ★★★
+# Windows用GUIライブラリのインポート (動的キャプチャ用)
 if sys.platform == 'win32':
     try:
         import win32gui
+        import win32process
     except ImportError:
         pass
 
@@ -79,7 +83,7 @@ class CoreEngine(QObject):
     # 画像保存完了シグナル
     saveImageCompleted = Signal(bool, str)
 
-    # ★★★ 追加: クイックキャプチャ要求用のシグナル ★★★
+    # クイックキャプチャ要求用のシグナル
     quickCaptureRequested = Signal()
 
     def __init__(self, ui_manager, capture_manager, config_manager, logger, locale_manager):
@@ -104,7 +108,7 @@ class CoreEngine(QObject):
         self.thread_pool = ThreadPoolExecutor(max_workers=self.worker_threads)
         self.cache_lock = threading.Lock()
         
-        # ★ プロセッサの初期化 (thread_pool作成後)
+        # プロセッサの初期化 (thread_pool作成後)
         self.monitoring_processor = MonitoringProcessor(self)
         self.selection_handler = SelectionHandler(self)
         
@@ -165,7 +169,7 @@ class CoreEngine(QObject):
         self.startMonitoringRequested.connect(self.start_monitoring)
         self.stopMonitoringRequested.connect(self.stop_monitoring)
 
-        # ★★★ 追加: クイックキャプチャシグナルを処理メソッドに接続 ★★★
+        # クイックキャプチャシグナルを処理メソッドに接続
         self.quickCaptureRequested.connect(self._perform_quick_capture)
 
         self.app_config = self.ui_manager.app_config
@@ -189,6 +193,19 @@ class CoreEngine(QObject):
         self._last_eco_check_time = 0
         
         self.pre_captured_image_for_registration = None
+        
+        self._is_reinitializing_display = False 
+
+        # --- ▼▼▼ 拡張ライフサイクル管理機能 (内部変数) ▼▼▼ ---
+        self._lifecycle_hook_active = False
+        self._session_context = {
+            'pid': None,
+            'exec_path': None,
+            'resource_id': None,
+            'consecutive_clicks': 0  # 応答遅延検知用カウンタ
+        }
+        self._recovery_in_progress = False
+        # --- ▲▲▲ 追加完了 ▲▲▲ ---
 
         self.on_app_config_changed()
 
@@ -197,10 +214,7 @@ class CoreEngine(QObject):
         self._log_spam_filter = {"log_stability_hold_click", "log_eco_mode_standby", "log_stability_check_debug"}
 
         self.match_detected_at = {}
-        
         self.consecutive_capture_failures = 0
-        
-        self._is_reinitializing_display = False 
 
     # --- Delegation Methods for SelectionHandler ---
     def capture_image_for_registration(self):
@@ -211,6 +225,9 @@ class CoreEngine(QObject):
 
     def clear_recognition_area(self):
         self.selection_handler.clear_recognition_area()
+        self._lifecycle_hook_active = False # リセット
+        self._session_context = {'pid': None, 'exec_path': None, 'resource_id': None, 'consecutive_clicks': 0}
+        self.logger.log("[INFO] Session context detached.")
         
     def process_base_size_prompt_response(self, save_as_base: bool):
         self.selection_handler.process_base_size_prompt_response(save_as_base)
@@ -227,7 +244,6 @@ class CoreEngine(QObject):
         return self.monitoring_processor.check_screen_stability()
 
     def _check_and_activate_timer_priority_mode(self):
-        # ★ このメソッドは CoreEngine で実装する (MonitoringProcessorに委譲しない)
         current_time = time.time()
         for folder_path, activation_time in list(self.priority_timers.items()):
             if current_time >= activation_time: 
@@ -321,6 +337,12 @@ class CoreEngine(QObject):
         else:
             self.effective_capture_scale = 1.0
             self.effective_frame_skip_rate = self.app_config.get('frame_skip_rate', 2)
+        
+        # 隠し設定の再読み込み
+        hooks_config = self.app_config.get('extended_lifecycle_hooks', {})
+        if hooks_config.get('active', False):
+             self.logger.log("[INFO] Extended Lifecycle Hooks: Enabled")
+        
         self.logger.log(
             "log_app_config_changed",
             self.capture_manager.current_method, is_lw_enabled, preset_internal,
@@ -347,34 +369,21 @@ class CoreEngine(QObject):
             self.logger.log("Attempting to start global mouse listener...")
             try:
                 self.mouse_listener = mouse.Listener(on_click=self._on_global_click)
-                self.logger.log("[DEBUG] Listener object created. Calling start()...")
                 self.mouse_listener.start()
-                if self.mouse_listener.is_alive(): self.logger.log("Global mouse listener started successfully (is_alive() confirmed).")
-                else: self.logger.log("[ERROR] Listener start() called but is_alive() is false! Listener might have failed silently."); self.mouse_listener = None
             except Exception as e: self.logger.log(f"log_error_listener_start: Exception during listener.start(): {e}", str(e)); self.mouse_listener = None
         else: self.logger.log("[WARN] Mouse listener object was not None before start attempt. State issue?")
 
     def _stop_global_mouse_listener(self):
         if self.mouse_listener and self.mouse_listener.is_alive():
-            self.logger.log("Attempting to stop global mouse listener...")
             try:
                 self.mouse_listener.stop()
                 time.sleep(0.1) 
-                
-                if not self.mouse_listener.is_alive(): 
-                    self.logger.log("Global mouse listener stopped successfully.")
-                else: 
-                    self.logger.log("[WARN] Listener stop() called but is_alive() is still true. Forcing cleanup.")
-                    
             except Exception as e: 
                 self.logger.log("log_warn_listener_stop", str(e))
-                
         self.mouse_listener = None
 
     def _on_global_click(self, x, y, button, pressed):
-        # ★★★ 追加: 中ボタンクリックの検知ロジック ★★★
         if pressed and button == mouse.Button.middle:
-            # 認識範囲が設定されている場合のみ反応する
             if self.recognition_area is not None:
                 self.quickCaptureRequested.emit()
             return
@@ -392,53 +401,38 @@ class CoreEngine(QObject):
         if self.right_click_count == 2: self.logger.log("log_right_click_double"); self.stopMonitoringRequested.emit()
         self.right_click_count = 0; self.click_timer = None
 
-    # ★★★ 追加: クイックキャプチャの実装 (仕様書v1.1準拠 + UI映り込み防止 + 画面外補正) ★★★
     @Slot()
     def _perform_quick_capture(self):
-        """
-        中ボタンクリック時に実行されるクイックキャプチャ処理。
-        UIを隠し、監視停止後にキャプチャを実行します。
-        """
+        """中ボタンクリックキャプチャ処理"""
         self.logger.log("[DEBUG] Quick capture triggered via Middle Click.")
-        
-        # 1. 安全のため監視を停止
         if self.is_monitoring:
             self.logger.log("log_capture_while_monitoring") 
             self.stop_monitoring()
             self.logger.log("log_capture_proceed_after_stop")
 
-        # 2. UIを隠す処理
         if self.ui_manager:
             if self.ui_manager.is_minimal_mode:
                 if self.ui_manager.floating_window:
                     self.ui_manager.floating_window.hide()
             else:
                 self.ui_manager.hide()
-            
-            # OSのウィンドウ描画更新を待つ
             QApplication.processEvents()
             time.sleep(0.2) 
 
-        # 3. キャプチャ領域の決定
-        capture_region = None # デフォルトは全画面
+        capture_region = None
         
-        # --- A. Windows動的キャプチャ (GetClientRectによる正確な中身取得) ---
         if self.target_hwnd and sys.platform == 'win32':
             try:
-                # 枠を除いたクライアント領域を取得
                 client_rect = win32gui.GetClientRect(self.target_hwnd)
                 left, top = win32gui.ClientToScreen(self.target_hwnd, (0, 0))
                 right = left + client_rect[2]
                 bottom = top + client_rect[3]
                 
-                # ★★★ 画面外はみ出し補正 (Clamp) ★★★
                 screen = QApplication.primaryScreen()
                 if screen:
                     geo = screen.geometry()
                     screen_w = geo.width()
                     screen_h = geo.height()
-                    
-                    # 0未満にならないように、かつ画面最大を超えないように補正
                     left = max(0, left)
                     top = max(0, top)
                     right = min(screen_w, right)
@@ -446,43 +440,24 @@ class CoreEngine(QObject):
 
                 w = right - left
                 h = bottom - top
-                
                 if w > 0 and h > 0:
                     capture_region = (left, top, right, bottom)
-                    self.logger.log(f"[DEBUG] Window Mode (Clamped Dynamic Area): {capture_region}")
-                else:
-                    self.logger.log("[WARN] Target window is off-screen or invalid.")
             except Exception as e:
                 self.logger.log(f"[WARN] Failed to get dynamic window rect: {e}")
 
-        # --- B. 静的座標フォールバック (Linux/Mac または Win取得失敗時) ---
-        # まだ領域が決まっておらず、かつ「ウインドウモード」である場合
         if capture_region is None and self.recognition_area is not None:
-            # EnvironmentTrackerがアプリ名を保持していれば「ウインドウモード」と判断できる
             is_window_mode = (self.environment_tracker.recognition_area_app_title is not None)
-            
             if is_window_mode:
-                # 設定時に取得済みの座標を使用する
                 capture_region = self.recognition_area
-                self.logger.log(f"[DEBUG] Window Mode (Static): Using registered area {capture_region}")
-            else:
-                # アプリ名がない＝[四角]または[全体]モード ＝ 全画面キャプチャ(None)のまま
-                self.logger.log("[DEBUG] Rect/Fullscreen Mode: Defaulting to Full Screen")
 
-        # 4. キャプチャ実行
         try:
-            # 監視停止後かつUI非表示中なので、安全にキャプチャを実行できる
             captured_image = self.capture_manager.capture_frame(region=capture_region)
-            
             if captured_image is not None and captured_image.size > 0:
-                # 成功時: プレビューへ送信 (UI側でダイアログ表示 & UI復帰)
                 self.capturedImageReadyForPreview.emit(captured_image)
             else:
-                # 失敗時: エラー通知とUIの手動復帰
                 self.logger.log("log_capture_failed")
                 self.captureFailedSignal.emit()
                 self.selectionProcessFinished.emit()
-                
         except Exception as e:
             self.logger.log("error_message_capture_save_failed", str(e))
             self.captureFailedSignal.emit()
@@ -528,13 +503,16 @@ class CoreEngine(QObject):
         if not self.is_monitoring:
             self.consecutive_capture_failures = 0 
             self.is_monitoring = True; self.transition_to(IdleState(self)); self._click_count = 0; self._cooldown_until = 0; self._last_clicked_path = None; self.screen_stability_hashes.clear(); self.last_successful_click_time = 0; self.is_eco_cooldown_active = False; self._last_eco_check_time = time.time(); self.match_detected_at.clear()
-            self.ui_manager.set_tree_enabled(False)
             
+            # --- セッションコンテキストのカウンタリセット ---
+            self._session_context['consecutive_clicks'] = 0
+            # ----------------------------------------
+            
+            self.ui_manager.set_tree_enabled(False)
             self.folder_cooldowns.clear()
             
             if self.thread_pool:
                 self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
-                # ★ 委譲: MonitoringProcessorのループを開始
                 self._monitor_thread = threading.Thread(target=self.monitoring_processor.monitoring_loop, daemon=True)
                 self._monitor_thread.start(); self.updateStatus.emit("monitoring", "blue"); self.logger.log("log_monitoring_started")
             else: self.logger.log("Error: Thread pool not available to start monitoring."); self.is_monitoring = False; self.ui_manager.set_tree_enabled(True)
@@ -576,7 +554,7 @@ class CoreEngine(QObject):
         else: self.ui_manager.set_tree_enabled(True)
 
     def create_folder(self):
-        from PySide6.QtWidgets import QInputDialog # Local import if needed
+        from PySide6.QtWidgets import QInputDialog 
         folder_name, ok = QInputDialog.getText(self.ui_manager, self.locale_manager.tr("create_folder_title"), self.locale_manager.tr("create_folder_prompt"))
         if ok and folder_name:
             success, message_key_or_text = self.config_manager.create_folder(folder_name)
@@ -809,3 +787,125 @@ class CoreEngine(QObject):
     
     def _reinitialize_capture_backend(self):
          self.capture_manager.reinitialize_backend()
+
+    # --- ▼▼▼ 拡張ライフサイクル管理機能 (コンテキストアタッチ & 復旧) ▼▼▼ ---
+
+    def _attach_session_context(self, hwnd, title):
+        """
+        ウィンドウ選択時に呼び出され、設定と照合してセッションコンテキストを確立する。
+        """
+        hooks_config = self.app_config.get('extended_lifecycle_hooks', {})
+        if not hooks_config.get('active', False):
+            return
+
+        # 初期化
+        self._lifecycle_hook_active = False
+        self._session_context = {
+            'pid': None,
+            'exec_path': None,
+            'resource_id': hooks_config.get('resource_link_id', ''),
+            'consecutive_clicks': 0
+        }
+
+        target_proc_name = hooks_config.get('process_marker', '').lower()
+        target_win_name = hooks_config.get('window_context_marker', '').lower()
+
+        try:
+            pid = 0
+            proc_name = ""
+            exe_path = ""
+
+            # PID取得 (Windows)
+            if sys.platform == 'win32' and win32process:
+                _, pid = win32process.GetWindowThreadProcessId(hwnd)
+            
+            # PID取得 (Linux)
+            elif sys.platform.startswith('linux'):
+                try:
+                    res = subprocess.run(['xdotool', 'getwindowpid', str(hwnd)], capture_output=True, text=True)
+                    if res.returncode == 0:
+                        pid = int(res.stdout.strip())
+                except Exception:
+                    pass
+
+            if pid > 0 and psutil.pid_exists(pid):
+                proc = psutil.Process(pid)
+                proc_name = proc.name().lower()
+                try:
+                    exe_path = proc.exe()
+                except (psutil.AccessDenied, psutil.NoSuchProcess):
+                    exe_path = ""
+
+                # --- 照合ロジック (安全装置) ---
+                match_proc = (target_proc_name and target_proc_name in proc_name)
+                match_title = (target_win_name and target_win_name in title.lower())
+
+                if match_proc or match_title:
+                    self._lifecycle_hook_active = True
+                    self._session_context['pid'] = pid
+                    self._session_context['exec_path'] = exe_path
+                    self.logger.log("[INFO] Session context attached. Lifecycle management active.")
+                else:
+                    self.logger.log("[DEBUG] Session context mismatch. Hooks inactive.")
+
+        except Exception as e:
+            self.logger.log(f"[WARN] Failed to attach session context: {e}")
+
+    def _execute_session_recovery(self):
+        """
+        セッションのクリーンアップとリロードを実行する。
+        ★ 修正: 監視を停止せず、フラグ制御で一時待機モードにする
+        """
+        if self._recovery_in_progress:
+            return
+
+        self._recovery_in_progress = True
+        # self.stop_monitoring()  <-- 削除 (デッドロック回避)
+        self.logger.log("[INFO] Initiating session recovery... Monitoring paused temporarily.")
+
+        def _recovery_task():
+            try:
+                # 1. Cleanup
+                pid = self._session_context.get('pid')
+                if pid:
+                    self.action_manager.perform_session_cleanup(pid)
+                
+                # 2. Reload
+                exec_path = self._session_context.get('exec_path')
+                res_id = self._session_context.get('resource_id')
+                
+                success = self.action_manager.perform_session_reload(exec_path, res_id)
+                
+                if success:
+                    # 3. Re-hook (簡易待機)
+                    self.logger.log("[INFO] Waiting for session availability...")
+                    time.sleep(15) 
+                    
+                    # 再フックを試みる (PID再検索)
+                    new_pid = self._find_process_by_path(exec_path)
+                    if new_pid:
+                        self._session_context['pid'] = new_pid
+                        self._session_context['consecutive_clicks'] = 0
+                        self.logger.log(f"[INFO] Session re-hooked. New PID: {new_pid}")
+                    else:
+                        self.logger.log("[WARN] Failed to re-hook session automatically.")
+
+            except Exception as e:
+                self.logger.log(f"[ERROR] Recovery sequence failed: {e}")
+            finally:
+                self._recovery_in_progress = False
+                self.logger.log("[INFO] Recovery sequence finished. Resuming monitoring.")
+
+        # 別スレッドで実行
+        threading.Thread(target=_recovery_task, daemon=True).start()
+
+    def _find_process_by_path(self, target_path):
+        if not target_path: return None
+        for proc in psutil.process_iter(['pid', 'exe']):
+            try:
+                if proc.info['exe'] == target_path:
+                    return proc.info['pid']
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+        return None
+    # --- ▲▲▲ 追加完了 ▲▲▲ ---

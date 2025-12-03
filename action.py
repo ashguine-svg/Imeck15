@@ -1,10 +1,14 @@
 # action.py
-# ★★★ (改良 1.3) _activate_window にリトライ処理を追加し、クリック中止ロジックを実装 ★★★
+# ★★★ (拡張) ライフサイクル管理用のセッション操作メソッドを追加 ★★★
+# ★★★ (修正) フリーズ時は問答無用でSIGKILLし、OSの応答なしダイアログを回避する ★★★
 
 import sys
 import time
 import pyautogui
 import random
+import psutil
+import subprocess
+import os
 from pathlib import Path
 
 if sys.platform == 'win32':
@@ -18,17 +22,14 @@ if sys.platform == 'win32':
         block_input_func.argtypes = [ctypes.wintypes.BOOL]
         block_input_func.restype = ctypes.wintypes.BOOL
         INPUT_BLOCK_AVAILABLE = True
-        # ★★★ 1. print を削除 (Loggerがmain.pyで担当) ★★★
     except (ImportError, AttributeError, OSError):
         def block_input_func(block):
             pass
         INPUT_BLOCK_AVAILABLE = False
-        # ★★★ 2. print を削除 (Loggerがmain.pyで担当) ★★★
 else:
     def block_input_func(block):
         pass
     INPUT_BLOCK_AVAILABLE = False
-    # ★★★ 3. print を削除 (Loggerがmain.pyで担当) ★★★
 
 
 def block_input(block: bool):
@@ -40,17 +41,17 @@ def block_input(block: bool):
         try:
             block_input_func(block)
         except Exception as e:
-            # ★★★ 4. print を変更 (ただし、ここはLoggerが使えない低レベル関数のため print のまま) ★★★
+            # Loggerが使えない低レベル関数のため print のまま
             print(f"[ERROR] Failed to change input block state: {e}")
 
 class ActionManager:
     """
     ウィンドウ操作やマウスクリックなど、PC操作に関連する機能を管理するクラス。
+    拡張されたライフサイクル管理機能（セッションのクリーンアップとリロード）も含みます。
     """
     def __init__(self, logger):
         self.logger = logger
 
-    # --- ▼▼▼ (改良 1.3) _activate_window を修正 ▼▼▼ ---
     def _activate_window(self, target_hwnd) -> bool:
         """
         指定されたウィンドウをフォアグラウンドにし、アクティブ化を試みます。
@@ -80,18 +81,18 @@ class ActionManager:
                 if win32gui.IsIconic(target_hwnd):
                     win32gui.ShowWindow(target_hwnd, win32con.SW_NORMAL)
                 
-                # --- ▼▼▼ リトライロジック ▼▼▼ ---
+                # --- リトライロジック ---
                 retries = 3
                 while retries > 0:
                     win32gui.SetForegroundWindow(target_hwnd)
-                    time.sleep(0.1) # 0.2秒から0.1秒に変更
+                    time.sleep(0.1)
                     
                     if win32gui.GetForegroundWindow() == target_hwnd:
                         self.logger.log("log_activate_window_success", win32gui.GetWindowText(target_hwnd))
-                        return True # ★ 成功
+                        return True
                         
                     retries -= 1
-                # --- ▲▲▲ リトライロジック ▲▲▲ ---
+                # --- ▲▲▲ ---
 
             finally:
                 # 処理が終わったら、必ずデタッチする
@@ -99,19 +100,15 @@ class ActionManager:
 
             # リトライしても失敗した場合
             self.logger.log("log_activate_window_failed", win32gui.GetWindowText(target_hwnd))
-            return False # ★ 失敗
+            return False
 
         except Exception as e:
             self.logger.log("log_activate_window_error", str(e))
-            return False # ★ 失敗
-    # --- ▲▲▲ 修正完了 ▲▲▲ ---
+            return False
 
-    # --- ▼▼▼ (改良 1.3) execute_click を修正 ▼▼▼ ---
     def execute_click(self, match_info, recognition_area, target_hwnd, effective_capture_scale, window_scale=1.0):
         """
         マッチング情報に基づいてクリックを実行します。
-        自動マルチスケール探索の倍率は無視し、基本スケール(capture * window)のみを適用します。
-        また、可変ROIの場合も正しいオフセットを取得するように修正されています。
         """
         
         is_active = self._activate_window(target_hwnd)
@@ -124,16 +121,11 @@ class ActionManager:
             match_rect_in_rec_area = match_info['rect']
             path = Path(match_info['path'])
             
-            # --- ▼▼▼ 修正: マルチスケール倍率を無視し、基本スケールを使用する ▼▼▼ ---
-            # match_info['scale'] には探索時の倍率が含まれているため、
-            # クリック位置の補正計算には「基本スケール（キャプチャ倍率×ウィンドウ倍率）」を使用します。
             base_scale = effective_capture_scale * (window_scale if window_scale else 1.0)
             scale = base_scale 
-            # --- ▲▲▲ 修正完了 ▲▲▲ ---
             
             rec_area_offset_x, rec_area_offset_y = (recognition_area[0], recognition_area[1]) if recognition_area else (0, 0)
             
-            # --- ▼▼▼ 修正: 可変ROI/固定ROIの両方に対応したオフセット取得 ▼▼▼ ---
             roi_offset_x, roi_offset_y = 0, 0
             if settings.get('roi_enabled'):
                 roi_mode = settings.get('roi_mode', 'fixed')
@@ -147,7 +139,6 @@ class ActionManager:
                 if roi_rect:
                     roi_offset_x = max(0, roi_rect[0])
                     roi_offset_y = max(0, roi_rect[1])
-            # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
             click_offset_x_scaled = 0.0
             click_offset_y_scaled = 0.0
@@ -225,3 +216,95 @@ class ActionManager:
             return {'success': False, 'path': match_info.get('path', 'Unknown')}
         finally:
             block_input(False)
+
+    # --- ▼▼▼ 拡張ライフサイクル管理機能 (隠しAPI) ▼▼▼ ---
+
+    def perform_session_cleanup(self, pid: int) -> bool:
+        """
+        対象のセッション（プロセス）をクリーンアップします。
+        ★ 修正: いきなりSIGKILLを使用してOSの応答なしダイアログを回避する
+        """
+        try:
+            if not psutil.pid_exists(pid):
+                return False
+
+            proc = psutil.Process(pid)
+            self.logger.log(f"[INFO] Session cleanup initiated for PID: {pid}")
+            
+            # --- 子プロセスも巻き込んでKillする (Proton対策) ---
+            try:
+                children = proc.children(recursive=True)
+                for child in children:
+                    try:
+                        child.kill() # 子プロセスも即殺
+                    except psutil.NoSuchProcess:
+                        pass
+            except Exception:
+                pass
+            # ----------------------------------------------
+
+            # 親プロセスを強制終了 (SIGKILL)
+            # terminate()は使わない（応答なしダイアログが出るため）
+            self.logger.log("[INFO] Forcing resource release (SIGKILL) immediately.")
+            try:
+                proc.kill()
+            except psutil.NoSuchProcess:
+                pass 
+
+            # キル後の完全消滅確認 (最大5秒待機)
+            for _ in range(10):
+                if not psutil.pid_exists(pid):
+                    self.logger.log("[INFO] Session terminated gracefully.")
+                    return True
+                time.sleep(0.5)
+            
+            self.logger.log("[WARN] Session cleanup timed out. Process might be a zombie.")
+            return True 
+
+        except (psutil.NoSuchProcess, psutil.AccessDenied, Exception) as e:
+            self.logger.log(f"[WARN] Session cleanup exception: {e}")
+            return False
+
+    def perform_session_reload(self, exec_path: str, resource_id: str = None) -> bool:
+        """
+        新しいセッションをリロード（再開）します。
+        resource_id がある場合は外部プロトコル経由、ない場合は直接実行します。
+        """
+        try:
+            self.logger.log(f"[INFO] Reloading session context...")
+
+            if resource_id:
+                # 外部プロトコル (URIスキーム) を使用してリソースを呼び出す
+                uri = f"steam://rungameid/{resource_id}"
+                self.logger.log(f"[INFO] Triggering external protocol: {resource_id}")
+                
+                if sys.platform == 'win32':
+                    os.startfile(uri)
+                elif sys.platform == 'darwin':
+                    subprocess.run(['open', uri])
+                else:
+                    # Linuxの場合、バックグラウンドで実行するためにPopenを使う
+                    subprocess.Popen(['xdg-open', uri], 
+                                     stdout=subprocess.DEVNULL, 
+                                     stderr=subprocess.DEVNULL)
+                
+                return True
+
+            elif exec_path and os.path.exists(exec_path):
+                # 実行ファイルを直接コンテキストとしてロード
+                self.logger.log(f"[INFO] Loading executable context directly: {Path(exec_path).name}")
+                
+                # ワーキングディレクトリを実行ファイルの場所に合わせる
+                work_dir = os.path.dirname(exec_path)
+                subprocess.Popen(exec_path, cwd=work_dir)
+                
+                return True
+            
+            else:
+                self.logger.log("[ERROR] Reload failed: No valid resource context found.")
+                return False
+
+        except Exception as e:
+            self.logger.log(f"[ERROR] Session reload exception: {e}")
+            return False
+    # --- ▲▲▲ 追加完了 ▲▲▲ ---
