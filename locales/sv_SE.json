@@ -399,12 +399,12 @@
     "log_sequence_started": "Sekventiellt prioritetsläge startat. Återstående steg: %s",
     "log_sequence_next_step": "Sekvenssteg: Söker efter '%s'",
     "log_sequence_completed": "Sekventiellt prioritetsläge slutfört.",
-    "capture_image_tooltip": "Skärmdump<br>F10 Fönsterdump",
+    "capture_image_tooltip": "Skärmdump<br>Snabbdump med mittenknappen",
     "log_click_success": "log_click_success",
-    "log_capture_hotkey_rect_fullscreen": "log_capture_hotkey_rect_fullscreen",
-    "log_capture_hotkey_window_capture": "log_capture_hotkey_window_capture",
+    "log_capture_hotkey_rect_fullscreen": "Mittenknappen: Startar dumpning med helskärms-/rektangelinställningar.",
+    "log_capture_hotkey_window_capture": "Mittenknappen: Startar fönsterdumpning baserat på fönsterinställningar.",
     "log_error_hotkey_listener": "log_error_hotkey_listener",
     "warn_capture_no_window_target": "warn_capture_no_window_target",
-    "log_warn_window_activation_failed_for_capture": "log_warn_window_activation_failed_for_capture",
-    "log_error_hotkey_window_capture": "log_error_hotkey_window_capture"
+    "log_warn_window_activation_failed_for_capture": "Varning: Misslyckades med att aktivera målfönstret innan dumpning med mittenknappen.",
+    "log_error_hotkey_window_capture": "Fel uppstod vid F10-fönsterdumpning: %s"
 }

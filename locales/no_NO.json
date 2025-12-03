@@ -399,12 +399,12 @@
     "log_sequence_started": "Sekvensiell prioritetsmodus startet. Gjenstående trinn: %s",
     "log_sequence_next_step": "Sekvenstrinn: Søker etter '%s'",
     "log_sequence_completed": "Sekvensiell prioritetsmodus fullført.",
-    "capture_image_tooltip": "Skjermbilde<br>F10 Vindusbilde",
+    "capture_image_tooltip": "Skjermbilde<br>Hurtigopptak med midtre museknapp",
     "log_click_success": "log_click_success",
-    "log_capture_hotkey_rect_fullscreen": "log_capture_hotkey_rect_fullscreen",
-    "log_capture_hotkey_window_capture": "log_capture_hotkey_window_capture",
+    "log_capture_hotkey_rect_fullscreen": "Midtre museknapp: Starter opptak med fullskjerm-/rektangelinnstillinger.",
+    "log_capture_hotkey_window_capture": "Midtre museknapp: Starter vindusopptak basert på vindusinnstillinger.",
     "log_error_hotkey_listener": "log_error_hotkey_listener",
     "warn_capture_no_window_target": "warn_capture_no_window_target",
-    "log_warn_window_activation_failed_for_capture": "log_warn_window_activation_failed_for_capture",
-    "log_error_hotkey_window_capture": "log_error_hotkey_window_capture"
+    "log_warn_window_activation_failed_for_capture": "Advarsel: Klarte ikke å aktivere målvinduet før opptak med midtre museknapp.",
+    "log_error_hotkey_window_capture": "Feil oppsto under F10-vindusopptak: %s"
 }

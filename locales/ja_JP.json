@@ -421,10 +421,10 @@
     "log_sequence_started": "順序優先モードを開始しました。残りステップ: %s",
     "log_sequence_next_step": "順序シーケンス: '%s' を検索中...",
     "log_sequence_completed": "順序優先モードが完了しました。",
-    "capture_image_tooltip": "画面キャプチャ<br>F10 ウインドウ画面キャプチャ",
-    "log_capture_hotkey_rect_fullscreen": "F10: 全画面/矩形設定でキャプチャを開始します。",
-    "log_capture_hotkey_window_capture": "F10: ウィンドウ設定に基づき、ウィンドウキャプチャを開始します。",
+    "capture_image_tooltip": "画面キャプチャ<br>マウス中ボタンでクイックキャプチャ",
+    "log_capture_hotkey_rect_fullscreen": "マウス中ボタン: 全画面/矩形設定でキャプチャを開始します。",
+    "log_capture_hotkey_window_capture": "マウス中ボタン: ウィンドウ設定に基づき、ウィンドウキャプチャを開始します。",
     "warn_capture_no_window_target": "ウィンドウが設定されていません。手動でウィンドウを選択してください。",
-    "log_warn_window_activation_failed_for_capture": "警告: F10キャプチャ前にターゲットウィンドウのアクティブ化に失敗しました。",
+    "log_warn_window_activation_failed_for_capture": "警告: マウス中ボタン キャプチャ前にターゲットウィンドウのアクティブ化に失敗しました。",
     "log_error_hotkey_window_capture": "F10ウィンドウキャプチャ中にエラーが発生しました: %s"
 }

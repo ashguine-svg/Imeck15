@@ -399,9 +399,11 @@
     "log_sequence_started": "Sequentiële prioriteitsmodus gestart. Resterende stappen: %s",
     "log_sequence_next_step": "Volgordestap: Zoeken naar '%s'",
     "log_sequence_completed": "Sequentiële prioriteitsmodus voltooid.",
-    "capture_image_tooltip": "Schermopname<br>F10 Vensteropname",
+    "capture_image_tooltip": "Schermopname<br>Snel vastleggen met middelste muisknop",
     "log_click_success": "log_click_success",
-    "log_capture_hotkey_rect_fullscreen": "log_capture_hotkey_rect_fullscreen",
-    "log_capture_hotkey_window_capture": "log_capture_hotkey_window_capture",
-    "log_error_hotkey_listener": "log_error_hotkey_listener"
+    "log_capture_hotkey_rect_fullscreen": "Middelste muisknop: Start opname met volledig scherm/rechthoek instellingen.",
+    "log_capture_hotkey_window_capture": "Middelste muisknop: Start vensteropname op basis van vensterinstellingen.",
+    "log_error_hotkey_listener": "log_error_hotkey_listener",
+    "log_warn_window_activation_failed_for_capture": "Waarschuwing: Kan doelvenster niet activeren voor opname met middelste muisknop.",
+    "log_error_hotkey_window_capture": "Fout opgetreden tijdens F10 vensteropname: %s"
 }

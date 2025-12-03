@@ -399,12 +399,12 @@
     "log_sequence_started": "Modalità priorità sequenziale avviata. Passi rimanenti: %s",
     "log_sequence_next_step": "Passo sequenza: Ricerca di '%s'",
     "log_sequence_completed": "Modalità priorità sequenziale completata.",
-    "capture_image_tooltip": "Cattura schermo<br>F10 Cattura finestra",
+    "capture_image_tooltip": "Cattura schermo<br>Cattura rapida con tasto centrale",
     "log_click_success": "log_click_success",
-    "log_capture_hotkey_rect_fullscreen": "log_capture_hotkey_rect_fullscreen",
-    "log_capture_hotkey_window_capture": "log_capture_hotkey_window_capture",
+    "log_capture_hotkey_rect_fullscreen": "Tasto centrale: Avvia cattura con impostazioni schermo intero/rettangolo.",
+    "log_capture_hotkey_window_capture": "Tasto centrale: Avvia cattura finestra in base alle impostazioni.",
     "log_error_hotkey_listener": "log_error_hotkey_listener",
     "warn_capture_no_window_target": "warn_capture_no_window_target",
-    "log_warn_window_activation_failed_for_capture": "log_warn_window_activation_failed_for_capture",
-    "log_error_hotkey_window_capture": "log_error_hotkey_window_capture"
+    "log_warn_window_activation_failed_for_capture": "Avviso: Impossibile attivare la finestra di destinazione prima della cattura con tasto centrale.",
+    "log_error_hotkey_window_capture": "Errore durante la cattura finestra F10: %s"
 }

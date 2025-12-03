@@ -399,12 +399,12 @@
     "log_sequence_started": "تم بدء وضع الأولوية التسلسلية. الخطوات المتبقية: %s",
     "log_sequence_next_step": "خطوة التسلسل: البحث عن '%s'",
     "log_sequence_completed": "اكتمل وضع الأولوية التسلسلية.",
-    "capture_image_tooltip": "لقطة الشاشة<br>F10 لقطة النافذة",
+    "capture_image_tooltip": "التقاط الشاشة<br>التقاط سريع باستخدام زر الماوس الأوسط",
     "log_click_success": "log_click_success",
-    "log_capture_hotkey_rect_fullscreen": "log_capture_hotkey_rect_fullscreen",
-    "log_capture_hotkey_window_capture": "log_capture_hotkey_window_capture",
+    "log_capture_hotkey_rect_fullscreen": "زر الماوس الأوسط: يبدأ الالتقاط بإعدادات ملء الشاشة/المستطيل.",
+    "log_capture_hotkey_window_capture": "زر الماوس الأوسط: يبدأ التقاط النافذة بناءً على إعدادات النافذة.",
     "log_error_hotkey_listener": "log_error_hotkey_listener",
     "warn_capture_no_window_target": "warn_capture_no_window_target",
-    "log_warn_window_activation_failed_for_capture": "log_warn_window_activation_failed_for_capture",
-    "log_error_hotkey_window_capture": "log_error_hotkey_window_capture"
+    "log_warn_window_activation_failed_for_capture": "تحذير: فشل تنشيط النافذة المستهدفة قبل الالتقاط بزر الماوس الأوسط.",
+    "log_error_hotkey_window_capture": "حدث خطأ أثناء التقاط نافذة F10: %s"
 }

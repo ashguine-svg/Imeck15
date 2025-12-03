@@ -399,6 +399,10 @@
     "log_sequence_started": "Sıralı öncelik modu başlatıldı. Kalan adımlar: %s",
     "log_sequence_next_step": "Sıra adımı: '%s' aranıyor",
     "log_sequence_completed": "Sıralı öncelik modu tamamlandı.",
-    "capture_image_tooltip": "Ekran Görüntüsü<br>F10 Pencere Görüntüsü",
-    "log_click_success": "log_click_success"
+    "capture_image_tooltip": "Ekran Görüntüsü<br>Orta fare tuşuyla hızlı çekim",
+    "log_click_success": "log_click_success",
+    "log_capture_hotkey_rect_fullscreen": "Orta fare tuşu: Tam ekran/dikdörtgen ayarlarıyla çekimi başlatır.",
+    "log_capture_hotkey_window_capture": "Orta fare tuşu: Pencere ayarlarına göre pencere yakalamayı başlatır.",
+    "log_warn_window_activation_failed_for_capture": "Uyarı: Orta fare tuşuyla yakalamadan önce hedef pencere etkinleştirilemedi.",
+    "log_error_hotkey_window_capture": "F10 pencere yakalama sırasında hata oluştu: %s"
 }

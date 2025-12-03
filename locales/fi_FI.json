@@ -399,12 +399,12 @@
     "log_sequence_started": "Sekventiaalinen prioriteettitila käynnistetty. Vaiheita jäljellä: %s",
     "log_sequence_next_step": "Sekvenssivaihe: Etsitään '%s'",
     "log_sequence_completed": "Sekventiaalinen prioriteettitila valmis.",
-    "capture_image_tooltip": "Kuvakaappaus<br>F10 Ikkunakaappaus",
+    "capture_image_tooltip": "Kuvakaappaus<br>Pikakaappaus hiiren keskipainikkeella",
     "log_click_success": "log_click_success",
-    "log_capture_hotkey_rect_fullscreen": "log_capture_hotkey_rect_fullscreen",
-    "log_capture_hotkey_window_capture": "log_capture_hotkey_window_capture",
+    "log_capture_hotkey_rect_fullscreen": "Hiiren keskipainike: Aloittaa kaappauksen koko näyttö/suorakulmio -asetuksilla.",
+    "log_capture_hotkey_window_capture": "Hiiren keskipainike: Aloittaa ikkunakaappauksen ikkuna-asetusten perusteella.",
     "log_error_hotkey_listener": "log_error_hotkey_listener",
     "warn_capture_no_window_target": "warn_capture_no_window_target",
-    "log_warn_window_activation_failed_for_capture": "log_warn_window_activation_failed_for_capture",
-    "log_error_hotkey_window_capture": "log_error_hotkey_window_capture"
+    "log_warn_window_activation_failed_for_capture": "Varoitus: Kohdeikkunan aktivointi epäonnistui ennen hiiren keskipainikkeen kaappausta.",
+    "log_error_hotkey_window_capture": "Virhe F10-ikkunakaappauksessa: %s"
 }

@@ -397,11 +397,11 @@
     "log_sequence_started": "Modo de prioridad secuencial iniciado. Pasos restantes: %s",
     "log_sequence_next_step": "Paso de secuencia: Buscando '%s'",
     "log_sequence_completed": "Modo de prioridad secuencial completado.",
-    "capture_image_tooltip": "Captura de pantalla<br>F10 Captura de ventana",
-    "log_capture_hotkey_rect_fullscreen": "log_capture_hotkey_rect_fullscreen",
-    "log_capture_hotkey_window_capture": "log_capture_hotkey_window_capture",
+    "capture_image_tooltip": "Captura de pantalla<br>Captura rápida con botón central",
+    "log_capture_hotkey_rect_fullscreen": "Botón central: Inicia captura con ajustes de pantalla completa/rectángulo.",
+    "log_capture_hotkey_window_capture": "Botón central: Inicia captura de ventana según la configuración.",
     "log_error_hotkey_listener": "log_error_hotkey_listener",
     "warn_capture_no_window_target": "warn_capture_no_window_target",
-    "log_warn_window_activation_failed_for_capture": "log_warn_window_activation_failed_for_capture",
-    "log_error_hotkey_window_capture": "log_error_hotkey_window_capture"
+    "log_warn_window_activation_failed_for_capture": "Advertencia: Fallo al activar la ventana objetivo antes de la captura con botón central.",
+    "log_error_hotkey_window_capture": "Ocurrió un error durante la captura de ventana con F10: %s"
 }

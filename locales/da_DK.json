@@ -399,12 +399,12 @@
     "log_sequence_started": "Sekventiel prioritetstilstand startet. Resterende trin: %s",
     "log_sequence_next_step": "Sekvenstrin: Søger efter '%s'",
     "log_sequence_completed": "Sekventiel prioritetstilstand afsluttet.",
-    "capture_image_tooltip": "Skærmbillede<br>F10 Vinduesbillede",
+    "capture_image_tooltip": "Skærmoptagelse<br>Hurtig optagelse med midterste museknap",
     "log_click_success": "log_click_success",
-    "log_capture_hotkey_rect_fullscreen": "log_capture_hotkey_rect_fullscreen",
-    "log_capture_hotkey_window_capture": "log_capture_hotkey_window_capture",
+    "log_capture_hotkey_rect_fullscreen": "Midterste museknap: Starter optagelse med fuldskærm/rektangel indstillinger.",
+    "log_capture_hotkey_window_capture": "Midterste museknap: Starter vinduesoptagelse baseret på vinduesindstillinger.",
     "log_error_hotkey_listener": "log_error_hotkey_listener",
     "warn_capture_no_window_target": "warn_capture_no_window_target",
-    "log_warn_window_activation_failed_for_capture": "log_warn_window_activation_failed_for_capture",
-    "log_error_hotkey_window_capture": "log_error_hotkey_window_capture"
+    "log_warn_window_activation_failed_for_capture": "Advarsel: Kunne ikke aktivere målvinduet før optagelse med midterste museknap.",
+    "log_error_hotkey_window_capture": "Der opstod en fejl under F10 vinduesoptagelse: %s"
 }

@@ -397,11 +397,11 @@
     "log_sequence_started": "Sequenzieller Prioritätsmodus gestartet. Verbleibende Schritte: %s",
     "log_sequence_next_step": "Sequenzschritt: Suche nach '%s'",
     "log_sequence_completed": "Sequenzieller Prioritätsmodus abgeschlossen.",
-    "capture_image_tooltip": "Bildschirmaufnahme<br>F10 Fensteraufnahme",
-    "log_capture_hotkey_rect_fullscreen": "log_capture_hotkey_rect_fullscreen",
-    "log_capture_hotkey_window_capture": "log_capture_hotkey_window_capture",
+    "capture_image_tooltip": "Bildschirmaufnahme<br>Schnellaufnahme mit mittlerer Maustaste",
+    "log_capture_hotkey_rect_fullscreen": "Mittlere Maustaste: Startet Aufnahme mit Vollbild-/Rechteckeinstellungen.",
+    "log_capture_hotkey_window_capture": "Mittlere Maustaste: Startet Fensteraufnahme basierend auf Fenstereinstellungen.",
     "log_error_hotkey_listener": "log_error_hotkey_listener",
     "warn_capture_no_window_target": "warn_capture_no_window_target",
-    "log_warn_window_activation_failed_for_capture": "log_warn_window_activation_failed_for_capture",
-    "log_error_hotkey_window_capture": "log_error_hotkey_window_capture"
+    "log_warn_window_activation_failed_for_capture": "Warnung: Zielfenster konnte vor der Aufnahme mit mittlerer Maustaste nicht aktiviert werden.",
+    "log_error_hotkey_window_capture": "Fehler bei der F10-Fensteraufnahme: %s"
 }

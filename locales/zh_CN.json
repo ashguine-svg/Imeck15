@@ -397,12 +397,12 @@
     "log_sequence_started": "顺序优先模式已启动。剩余步骤：%s",
     "log_sequence_next_step": "顺序步骤：正在搜索 '%s'",
     "log_sequence_completed": "顺序优先模式已完成。",
-    "capture_image_tooltip": "屏幕截图<br>F10 窗口截图",
+    "capture_image_tooltip": "屏幕截图<br>鼠标中键快速截图",
     "log_click_success": "log_click_success",
-    "log_capture_hotkey_rect_fullscreen": "log_capture_hotkey_rect_fullscreen",
-    "log_capture_hotkey_window_capture": "log_capture_hotkey_window_capture",
+    "log_capture_hotkey_rect_fullscreen": "鼠标中键：使用全屏/矩形设置开始截图。",
+    "log_capture_hotkey_window_capture": "鼠标中键：根据窗口设置开始窗口截图。",
     "log_error_hotkey_listener": "log_error_hotkey_listener",
     "warn_capture_no_window_target": "warn_capture_no_window_target",
-    "log_warn_window_activation_failed_for_capture": "log_warn_window_activation_failed_for_capture",
-    "log_error_hotkey_window_capture": "log_error_hotkey_window_capture"
+    "log_warn_window_activation_failed_for_capture": "警告：鼠标中键截图前无法激活目标窗口。",
+    "log_error_hotkey_window_capture": "F10窗口截图时发生错误：%s"
 }

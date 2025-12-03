@@ -399,12 +399,12 @@
     "log_sequence_started": "Sequential priority mode started. Steps remaining: %s",
     "log_sequence_next_step": "Sequence step: Searching for '%s'",
     "log_sequence_completed": "Sequential priority mode completed.",
-    "capture_image_tooltip": "Screen Capture<br>F10 Window Capture",
+    "capture_image_tooltip": "Screen capture<br>Quick capture with middle mouse button",
     "log_click_success": "Click: %s @(%s, %s) conf:%s",
-    "log_capture_hotkey_rect_fullscreen": "F10: Starting capture with Full Screen/Rectangle setting.",
-    "log_capture_hotkey_window_capture": "F10: Starting window capture based on Window setting.",
+    "log_capture_hotkey_rect_fullscreen": "Middle mouse button: Starts capture with full screen/rectangle settings.",
+    "log_capture_hotkey_window_capture": "Middle mouse button: Starts window capture based on window settings.",
     "log_error_hotkey_listener": "An error occurred in the hotkey listener: %s",
     "warn_capture_no_window_target": "Window is not set. Please select a window manually.",
-    "log_warn_window_activation_failed_for_capture": "Warning: Failed to activate the target window before F10 capture.",
-    "log_error_hotkey_window_capture": "An error occurred during F10 window capture: %s"
+    "log_warn_window_activation_failed_for_capture": "Warning: Failed to activate target window before middle mouse button capture.",
+    "log_error_hotkey_window_capture": "Error occurred during F10 window capture: %s"
 }

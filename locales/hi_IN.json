@@ -398,11 +398,11 @@
     "log_sequence_started": "अनुक्रमिक प्राथमिकता मोड शुरू हुआ। शेष चरण: %s",
     "log_sequence_next_step": "अनुक्रम चरण: '%s' की खोज कर रहा है",
     "log_sequence_completed": "अनुक्रमिक प्राथमिकता मोड पूरा हुआ।",
-    "capture_image_tooltip": "स्क्रीन कैप्चर<br>F10 विंडो कैप्चर",
-    "log_capture_hotkey_rect_fullscreen": "log_capture_hotkey_rect_fullscreen",
-    "log_capture_hotkey_window_capture": "log_capture_hotkey_window_capture",
+    "capture_image_tooltip": "स्क्रीन कैप्चर<br>माउस के मध्य बटन से त्वरित कैप्चर",
+    "log_capture_hotkey_rect_fullscreen": "माउस का मध्य बटन: पूर्ण स्क्रीन/आयत सेटिंग्स के साथ कैप्चर शुरू करता है।",
+    "log_capture_hotkey_window_capture": "माउस का मध्य बटन: विंडो सेटिंग्स के आधार पर विंडो कैप्चर शुरू करता है।",
     "log_error_hotkey_listener": "log_error_hotkey_listener",
     "warn_capture_no_window_target": "warn_capture_no_window_target",
-    "log_warn_window_activation_failed_for_capture": "log_warn_window_activation_failed_for_capture",
-    "log_error_hotkey_window_capture": "log_error_hotkey_window_capture"
+    "log_warn_window_activation_failed_for_capture": "चेतावनी: माउस के मध्य बटन कैप्चर से पहले लक्ष्य विंडो को सक्रिय करने में विफल।",
+    "log_error_hotkey_window_capture": "F10 विंडो कैप्चर के दौरान त्रुटि हुई: %s"
 }

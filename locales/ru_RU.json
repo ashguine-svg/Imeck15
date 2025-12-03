@@ -398,11 +398,11 @@
     "log_sequence_started": "Запущен режим последовательного приоритета. Осталось шагов: %s",
     "log_sequence_next_step": "Шаг последовательности: Поиск '%s'",
     "log_sequence_completed": "Режим последовательного приоритета завершен.",
-    "capture_image_tooltip": "Захват экрана<br>F10 Захват окна",
-    "log_capture_hotkey_rect_fullscreen": "log_capture_hotkey_rect_fullscreen",
-    "log_capture_hotkey_window_capture": "log_capture_hotkey_window_capture",
+    "capture_image_tooltip": "Захват экрана<br>Быстрый захват средней кнопкой мыши",
+    "log_capture_hotkey_rect_fullscreen": "Средняя кнопка мыши: Запуск захвата с настройками полного экрана/прямоугольника.",
+    "log_capture_hotkey_window_capture": "Средняя кнопка мыши: Запуск захвата окна на основе настроек.",
     "log_error_hotkey_listener": "log_error_hotkey_listener",
     "warn_capture_no_window_target": "warn_capture_no_window_target",
-    "log_warn_window_activation_failed_for_capture": "log_warn_window_activation_failed_for_capture",
-    "log_error_hotkey_window_capture": "log_error_hotkey_window_capture"
+    "log_warn_window_activation_failed_for_capture": "Предупреждение: Не удалось активировать целевое окно перед захватом средней кнопкой мыши.",
+    "log_error_hotkey_window_capture": "Ошибка при захвате окна F10: %s"
 }

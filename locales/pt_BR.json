@@ -399,12 +399,12 @@
     "log_sequence_started": "Modo de prioridade sequencial iniciado. Etapas restantes: %s",
     "log_sequence_next_step": "Etapa da sequência: Buscando por '%s'",
     "log_sequence_completed": "Modo de prioridade sequencial concluído.",
-    "capture_image_tooltip": "Captura de tela<br>F10 Captura de janela",
+    "capture_image_tooltip": "Captura de tela<br>Captura rápida com botão do meio",
     "log_click_success": "log_click_success",
-    "log_capture_hotkey_rect_fullscreen": "log_capture_hotkey_rect_fullscreen",
-    "log_capture_hotkey_window_capture": "log_capture_hotkey_window_capture",
+    "log_capture_hotkey_rect_fullscreen": "Botão do meio: Inicia captura com configurações de tela cheia/retângulo.",
+    "log_capture_hotkey_window_capture": "Botão do meio: Inicia captura de janela com base nas configurações.",
     "log_error_hotkey_listener": "log_error_hotkey_listener",
     "warn_capture_no_window_target": "warn_capture_no_window_target",
-    "log_warn_window_activation_failed_for_capture": "log_warn_window_activation_failed_for_capture",
-    "log_error_hotkey_window_capture": "log_error_hotkey_window_capture"
+    "log_warn_window_activation_failed_for_capture": "Aviso: Falha ao ativar a janela de destino antes da captura com botão do meio.",
+    "log_error_hotkey_window_capture": "Erro durante a captura de janela F10: %s"
 }

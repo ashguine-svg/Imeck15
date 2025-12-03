@@ -399,12 +399,12 @@
     "log_sequence_started": "Uruchomiono tryb priorytetu sekwencyjnego. Pozostałe kroki: %s",
     "log_sequence_next_step": "Krok sekwencji: Szukanie '%s'",
     "log_sequence_completed": "Tryb priorytetu sekwencyjnego zakończony.",
-    "capture_image_tooltip": "Zrzut ekranu<br>F10 Zrzut okna",
+    "capture_image_tooltip": "Zrzut ekranu<br>Szybki zrzut środkowym przyciskiem myszy",
     "log_click_success": "log_click_success",
-    "log_capture_hotkey_rect_fullscreen": "log_capture_hotkey_rect_fullscreen",
-    "log_capture_hotkey_window_capture": "log_capture_hotkey_window_capture",
+    "log_capture_hotkey_rect_fullscreen": "Środkowy przycisk myszy: Rozpoczyna zrzut z ustawieniami pełnego ekranu/prostokąta.",
+    "log_capture_hotkey_window_capture": "Środkowy przycisk myszy: Rozpoczyna zrzut okna na podstawie ustawień.",
     "log_error_hotkey_listener": "log_error_hotkey_listener",
     "warn_capture_no_window_target": "warn_capture_no_window_target",
-    "log_warn_window_activation_failed_for_capture": "log_warn_window_activation_failed_for_capture",
-    "log_error_hotkey_window_capture": "log_error_hotkey_window_capture"
+    "log_warn_window_activation_failed_for_capture": "Ostrzeżenie: Nie udało się aktywować okna docelowego przed zrzutem środkowym przyciskiem myszy.",
+    "log_error_hotkey_window_capture": "Wystąpił błąd podczas zrzutu okna F10: %s"
 }
