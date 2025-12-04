@@ -1,6 +1,7 @@
 # action.py
 # ★★★ (拡張) ライフサイクル管理用のセッション操作メソッドを追加 ★★★
 # ★★★ (修正) フリーズ時は問答無用でSIGKILLし、OSの応答なしダイアログを回避する ★★★
+# ★★★ (修正) Windowsで対象ウィンドウを強力に最前面化するロジックを追加 ★★★
 
 import sys
 import time
@@ -11,6 +12,7 @@ import subprocess
 import os
 from pathlib import Path
 
+# Windows API用のインポート (プラットフォーム依存)
 if sys.platform == 'win32':
     try:
         import ctypes
@@ -18,6 +20,8 @@ if sys.platform == 'win32':
         import win32con
         import win32process
         import win32api
+        
+        # 入力ブロック用
         block_input_func = ctypes.windll.user32.BlockInput
         block_input_func.argtypes = [ctypes.wintypes.BOOL]
         block_input_func.restype = ctypes.wintypes.BOOL
@@ -55,55 +59,118 @@ class ActionManager:
     def _activate_window(self, target_hwnd) -> bool:
         """
         指定されたウィンドウをフォアグラウンドにし、アクティブ化を試みます。
-        タスクバーが点滅する問題を回避するための高度な手法を使用します。
+        Windowsの「前面化ブロック」機能を回避するためのハックを含みます。
         
         Returns:
             bool: アクティブ化に成功したかどうか。
         """
         if not (sys.platform == 'win32' and target_hwnd):
-            return True # Windows以外、または対象なしは「成功」扱い
+            # Windows以外、または対象HWNDなし(矩形選択など)はそのまま成功扱い
+            return True
 
         # ターゲットが既にフォアグラウンドなら何もしない
-        if win32gui.GetForegroundWindow() == target_hwnd:
-            return True # 既にアクティブ
+        try:
+            current_foreground = win32gui.GetForegroundWindow()
+            if current_foreground == target_hwnd:
+                return True
+        except Exception:
+            pass
 
         try:
             # 現在フォアグラウンドのウィンドウのスレッドIDを取得
-            foreground_thread_id, _ = win32process.GetWindowThreadProcessId(win32gui.GetForegroundWindow())
+            foreground_hwnd = win32gui.GetForegroundWindow()
+            foreground_thread_id = 0
+            if foreground_hwnd:
+                foreground_thread_id, _ = win32process.GetWindowThreadProcessId(foreground_hwnd)
+            
+            # ターゲットウィンドウのスレッドIDを取得
+            target_thread_id, _ = win32process.GetWindowThreadProcessId(target_hwnd)
+            
             # 自分自身のスレッドIDを取得
             current_thread_id = win32api.GetCurrentThreadId()
 
-            # フォアグラウンドスレッドの入力処理にアタッチする
-            win32process.AttachThreadInput(foreground_thread_id, current_thread_id, True)
+            # 入力処理のアタッチ（フォアグラウンドプロセスとターゲットプロセスの両方にアタッチを試みる）
+            # これにより「自分がアクティブウィンドウの所有者である」とOSに誤認させ、操作権限を得る
+            attached_foreground = False
+            attached_target = False
+
+            if foreground_thread_id != current_thread_id and foreground_thread_id != 0:
+                try:
+                    win32process.AttachThreadInput(foreground_thread_id, current_thread_id, True)
+                    attached_foreground = True
+                except Exception:
+                    pass
+            
+            if target_thread_id != current_thread_id and target_thread_id != 0:
+                try:
+                    win32process.AttachThreadInput(target_thread_id, current_thread_id, True)
+                    attached_target = True
+                except Exception:
+                    pass
 
             try:
-                # 最小化されている場合は通常の状態に戻す
+                # 最小化されている場合は元に戻す (SW_RESTORE = 9)
                 if win32gui.IsIconic(target_hwnd):
-                    win32gui.ShowWindow(target_hwnd, win32con.SW_NORMAL)
-                
+                    win32gui.ShowWindow(target_hwnd, win32con.SW_RESTORE)
+                else:
+                    # 最小化されていなくても、隠れている可能性があるので表示を強制
+                    win32gui.ShowWindow(target_hwnd, win32con.SW_SHOW)
+
+                # Zオーダーのトップに持ってくる
+                try:
+                    win32gui.BringWindowToTop(target_hwnd)
+                except Exception:
+                    pass
+
                 # --- リトライロジック ---
                 retries = 3
                 while retries > 0:
-                    win32gui.SetForegroundWindow(target_hwnd)
-                    time.sleep(0.1)
+                    try:
+                        win32gui.SetForegroundWindow(target_hwnd)
+                    except Exception:
+                        pass 
+                    
+                    # OSのスイッチ完了待ち
+                    time.sleep(0.05)
                     
                     if win32gui.GetForegroundWindow() == target_hwnd:
-                        self.logger.log("log_activate_window_success", win32gui.GetWindowText(target_hwnd))
                         return True
                         
                     retries -= 1
                 # --- ▲▲▲ ---
+                
+                # 最終手段: Altキーハック
+                # SetForegroundWindowが拒否された場合、Altキー入力イベントを偽装して
+                # OSに「ユーザー操作があった」と認識させ、前面化を許可させる
+                if win32gui.GetForegroundWindow() != target_hwnd:
+                    try:
+                        import ctypes
+                        # Alt key press
+                        ctypes.windll.user32.keybd_event(0x12, 0, 0, 0)
+                        # Alt key release
+                        ctypes.windll.user32.keybd_event(0x12, 0, 2, 0)
+                        win32gui.SetForegroundWindow(target_hwnd)
+                    except Exception:
+                        pass
 
             finally:
-                # 処理が終わったら、必ずデタッチする
-                win32process.AttachThreadInput(foreground_thread_id, current_thread_id, False)
+                # 処理が終わったら、必ずデタッチする (忘れると入力がおかしくなる)
+                if attached_foreground:
+                    win32process.AttachThreadInput(foreground_thread_id, current_thread_id, False)
+                if attached_target:
+                    win32process.AttachThreadInput(target_thread_id, current_thread_id, False)
+
+            # 最終チェック
+            if win32gui.GetForegroundWindow() == target_hwnd:
+                return True
 
             # リトライしても失敗した場合
-            self.logger.log("log_activate_window_failed", win32gui.GetWindowText(target_hwnd))
+            self.logger.log("log_activate_window_failed", str(target_hwnd))
             return False
 
         except Exception as e:
             self.logger.log("log_activate_window_error", str(e))
+            # アクティブ化に失敗しても、クリック処理自体は続行させる（非アクティブでも通る場合があるため）
             return False
 
     def execute_click(self, match_info, recognition_area, target_hwnd, effective_capture_scale, window_scale=1.0):
@@ -111,9 +178,11 @@ class ActionManager:
         マッチング情報に基づいてクリックを実行します。
         """
         
-        is_active = self._activate_window(target_hwnd)
-        if not is_active:
-            return {'success': False, 'path': match_info.get('path', 'Unknown')}
+        # --- ▼▼▼ 修正: クリック前にウィンドウをアクティブ化 ▼▼▼ ---
+        if target_hwnd:
+            # アクティブ化を試みる (失敗してもログを出すだけで処理は止めない)
+            self._activate_window(target_hwnd)
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
         block_input(True)
         try:
