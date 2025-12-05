@@ -102,11 +102,17 @@ def restart_application():
 def main():
     global app
     
+    # 修正箇所: Windowsの高DPI設定を強化 (Nuitka exe対策)
     if sys.platform == 'win32':
         try:
-            ctypes.windll.user32.SetProcessDPIAware()
-        except Exception as e:
-            print(f"[WARN] Failed to call SetProcessDPIAware(): {e}")
+            # Windows 8.1 以降向けの強力な設定 (PROCESS_SYSTEM_DPI_AWARE = 1)
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        except Exception:
+            try:
+                # Windows Vista/7 向けのフォールバック
+                ctypes.windll.user32.SetProcessDPIAware()
+            except Exception:
+                pass
 
     app = QApplication.instance() or QApplication(sys.argv)
     

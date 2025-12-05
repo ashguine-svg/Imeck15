@@ -387,17 +387,35 @@ class AppSettingsPanel(QObject):
         self.app_settings_widgets['lightweight_mode_enabled'].setText(lm("app_setting_lw_mode_enable"))
         self.lw_mode_preset_label.setText(lm("app_setting_lw_mode_preset"))
         
-        current_preset_index = self.app_settings_widgets['lightweight_mode_preset'].currentIndex()
+        # --- 修正: 設定からプリセット値を正しく反映させる ---
         self.app_settings_widgets['lightweight_mode_preset'].blockSignals(True)
         self.app_settings_widgets['lightweight_mode_preset'].clear()
-        self.app_settings_widgets['lightweight_mode_preset'].addItems([
-            lm("app_setting_lw_mode_preset_standard"),
-            lm("app_setting_lw_mode_preset_performance"),
-            lm("app_setting_lw_mode_preset_ultra")
-        ])
-        if current_preset_index != -1 and current_preset_index < self.app_settings_widgets['lightweight_mode_preset'].count():
-             self.app_settings_widgets['lightweight_mode_preset'].setCurrentIndex(current_preset_index)
+        
+        # 項目リストを定義
+        preset_items = [
+            lm("app_setting_lw_mode_preset_standard"),    # index 0: standard
+            lm("app_setting_lw_mode_preset_performance"), # index 1: performance
+            lm("app_setting_lw_mode_preset_ultra")        # index 2: ultra
+        ]
+        self.app_settings_widgets['lightweight_mode_preset'].addItems(preset_items)
+
+        # Configから保存された設定値を取得 ('standard' / 'performance' / 'ultra')
+        saved_preset_key = self.app_config.get('lightweight_mode', {}).get('preset', 'standard')
+        
+        # 内部キーをインデックスにマッピング
+        target_index = 0
+        if saved_preset_key == 'performance':
+            target_index = 1
+        elif saved_preset_key == 'ultra':
+            target_index = 2
+        
+        # 正しいインデックスを選択
+        if target_index < self.app_settings_widgets['lightweight_mode_preset'].count():
+             self.app_settings_widgets['lightweight_mode_preset'].setCurrentIndex(target_index)
+             
         self.app_settings_widgets['lightweight_mode_preset'].blockSignals(False)
+        # ----------------------------------------------------
+
         self.lw_mode_desc_label.setText(lm("app_setting_lw_mode_desc"))
 
         self.lang_label.setText(lm("app_setting_language_label"))

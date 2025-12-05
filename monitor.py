@@ -1,4 +1,5 @@
 # monitor.py
+# ★★★ (修正) CPU使用率を全コアに対する割合(0-100%)に正規化 ★★★
 
 import sys
 import time
@@ -31,6 +32,7 @@ class PerformanceMonitor(QDialog):
         self.setMinimumSize(200, 40) 
 
         self.process = psutil.Process()
+        # 初回呼び出しは0.0になることがあるため空読み
         self.process.cpu_percent(interval=None)
         
         self.last_cpu_percent = 0.0
@@ -69,8 +71,11 @@ class PerformanceMonitor(QDialog):
 
     def update_performance_info(self):
         try:
-            self.last_cpu_percent = self.process.cpu_percent(interval=None) 
-            self.process.cpu_percent() 
+            # --- ▼▼▼ 修正: CPU使用率をコア数で割って正規化 (0-100%範囲に) ▼▼▼ ---
+            raw_cpu = self.process.cpu_percent(interval=None)
+            num_cores = psutil.cpu_count() or 1
+            self.last_cpu_percent = raw_cpu / num_cores
+            # --- ▲▲▲ 修正完了 ▲▲▲ ---
             
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             self.update_timer.stop()

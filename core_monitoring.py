@@ -1,6 +1,6 @@
 # core_monitoring.py
 # 監視ループ、マッチング、アクション実行を担当
-# ★★★ (拡張) ライフサイクル管理機能 (フリーズ検知・クラッシュ検知・復旧中の待機ロジック) を追加 ★★★
+# ★★★ (修正) CPU使用率を全コアに対する割合(0-100%)に正規化 ★★★
 
 import time
 import cv2
@@ -40,13 +40,10 @@ class MonitoringProcessor:
 
         while self.core.is_monitoring:
             
-            # --- ▼▼▼ 修正: 復旧中の待機ロジック (空転) ▼▼▼ ---
-            # 復旧処理中 (ActionManagerがCleanup/Reload中) は、
-            # 画像認識を行わずに待機する。スレッド自体は死なない。
+            # --- 復旧中の待機ロジック (空転) ---
             if self.core._recovery_in_progress:
                 time.sleep(0.5)
                 continue
-            # --- ▲▲▲ 追加完了 ▲▲▲ ---
 
             with self.core.state_lock:
                 current_state = self.core.state
@@ -62,7 +59,7 @@ class MonitoringProcessor:
             try:
                 current_time = time.time()
 
-                # --- ▼▼▼ 拡張: 状態消失検知 (クラッシュ監視) ▼▼▼ ---
+                # --- 状態消失検知 (クラッシュ監視) ---
                 if self.core._lifecycle_hook_active:
                     hooks_conf = self.core.app_config.get('extended_lifecycle_hooks', {})
                     check_interval = hooks_conf.get('state_check_interval', 5.0)
@@ -78,7 +75,6 @@ class MonitoringProcessor:
                             continue
                         
                         last_state_check_time = current_time
-                # --- ▲▲▲ 追加完了 ▲▲▲ ---
 
                 # --- 1. タイミング制御フェーズ ---
                 should_process, fps_last_time, frame_counter = self._wait_for_next_frame(
@@ -434,7 +430,7 @@ class MonitoringProcessor:
         
         if result and result.get('success'): 
             
-            # --- ▼▼▼ 拡張: 応答遅延検知 (フリーズ監視) ▼▼▼ ---
+            # --- 応答遅延検知 (フリーズ監視) ---
             if self.core._lifecycle_hook_active:
                 current_clicked_path = result.get('path')
                 if current_clicked_path == self.core._last_clicked_path:
@@ -450,8 +446,7 @@ class MonitoringProcessor:
                     # 復旧シーケンス開始 -> フラグが立ち、次のループから待機モードへ
                     self.core._execute_session_recovery()
                     return 
-            # --- ▲▲▲ 追加完了 ▲▲▲ ---
-
+            
             self.core._click_count += 1
             self.core._last_clicked_path = result.get('path')
             self.core.last_successful_click_time = time.time()
@@ -501,7 +496,11 @@ class MonitoringProcessor:
             cpu_percent = 0.0
             if self.core.process:
                 try:
-                    cpu_percent = self.core.process.cpu_percent(interval=None)
+                    # --- ▼▼▼ 修正: CPU使用率をコア数で割って正規化 (0-100%範囲に) ▼▼▼ ---
+                    raw_cpu = self.core.process.cpu_percent(interval=None)
+                    num_cores = psutil.cpu_count() or 1
+                    cpu_percent = raw_cpu / num_cores
+                    # --- ▲▲▲ 修正完了 ▲▲▲ ---
                 except Exception:
                     cpu_percent = 0.0
             
