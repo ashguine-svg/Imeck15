@@ -1,6 +1,11 @@
 # monitoring_states.py
+# 状態遷移ロジック
+# ★★★ (拡張) タイマー連動クリック機能 (TimerStandbyState) を実装 ★★★
+# ★★★ (修正) ロック時間内は通常監視から対象を除外し、タイマーによる独占制御を行うロジックを追加 ★★★
+# ★★★ (修正) 画像認識のROI設定がある場合、タイマー座標にROIのオフセットを適用する ★★★
 
 import time
+import pyautogui
 from pathlib import Path
 
 class State:
@@ -29,8 +34,84 @@ class State:
 class IdleState(State):
     def handle(self, current_time, screen_data, last_match_time_map, pre_matches=None):
         context = self.context
+        
+        # --- 1. タイマーアプローチ (ロック) 判定 ---
+        # タイマースケジュールが存在する場合、優先的にチェック
+        if context.timer_schedule_cache:
+            for path, schedule in context.timer_schedule_cache.items():
+                actions = schedule['actions']
+                # 未実行のアクションがあるか？
+                pending_actions = [a for a in actions if not a['executed']]
+                
+                if not pending_actions:
+                    continue
+                
+                next_action = pending_actions[0]
+                time_until_trigger = next_action['target_time'] - current_time
+                
+                # 期限切れ判定 (要件: 1秒でも過ぎたら諦める)
+                if time_until_trigger < -1.0:
+                    context.logger.log(f"[WARN] Timer action expired for {Path(path).name} (ID:{next_action['id']}). Skipping.")
+                    next_action['executed'] = True # スキップ扱い
+                    continue
+                
+                # アプローチ範囲内か？ (ロック開始時刻を過ぎているか)
+                if time_until_trigger <= schedule['approach_time']:
+                    # 対象画像を優先検索
+                    target_match = None
+                    
+                    # A. 既に pre_matches (通常検索結果) に含まれているか確認
+                    if pre_matches:
+                        for m in pre_matches:
+                            if m['path'] == path:
+                                target_match = m
+                                break
+                    
+                    # B. なければ明示的に検索 (キャッシュからテンプレート取得)
+                    if not target_match:
+                        cache_item = context.normal_template_cache.get(path) or context.backup_template_cache.get(path)
+                        if cache_item:
+                            # 単体検索実行
+                            matches = context._find_best_match(*screen_data, {path: cache_item})
+                            if matches:
+                                target_match = matches[0]
+                    
+                    if target_match:
+                        # ★ 画像発見 -> TimerStandbyState へ遷移 (ロック開始)
+                        new_state = TimerStandbyState(context, path, schedule)
+                        context.transition_to(new_state)
+                        return
+                    
+                    # 見つからなければ次のループへ (まだロックできない)
+        
+        # --- 2. 通常監視ロジック ---
         all_matches = pre_matches if pre_matches is not None else []
         
+        # ★★★ 修正: タイマーロック中の画像を通常クリック候補から除外する ★★★
+        # これにより、ロック時間に入った画像が通常監視ロジックで「横取り」されるのを防ぎます。
+        candidates = []
+        for m in all_matches:
+            is_locked_by_timer = False
+            
+            if m['path'] in context.timer_schedule_cache:
+                schedule = context.timer_schedule_cache[m['path']]
+                pending = [a for a in schedule['actions'] if not a['executed']]
+                
+                if pending:
+                    next_action = pending[0]
+                    # 現在時刻が「ロック開始時刻 (ターゲット時刻 - アプローチ時間)」を過ぎているか？
+                    # 過ぎていれば、この画像はタイマー機能の管轄となるため、ここでは無視する。
+                    lock_start_time = next_action['target_time'] - schedule['approach_time']
+                    if current_time >= lock_start_time:
+                        is_locked_by_timer = True
+            
+            if not is_locked_by_timer:
+                candidates.append(m)
+        
+        # フィルタリング済みのリストを使用
+        all_matches = candidates
+        # ★★★ 修正終了 ★★★
+
         normal_matches = [m for m in all_matches if m['path'] in context.normal_template_cache]
         backup_trigger_matches = [m for m in all_matches if m['path'] in context.backup_template_cache]
 
@@ -47,7 +128,6 @@ class IdleState(State):
                         trigger_path = cache_item.get('priority_trigger_path')
                         target_path = trigger_path if trigger_path else cache_item['folder_path']
                         
-                        # ★ 修正: CoreEngineのメソッドを使わず直接インスタンス化
                         timeout_time = time.time() + 300 # デフォルト値
                         required_children = context.folder_children_map.get(target_path, set())
                         new_state = PriorityState(context, 'image', target_path, timeout_time, required_children)
@@ -64,7 +144,6 @@ class IdleState(State):
                                 # まず最初の画像のクリック処理を行う
                                 context._process_matches_as_sequence([match], current_time, last_match_time_map)
                                 
-                                # ★ 修正: CoreEngineのメソッドを使わず直接インスタンス化
                                 step_interval = seq_info.get('interval', 3)
                                 new_state = SequencePriorityState(context, ordered_paths, step_interval, start_index=1, parent_state=None)
                                 context.transition_to(new_state)
@@ -76,10 +155,147 @@ class IdleState(State):
 
         if backup_trigger_matches:
             best_backup_trigger = max(backup_trigger_matches, key=lambda m: m['confidence'])
-            # ★ 修正: 直接インスタンス化
             new_state = CountdownState(context, best_backup_trigger)
             context.transition_to(new_state)
             return
+
+class TimerStandbyState(State):
+    """
+    タイマー待機・実行ステート
+    対象画像が存在する限りロックし、時間が来たら座標をクリックする。
+    """
+    def __init__(self, context, target_path, schedule, parent_state=None):
+        super().__init__(context, parent_state)
+        self.target_path = target_path
+        self.schedule = schedule
+        
+        # 画像ロスト時の猶予期間用変数
+        self.last_seen_time = time.time()
+        
+        self.context.logger.log(f"[INFO] Timer Standby: Locked on {Path(target_path).name}")
+
+    def handle(self, current_time, screen_data, last_match_time_map, pre_matches=None):
+        context = self.context
+
+        # 1. 存在確認 (Safety)
+        # 現在の画面に対象画像があるか確認。
+        cache_item = context.normal_template_cache.get(self.target_path) or \
+                     context.backup_template_cache.get(self.target_path)
+        
+        target_match = None
+        if cache_item:
+            matches = context._find_best_match(*screen_data, {self.target_path: cache_item})
+            if matches:
+                target_match = matches[0] # 最も信頼度が高いもの
+        
+        if target_match:
+            self.last_seen_time = current_time # 画像が見えたら最終確認時刻を更新
+        else:
+            # 画像が見つからない場合: 猶予期間 (Grace Period)
+            if current_time - self.last_seen_time > 5.0:
+                context.logger.log("[INFO] Timer Target lost (timeout). Returning to Idle.")
+                self._return_to_parent_or_idle()
+                return
+
+        # 2. 時刻判定
+        pending_actions = [a for a in self.schedule['actions'] if not a['executed']]
+        if not pending_actions:
+            context.logger.log("[INFO] All timer actions completed.")
+            self._return_to_parent_or_idle()
+            return
+
+        next_action = pending_actions[0]
+        
+        # ターゲット時刻になったか？
+        if current_time >= next_action['target_time']:
+            # 時間が来た時点で画像が見えている場合のみクリック
+            if target_match:
+                self.execute_action(next_action, target_match)
+            else:
+                # ターゲット時刻+1.0秒を過ぎたら諦める (Strict Timeout)
+                if current_time > next_action['target_time'] + 1.0:
+                     context.logger.log(f"[WARN] Timer action failed: Target image not visible at trigger time. (ID:{next_action['id']})")
+                     next_action['executed'] = True
+
+    def execute_action(self, action, match_info):
+        """アクション実行ロジック (座標計算 -> クリック -> 待機)"""
+        context = self.context
+        
+        # --- 座標計算 ---
+        match_rect = match_info['rect'] # (x, y, w, h) in Capture coords
+        match_x, match_y = match_rect[0], match_rect[1]
+        
+        # テンプレートマッチング時のスケール (Original -> Capture)
+        current_scale = match_info.get('scale', 1.0)
+        
+        # 設定された相対座標 (Original coords)
+        target_x_orig = action['x']
+        target_y_orig = action['y']
+        
+        # --- ▼▼▼ 修正: ROIオフセットの補正 ▼▼▼ ---
+        # ROI設定がある場合、マッチングに使われたテンプレートは「元の画像から切り抜かれた一部」です。
+        # action['x']は「元の画像」の左上からの座標ですが、
+        # match_x は「切り抜かれた画像」の左上がマッチした場所です。
+        # そのため、action['x'] から「切り抜きの開始位置(ROI X)」を引いて、
+        # 「切り抜き画像内での相対座標」に変換してからスケールする必要があります。
+        
+        settings = match_info.get('settings', {})
+        roi_offset_x = 0
+        roi_offset_y = 0
+        
+        if settings.get('roi_enabled', False):
+            roi_mode = settings.get('roi_mode', 'fixed')
+            roi_rect = settings.get('roi_rect_variable') if roi_mode == 'variable' else settings.get('roi_rect')
+            
+            if roi_rect:
+                roi_offset_x = roi_rect[0]
+                roi_offset_y = roi_rect[1]
+        
+        # 切り抜き画像(テンプレート)内での相対位置に変換
+        rel_x_in_template = target_x_orig - roi_offset_x
+        rel_y_in_template = target_y_orig - roi_offset_y
+        
+        # スケール適用 (Capture coords)
+        rel_x_scaled = rel_x_in_template * current_scale
+        rel_y_scaled = rel_y_in_template * current_scale
+        
+        # --- ▲▲▲ 修正完了 ▲▲▲ ---
+        
+        # 認識エリアのオフセット
+        area_offset_x = context.recognition_area[0]
+        area_offset_y = context.recognition_area[1]
+        
+        # 実効キャプチャスケールの逆補正 (Capture -> Screen)
+        eff_scale = context.effective_capture_scale
+        
+        final_click_x = area_offset_x + ((match_x + rel_x_scaled) / eff_scale)
+        final_click_y = area_offset_y + ((match_y + rel_y_scaled) / eff_scale)
+        
+        # --- 安全装置: ウィンドウアクティブ化 ---
+        if context.target_hwnd:
+            context.action_manager._activate_window(context.target_hwnd)
+            
+        # --- クリック実行 ---
+        try:
+            cx, cy = int(final_click_x), int(final_click_y)
+            
+            from action import block_input
+            
+            block_input(True)
+            pyautogui.click(cx, cy)
+            block_input(False)
+            
+            context.logger.log(f"[INFO] Timer Action Executed: ID {action['id']} @ ({cx}, {cy})")
+            
+            action['executed'] = True
+            
+            interval = self.schedule.get('sequence_interval', 1.0)
+            if interval > 0:
+                time.sleep(interval)
+                
+        except Exception as e:
+            context.logger.log(f"[ERROR] Timer click failed: {e}")
+            action['executed'] = True
 
 class PriorityState(State):
     def __init__(self, context, mode_type, folder_path, timeout_time, required_children=None, parent_state=None):
@@ -132,7 +348,6 @@ class PriorityState(State):
                     trigger_path = cache_item.get('priority_trigger_path')
                     # ネストされたフォルダの処理分岐
                     if trigger_path and trigger_path != self.folder_path:
-                         # ★ 修正: 直接インスタンス化
                          timeout_time = time.time() + 300 
                          required_children = self.context.folder_children_map.get(trigger_path, set())
                          new_state = PriorityState(self.context, 'image', trigger_path, timeout_time, required_children, parent_state=self)
@@ -156,9 +371,6 @@ class PriorityState(State):
                         return
 
 class SequencePriorityState(State):
-    """
-    ★ 順序優先ステート (再帰対応・直接インスタンス化版)
-    """
     def __init__(self, context, ordered_paths, interval_sec, start_index=0, parent_state=None):
         super().__init__(context, parent_state)
         self.ordered_paths = ordered_paths
@@ -205,13 +417,11 @@ class SequencePriorityState(State):
 
         target_path = self.ordered_paths[self.current_index]
         
-        # ★★★ ターゲットが「フォルダ」の場合の分岐 ★★★
+        # ターゲットが「フォルダ」の場合
         if Path(target_path).is_dir():
-            # ConfigManager経由でフォルダ設定をロード
             folder_settings = self.context.config_manager.load_item_setting(Path(target_path))
             mode = folder_settings.get('mode', 'normal')
             
-            # 子ステートを作成して遷移 (自分を parent_state に指定)
             if mode == 'priority_sequence':
                 child_order_names = self.context.config_manager.load_image_order(Path(target_path))
                 child_ordered_paths = []
@@ -222,7 +432,6 @@ class SequencePriorityState(State):
                          child_ordered_paths.append(str(full_path))
                 
                 step_interval = folder_settings.get('sequence_interval', 3)
-                # ★ 修正: 直接インスタンス化
                 new_state = SequencePriorityState(self.context, child_ordered_paths, step_interval, start_index=0, parent_state=self)
                 self.context.transition_to(new_state)
                 return
@@ -230,13 +439,12 @@ class SequencePriorityState(State):
             elif mode == 'priority_image':
                 timeout_sec = folder_settings.get('priority_image_timeout', 10)
                 timeout_time = time.time() + timeout_sec
-                # ★ 修正: 直接インスタンス化
                 new_state = PriorityState(self.context, 'image', target_path, timeout_time, parent_state=self)
                 self.context.transition_to(new_state)
                 return
             
             else:
-                # 通常フォルダ -> 順序シーケンスとして扱う
+                # 通常フォルダ -> 順序シーケンス
                 child_order_names = self.context.config_manager.load_image_order(Path(target_path))
                 child_ordered_paths = []
                 for name in child_order_names:
@@ -245,12 +453,11 @@ class SequencePriorityState(State):
                      if c_set.get('mode') != 'excluded':
                          child_ordered_paths.append(str(full_path))
                 
-                # ★ 修正: 直接インスタンス化
                 new_state = SequencePriorityState(self.context, child_ordered_paths, 3.0, start_index=0, parent_state=self)
                 self.context.transition_to(new_state)
                 return
 
-        # ★★★ ターゲットが「画像」の場合 ★★★
+        # ターゲットが「画像」の場合
         target_cache = {}
         if target_path in self.context.normal_template_cache:
             target_cache[target_path] = self.context.normal_template_cache[target_path]

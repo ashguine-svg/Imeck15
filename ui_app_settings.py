@@ -363,7 +363,7 @@ class AppSettingsPanel(QObject):
         self.as_search_desc_label.setText(lm("auto_scale_search_desc"))
         self.as_desc_label.setText(lm("auto_scale_desc"))
 
-        self.general_group.setTitle("基本設定 & パフォーマンス") 
+        self.general_group.setTitle(lm("app_setting_group_general"))
         
         self.app_settings_widgets['grayscale_matching'].setText(lm("app_setting_grayscale"))
         self.gs_desc_label.setText(lm("app_setting_grayscale_desc"))

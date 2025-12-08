@@ -1,4 +1,6 @@
 # ui_tree_panel.py
+# 右クリックメニューに「タイマー設定」を追加
+# ★★★ 修正: タイマー設定が有効な画像にオレンジ色のインジケータを表示 ★★★
 
 import sys
 import os
@@ -7,17 +9,16 @@ from PySide6.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QGridLayout,
     QAbstractItemView, QMessageBox, QInputDialog, QTreeWidgetItem,
     QTreeWidget, QTreeWidgetItemIterator, QApplication, QToolTip, QFileDialog,
-    QLineEdit, QToolButton, QSizePolicy, QWidget
+    QLineEdit, QToolButton, QSizePolicy, QWidget, QMenu
 )
-# ★ QImage, QPixmap, QPainter 等をインポート
 from PySide6.QtGui import QPixmap, QImage, QPainter, QBrush, QColor, QIcon, QAction
-# ★★★ 修正: QRect をインポートに追加 ★★★
 from PySide6.QtCore import Qt, QObject, QSize, QRect
 
 import qtawesome as qta
 
 from image_tree_widget import DraggableTreeWidget
 from dialogs import FolderSettingsDialog
+from timer_ui import TimerSettingsDialog
 
 class LeftPanel(QObject):
     """
@@ -34,7 +35,6 @@ class LeftPanel(QObject):
         self.setup_ui(parent_layout)
         self.connect_signals()
 
-    # ★★★ QtAwesome対策: 安全なアイコン生成ラッパー ★★★
     def _safe_icon(self, icon_name, color=None):
         try:
             if color:
@@ -42,14 +42,12 @@ class LeftPanel(QObject):
             else:
                 base_icon = qta.icon(icon_name)
             
-            # メモリ上のQImageに描画して静的化
             image = QImage(24, 24, QImage.Format_ARGB32_Premultiplied)
             image.fill(Qt.transparent)
             
             painter = QPainter()
             if painter.begin(image):
                 try:
-                    # ここで QRect が必要
                     base_icon.paint(painter, QRect(0, 0, 24, 24))
                 finally:
                     painter.end()
@@ -110,7 +108,6 @@ class LeftPanel(QObject):
         
         def create_tool_btn(icon_name, tooltip_key):
             btn = QToolButton()
-            # 修正: _safe_icon を使用
             btn.setIcon(self._safe_icon(icon_name, color='#78909c')) 
             btn.setIconSize(QSize(14, 14))
             btn.setFixedSize(24, 24)
@@ -151,7 +148,6 @@ class LeftPanel(QObject):
         def create_action_btn(icon_name, primary=False, danger=False):
             btn = QPushButton()
             icon_color = 'white' if (primary or danger) else '#546e7a'
-            # 修正: _safe_icon を使用
             btn.setIcon(self._safe_icon(icon_name, color=icon_color))
             btn.setCursor(Qt.PointingHandCursor)
             btn.setMinimumHeight(34)
@@ -205,7 +201,6 @@ class LeftPanel(QObject):
         
         def create_small_btn(icon_name):
             btn = QPushButton()
-            # 修正: _safe_icon を使用
             btn.setIcon(self._safe_icon(icon_name, color='#546e7a'))
             btn.setMinimumHeight(34)
             btn.setCursor(Qt.PointingHandCursor)
@@ -316,7 +311,17 @@ class LeftPanel(QObject):
             elif item_data['type'] == 'image':
                 image_item = QTreeWidgetItem(parent_widget, [item_data['name']])
                 image_item.setData(0, Qt.UserRole, item_data['path'])
-                image_item.setIcon(0, self.create_colored_icon(Qt.transparent))
+                
+                # ★★★ 修正: タイマー設定が有効な場合、オレンジ色のインジケータを表示 ★★★
+                settings = item_data.get('settings', {})
+                is_timer_enabled = settings.get('timer_mode', {}).get('enabled', False)
+                
+                icon_color = Qt.transparent
+                if is_timer_enabled:
+                    icon_color = QColor("#ff9800") # オレンジ
+                
+                image_item.setIcon(0, self.create_colored_icon(icon_color))
+                # ★★★ 修正完了 ★★★
                 
                 brush = QBrush(QColor("#37474f"))
                 image_item.setForeground(0, brush)
@@ -389,58 +394,45 @@ class LeftPanel(QObject):
         if not path_str: return
         path = Path(path_str)
         
+        menu = QMenu(self.image_tree)
+        
         if path.is_dir():
-            current_settings = self.config_manager.load_item_setting(path)
-            is_root = (item.parent() is None)
+            text = lm("Folder Settings")
+            if text == "Folder Settings": text = "フォルダ設定" 
+            action_settings = menu.addAction(text)
+            action_settings.triggered.connect(lambda: self._open_folder_settings(item, path))
             
-            dialog = FolderSettingsDialog(path.name, current_settings, self.locale_manager, is_root, self.ui_manager)
-            
-            if dialog.exec():
-                new_settings = dialog.get_settings()
-                self.config_manager.save_item_setting(path, new_settings)
-                self.ui_manager.folderSettingsChanged.emit()
-                self.update_image_tree()
-                
         elif path.is_file():
-            try:
-                settings = self.config_manager.load_item_setting(path)
-                click_mode_text = lm("context_menu_info_mode_unset")
-                if settings.get('point_click'): click_mode_text = lm("context_menu_info_mode_point")
-                elif settings.get('range_click'): click_mode_text = lm("context_menu_info_mode_range_random") if settings.get('random_click') else lm("context_menu_info_mode_range")
-                threshold = settings.get('threshold', 0.8); interval = settings.get('interval_time', 1.5)
-                pixmap = QPixmap(path_str); img_size_text = lm("context_menu_info_size_error")
-                if not pixmap.isNull(): img_size_text = lm("context_menu_info_size", pixmap.width(), pixmap.height())
-                mode_str = f"({click_mode_text})"
-                threshold_str = lm('context_menu_info_threshold', f'{threshold:.2f}')
-                interval_str = lm('context_menu_info_interval', f'{interval:.1f}')
-                
-                tooltip_text = f"{mode_str}\n{threshold_str}：{interval_str}\n{img_size_text}"
+            action_timer = menu.addAction(lm("context_menu_timer_settings"))
+            action_timer.setIcon(self._safe_icon('fa5s.clock', color='#546e7a'))
+            action_timer.triggered.connect(lambda: self._open_timer_settings(path))
+            
+        menu.exec(self.image_tree.mapToGlobal(pos))
 
-                try:
-                    env_list = settings.get("environment_info", [])
-                    env_tooltip_lines = []
-                    MAX_ENV_DISPLAY = 5 
-                    if env_list:
-                        env_tooltip_lines.append(lm("context_menu_env_header", min(len(env_list), MAX_ENV_DISPLAY)))
-                        for env_data in env_list[-MAX_ENV_DISPLAY:]:
-                            app = env_data.get("app_name")
-                            res = env_data.get("resolution", "N/A")
-                            dpi = env_data.get("dpi", "N/A")
-                            scale = env_data.get("imeck_scale", 0.0)
-                            if app:
-                                env_tooltip_lines.append(lm("context_menu_env_entry", app, res, dpi, scale))
-                            else:
-                                env_tooltip_lines.append(lm("context_menu_env_entry_no_app", res, dpi, scale))
-                    if env_tooltip_lines:
-                        tooltip_text += "\n" + "\n".join(env_tooltip_lines)
-                except Exception as e:
-                    tooltip_text += f"\n[Env Info Error: {e}]" 
+    def _open_folder_settings(self, item, path):
+        current_settings = self.config_manager.load_item_setting(path)
+        is_root = (item.parent() is None)
+        
+        dialog = FolderSettingsDialog(path.name, current_settings, self.locale_manager, is_root, self.ui_manager)
+        
+        if dialog.exec():
+            new_settings = dialog.get_settings()
+            self.config_manager.save_item_setting(path, new_settings)
+            self.ui_manager.folderSettingsChanged.emit()
+            self.update_image_tree()
 
-                global_pos = self.image_tree.mapToGlobal(pos)
-                QToolTip.showText(global_pos, tooltip_text, self.image_tree)
-            except Exception as e: 
-                global_pos = self.image_tree.mapToGlobal(pos)
-                QToolTip.showText(global_pos, lm("context_menu_info_error", str(e)), self.image_tree)
+    def _open_timer_settings(self, path):
+        current_settings = self.config_manager.load_item_setting(path)
+        
+        dialog = TimerSettingsDialog(path, path.name, current_settings, self.locale_manager, self.ui_manager)
+        if dialog.exec():
+            timer_data = dialog.get_settings()
+            
+            current_settings['timer_mode'] = timer_data
+            self.config_manager.save_item_setting(path, current_settings)
+            
+            self.logger.log(f"[INFO] Timer settings updated for {path.name}")
+            self.ui_manager.folderSettingsChanged.emit()
 
     def load_images_dialog(self):
         lm = self.locale_manager.tr

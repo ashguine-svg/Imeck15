@@ -1,9 +1,8 @@
 # core.py
-# アプリケーションの統括、シグナル定義、状態管理を担当
-# (core_monitoring.py と core_selection.py を統合)
-# ★★★ 仕様書v1.1準拠: マウス中ボタンクイックキャプチャ (画面外補正 + UI非表示対応) ★★★
-# ★★★ (拡張) ライフサイクル管理機能 (コンテキスト保持・復旧シーケンス) を追加 ★★★
-# ★★★ (修正) 監視を停止せず、一時待機モードで復旧を行うように変更 ★★★
+# 認識範囲選択、ウィンドウ検出、画像保存処理を担当
+# ★★★ 修正: タイマースケジュール構築ロジックを「絶対時刻指定」に対応 ★★★
+# ★★★ 修正: 日またぎ判定（現在時刻より前なら明日の時刻とする）を実装 ★★★
+# ★★★ 修正: enabledフラグによるフィルタリングを適用 ★★★
 
 import sys
 import threading
@@ -13,6 +12,7 @@ import numpy as np
 import os
 import psutil
 import subprocess
+from datetime import datetime, timedelta # 日付計算用に追加
 from PySide6.QtCore import QObject, Signal, Slot, Qt
 from PySide6.QtWidgets import QMessageBox, QApplication 
 from pathlib import Path
@@ -27,13 +27,11 @@ import imagehash
 from action import ActionManager
 from template_manager import TemplateManager
 from environment_tracker import EnvironmentTracker
-from monitoring_states import IdleState, PriorityState, CountdownState, SequencePriorityState
+from monitoring_states import IdleState, PriorityState, CountdownState, SequencePriorityState, TimerStandbyState
 
-# 分割したモジュールをインポート
 from core_monitoring import MonitoringProcessor
 from core_selection import SelectionHandler
 
-# Windows用GUIライブラリのインポート (動的キャプチャ用)
 if sys.platform == 'win32':
     try:
         import win32gui
@@ -53,7 +51,6 @@ except Exception as e:
     OPENCL_STATUS_MESSAGE = f"[WARN] Could not configure OpenCL: {e}"
 
 class CoreEngine(QObject):
-    # --- Signals ---
     appContextChanged = Signal(str) 
     updateStatus = Signal(str, str)
     updatePreview = Signal(np.ndarray, object)
@@ -79,11 +76,7 @@ class CoreEngine(QObject):
     
     capturedImageReadyForPreview = Signal(np.ndarray)
     captureFailedSignal = Signal()
-    
-    # 画像保存完了シグナル
     saveImageCompleted = Signal(bool, str)
-
-    # クイックキャプチャ要求用のシグナル
     quickCaptureRequested = Signal()
 
     def __init__(self, ui_manager, capture_manager, config_manager, logger, locale_manager):
@@ -94,12 +87,10 @@ class CoreEngine(QObject):
         self.logger = logger
         self.locale_manager = locale_manager
 
-        # --- Sub-components Initialization ---
         self.action_manager = ActionManager(self.logger)
         self.template_manager = TemplateManager(self.config_manager, self.logger)
         self.environment_tracker = EnvironmentTracker(self, self.config_manager, self.logger)
         
-        # --- Shared State & Thread Pool Initialization ---
         cpu_cores = os.cpu_count() or 8
         max_thread_limit = 4 
         worker_threads = min(max(1, cpu_cores // 4), max_thread_limit)
@@ -108,7 +99,6 @@ class CoreEngine(QObject):
         self.thread_pool = ThreadPoolExecutor(max_workers=self.worker_threads)
         self.cache_lock = threading.Lock()
         
-        # プロセッサの初期化 (thread_pool作成後)
         self.monitoring_processor = MonitoringProcessor(self)
         self.selection_handler = SelectionHandler(self)
         
@@ -132,6 +122,10 @@ class CoreEngine(QObject):
 
         self.normal_template_cache = {}
         self.backup_template_cache = {}
+        
+        # タイマーセッション管理用 (絶対時刻制になったため T0 は不要だが、セッション状態として保持)
+        self.timer_session_active = False 
+        self.timer_schedule_cache = {}
         
         self.folder_cooldowns = {}
 
@@ -159,17 +153,13 @@ class CoreEngine(QObject):
         self.mouse_listener = None
         self._start_global_mouse_listener()
 
-        # --- Signal Connections ---
         self._showUiSignal.connect(self._show_ui_safe)
         
-        # Selection Handler への委譲シグナル接続
         self._areaSelectedForProcessing.connect(self.selection_handler.handle_area_selection)
         
-        # 自身のシグナル接続
         self.startMonitoringRequested.connect(self.start_monitoring)
         self.stopMonitoringRequested.connect(self.stop_monitoring)
 
-        # クイックキャプチャシグナルを処理メソッドに接続
         self.quickCaptureRequested.connect(self._perform_quick_capture)
 
         self.app_config = self.ui_manager.app_config
@@ -196,16 +186,14 @@ class CoreEngine(QObject):
         
         self._is_reinitializing_display = False 
 
-        # --- ▼▼▼ 拡張ライフサイクル管理機能 (内部変数) ▼▼▼ ---
         self._lifecycle_hook_active = False
         self._session_context = {
             'pid': None,
             'exec_path': None,
             'resource_id': None,
-            'consecutive_clicks': 0  # 応答遅延検知用カウンタ
+            'consecutive_clicks': 0 
         }
         self._recovery_in_progress = False
-        # --- ▲▲▲ 追加完了 ▲▲▲ ---
 
         self.on_app_config_changed()
 
@@ -216,7 +204,6 @@ class CoreEngine(QObject):
         self.match_detected_at = {}
         self.consecutive_capture_failures = 0
 
-    # --- Delegation Methods for SelectionHandler ---
     def capture_image_for_registration(self):
         self.selection_handler.capture_image_for_registration()
 
@@ -225,7 +212,7 @@ class CoreEngine(QObject):
 
     def clear_recognition_area(self):
         self.selection_handler.clear_recognition_area()
-        self._lifecycle_hook_active = False # リセット
+        self._lifecycle_hook_active = False 
         self._session_context = {'pid': None, 'exec_path': None, 'resource_id': None, 'consecutive_clicks': 0}
         self.logger.log("[INFO] Session context detached.")
         
@@ -239,7 +226,6 @@ class CoreEngine(QObject):
     def handle_save_captured_image(self, file_name: str, captured_image: np.ndarray):
         self.selection_handler.handle_save_captured_image(file_name, captured_image)
 
-    # --- Delegation Methods for MonitoringProcessor ---
     def check_screen_stability(self) -> bool:
         return self.monitoring_processor.check_screen_stability()
 
@@ -259,8 +245,6 @@ class CoreEngine(QObject):
     def _execute_click(self, *args):
         self.monitoring_processor.execute_click(*args)
 
-
-    # --- State Management ---
     def transition_to(self, new_state):
         with self.state_lock:
             self.state = new_state
@@ -294,8 +278,6 @@ class CoreEngine(QObject):
                 return self.state.get_remaining_time()
         return -1.0
 
-
-    # --- Utility Methods ---
     def _log(self, message: str, *args, force: bool = False):
         current_time = time.time()
         log_key = message
@@ -338,7 +320,6 @@ class CoreEngine(QObject):
             self.effective_capture_scale = 1.0
             self.effective_frame_skip_rate = self.app_config.get('frame_skip_rate', 2)
         
-        # 隠し設定の再読み込み
         hooks_config = self.app_config.get('extended_lifecycle_hooks', {})
         if hooks_config.get('active', False):
              self.logger.log("[INFO] Extended Lifecycle Hooks: Enabled")
@@ -360,7 +341,6 @@ class CoreEngine(QObject):
                 if 'SetForegroundWindow' in str(e): self.logger.log("log_warn_set_foreground_failed")
                 else: self.logger.log("log_warn_activate_window_error", str(e))
 
-    # --- Mouse Listener ---
     def _start_global_mouse_listener(self):
         if self.mouse_listener and self.mouse_listener.is_alive():
             self.logger.log("[DEBUG] Stopping existing listener before starting a new one.")
@@ -403,7 +383,6 @@ class CoreEngine(QObject):
 
     @Slot()
     def _perform_quick_capture(self):
-        """中ボタンクリックキャプチャ処理"""
         self.logger.log("[DEBUG] Quick capture triggered via Middle Click.")
         if self.is_monitoring:
             self.logger.log("log_capture_while_monitoring") 
@@ -463,18 +442,22 @@ class CoreEngine(QObject):
             self.captureFailedSignal.emit()
             self.selectionProcessFinished.emit()
 
-    # --- Cleanup ---
     def cleanup(self):
         self.stop_monitoring()
         self._stop_global_mouse_listener()
+        
+        self.timer_session_active = False
+        
         if self.capture_manager: self.capture_manager.cleanup()
         if hasattr(self, 'thread_pool') and self.thread_pool: self.thread_pool.shutdown(wait=False)
 
-
-    # --- Cache Management ---
     def _on_cache_build_done(self, future):
         try:
             if future: future.result()
+            
+            # 監視中、または設定変更時などにスケジュールを再構築する
+            self._build_timer_schedule()
+            
             self.cacheBuildFinished.emit(True)
         except Exception as e:
             self.logger.log("log_cache_build_error", str(e))
@@ -486,8 +469,67 @@ class CoreEngine(QObject):
             (self.normal_template_cache, self.backup_template_cache, self.priority_timers, self.folder_children_map) = \
                 self.template_manager.build_cache(self.app_config, self.current_window_scale, self.effective_capture_scale, self.is_monitoring, self.priority_timers, current_app_name)
 
+    # --- ★★★ 修正: タイマースケジュール構築 (絶対時刻 & フィルタリング) ★★★ ---
+    def _build_timer_schedule(self):
+        self.timer_schedule_cache = {}
+        # 監視が始まっていなくても、スケジュール自体は設定に基づいて計算しておく
+        # (ただし、実行には monitoring loop が必要)
 
-    # --- Capture & Monitoring Control ---
+        with self.cache_lock:
+            all_caches = list(self.normal_template_cache.items()) + list(self.backup_template_cache.items())
+            
+            now = datetime.now()
+            
+            for path, data in all_caches:
+                settings = data.get('settings', {})
+                timer_conf = settings.get('timer_mode', {})
+                
+                if timer_conf.get('enabled', False):
+                    actions = []
+                    
+                    # 基準となるID1の時刻を取得 (なければスキップ)
+                    # UI側で全てのIDの絶対時刻を計算・保存しているので、それを読み込む
+                    
+                    saved_actions = timer_conf.get('actions', [])
+                    for act in saved_actions:
+                        # --- 1. Enabled チェック ---
+                        if not act.get('enabled', False):
+                            continue
+                        
+                        # --- 2. 時刻解析とターゲット日時の決定 ---
+                        time_str = act.get('display_time', "20:00:00")
+                        try:
+                            t_time = datetime.strptime(time_str, "%H:%M:%S").time()
+                            # 今日の日付と結合
+                            target_dt = datetime.combine(now.date(), t_time)
+                            
+                            # 日またぎ判定: もしターゲット時刻が現在時刻より前なら、明日の時刻とする
+                            # (例: 現在21:00で、設定が20:00なら、明日の20:00)
+                            if target_dt < now:
+                                target_dt += timedelta(days=1)
+                            
+                            act_copy = act.copy()
+                            act_copy['target_time'] = target_dt.timestamp()
+                            act_copy['executed'] = False
+                            actions.append(act_copy)
+                            
+                        except ValueError:
+                            self.logger.log(f"[WARN] Invalid time format for {Path(path).name}: {time_str}")
+                            continue
+                    
+                    # 時間順にソート
+                    actions.sort(key=lambda x: x['target_time'])
+                    
+                    if actions:
+                        self.timer_schedule_cache[path] = {
+                            "approach_time": timer_conf.get('approach_time', 5) * 60, # 分 -> 秒
+                            "sequence_interval": timer_conf.get('sequence_interval', 1.0),
+                            "actions": actions
+                        }
+            
+            if self.timer_schedule_cache:
+                self.logger.log(f"[INFO] Timer schedule built for {len(self.timer_schedule_cache)} items.")
+
     def start_monitoring(self):
         if not self.recognition_area: QMessageBox.warning(self.ui_manager, self.locale_manager.tr("warn_rec_area_not_set_title"), self.locale_manager.tr("warn_rec_area_not_set_text")); return
         
@@ -504,9 +546,9 @@ class CoreEngine(QObject):
             self.consecutive_capture_failures = 0 
             self.is_monitoring = True; self.transition_to(IdleState(self)); self._click_count = 0; self._cooldown_until = 0; self._last_clicked_path = None; self.screen_stability_hashes.clear(); self.last_successful_click_time = 0; self.is_eco_cooldown_active = False; self._last_eco_check_time = time.time(); self.match_detected_at.clear()
             
-            # --- セッションコンテキストのカウンタリセット ---
             self._session_context['consecutive_clicks'] = 0
-            # ----------------------------------------
+            
+            self.timer_session_active = True
             
             self.ui_manager.set_tree_enabled(False)
             self.folder_cooldowns.clear()
@@ -531,10 +573,11 @@ class CoreEngine(QObject):
             self.priority_timers.clear()
             self.folder_cooldowns.clear() 
             
+            # タイマーセッションは維持するが、再開時にスケジュール再計算させるため特にリセットはしない
+            # (monitoring_loopが止まるので実行はされない)
+            
             self.updateStatus.emit("idle", "green")
 
-
-    # --- File & Tree Management ---
     def delete_selected_items(self, paths_to_delete: list):
         if not paths_to_delete: return
         self.ui_manager.set_tree_enabled(False); deleted_count = 0; failed_count = 0; last_error = ""
@@ -788,17 +831,11 @@ class CoreEngine(QObject):
     def _reinitialize_capture_backend(self):
          self.capture_manager.reinitialize_backend()
 
-    # --- ▼▼▼ 拡張ライフサイクル管理機能 (コンテキストアタッチ & 復旧) ▼▼▼ ---
-
     def _attach_session_context(self, hwnd, title):
-        """
-        ウィンドウ選択時に呼び出され、設定と照合してセッションコンテキストを確立する。
-        """
         hooks_config = self.app_config.get('extended_lifecycle_hooks', {})
         if not hooks_config.get('active', False):
             return
 
-        # 初期化
         self._lifecycle_hook_active = False
         self._session_context = {
             'pid': None,
@@ -815,11 +852,9 @@ class CoreEngine(QObject):
             proc_name = ""
             exe_path = ""
 
-            # PID取得 (Windows)
             if sys.platform == 'win32' and win32process:
                 _, pid = win32process.GetWindowThreadProcessId(hwnd)
             
-            # PID取得 (Linux)
             elif sys.platform.startswith('linux'):
                 try:
                     res = subprocess.run(['xdotool', 'getwindowpid', str(hwnd)], capture_output=True, text=True)
@@ -836,7 +871,6 @@ class CoreEngine(QObject):
                 except (psutil.AccessDenied, psutil.NoSuchProcess):
                     exe_path = ""
 
-                # --- 照合ロジック (安全装置) ---
                 match_proc = (target_proc_name and target_proc_name in proc_name)
                 match_title = (target_win_name and target_win_name in title.lower())
 
@@ -852,36 +886,27 @@ class CoreEngine(QObject):
             self.logger.log(f"[WARN] Failed to attach session context: {e}")
 
     def _execute_session_recovery(self):
-        """
-        セッションのクリーンアップとリロードを実行する。
-        ★ 修正: 監視を停止せず、フラグ制御で一時待機モードにする
-        """
         if self._recovery_in_progress:
             return
 
         self._recovery_in_progress = True
-        # self.stop_monitoring()  <-- 削除 (デッドロック回避)
         self.logger.log("[INFO] Initiating session recovery... Monitoring paused temporarily.")
 
         def _recovery_task():
             try:
-                # 1. Cleanup
                 pid = self._session_context.get('pid')
                 if pid:
                     self.action_manager.perform_session_cleanup(pid)
                 
-                # 2. Reload
                 exec_path = self._session_context.get('exec_path')
                 res_id = self._session_context.get('resource_id')
                 
                 success = self.action_manager.perform_session_reload(exec_path, res_id)
                 
                 if success:
-                    # 3. Re-hook (簡易待機)
                     self.logger.log("[INFO] Waiting for session availability...")
                     time.sleep(15) 
                     
-                    # 再フックを試みる (PID再検索)
                     new_pid = self._find_process_by_path(exec_path)
                     if new_pid:
                         self._session_context['pid'] = new_pid
@@ -896,7 +921,6 @@ class CoreEngine(QObject):
                 self._recovery_in_progress = False
                 self.logger.log("[INFO] Recovery sequence finished. Resuming monitoring.")
 
-        # 別スレッドで実行
         threading.Thread(target=_recovery_task, daemon=True).start()
 
     def _find_process_by_path(self, target_path):
@@ -908,4 +932,3 @@ class CoreEngine(QObject):
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
         return None
-    # --- ▲▲▲ 追加完了 ▲▲▲ ---
