@@ -263,7 +263,7 @@
     "float_perf_format": "{cpu:.0f}% {fps:.0f}fps",
     "monitor_window_title": "パフォーマンスモニター",
     "monitor_button_toggle": "監視開始/停止",
-    "monitor_button_toggle_tooltip": "右ダブルクリックで監視停止、右トリプルクリックで監視開始",
+    "monitor_button_toggle_tooltip": "右ダブルクリックで監視停止<br>右トリプルクリックで監視開始",
     "monitor_button_rec_area": "認識範囲設定",
     "monitor_label_perf_default": "CPU: --%  メモリ: --MB  FPS: --.-  クリック: 0  稼働: 00:00:00",
     "monitor_perf_format": "CPU: {cpu:.1f}% メモリ: {mem:.1f}MB FPS: {fps:.1f} クリック: {clicks} 稼働: {h:02d}:{m:02d}:{s:02d}",
