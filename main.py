@@ -3,7 +3,8 @@
 import sys
 import os
 import socket
-import ctypes 
+import ctypes
+import subprocess  # 追加: プロセス確認用
 
 # 実行されたスクリプト自身の場所を特定し、モジュール検索パスの先頭に追加する
 try:
@@ -99,8 +100,80 @@ def restart_application():
     QProcess.startDetached(process_path, args)
     app.quit()
 
+# --- 【追加】Linux IME 自動セットアップ関数 ---
+def detect_and_setup_linux_ime():
+    """
+    Linux環境において、システムで稼働中のIME（Fcitx/IBus）を検出し、
+    このアプリケーションプロセス内限定で環境変数を適用する。
+    また、Nuitka対策としてシステムプラグインパスを追加する。
+    """
+    if not sys.platform.startswith('linux'):
+        return
+
+    # 1. IMEモジュールの自動設定 (QT_IM_MODULE)
+    # ユーザーが既に手動で設定している場合は何もしない
+    if 'QT_IM_MODULE' not in os.environ:
+        xmodifiers = os.environ.get('XMODIFIERS', '')
+        target_im = None
+
+        # 環境変数から推測
+        if 'fcitx' in xmodifiers:
+            target_im = 'fcitx'
+        elif 'ibus' in xmodifiers:
+            target_im = 'ibus'
+        else:
+            # プロセスから推測 (pgrep)
+            try:
+                # fcitx を探す
+                res_fcitx = subprocess.run(['pgrep', 'fcitx'], capture_output=True)
+                if res_fcitx.returncode == 0:
+                    target_im = 'fcitx'
+                else:
+                    # ibus を探す
+                    res_ibus = subprocess.run(['pgrep', 'ibus-daemon'], capture_output=True)
+                    if res_ibus.returncode == 0:
+                        target_im = 'ibus'
+            except Exception:
+                pass
+
+        if target_im:
+            print(f"[INFO] Detected active IME: {target_im}. Setting QT_IM_MODULE for this session.")
+            os.environ['QT_IM_MODULE'] = target_im
+        else:
+            print("[INFO] No specific IME detected. Using system default.")
+
+    # 2. システムプラグインパスの継承 (QT_PLUGIN_PATH)
+    # Nuitkaでビルドした場合、Qtは内部パスしか見ないことがあるため、システムのパスも教える
+    current_plugin_path = os.environ.get('QT_PLUGIN_PATH', '')
+    
+    # 一般的なLinuxディストリビューションのQt6プラグインパス
+    system_paths = [
+        '/usr/lib/x86_64-linux-gnu/qt6/plugins', # Debian/Ubuntu
+        '/usr/lib/qt6/plugins',                  # Arch/Fedora
+        '/usr/lib64/qt6/plugins'                 # RHEL/CentOS/Fedora
+    ]
+    
+    new_paths = []
+    if current_plugin_path:
+        new_paths.append(current_plugin_path)
+    
+    for path in system_paths:
+        if os.path.exists(path):
+            new_paths.append(path)
+            
+    if new_paths:
+        # 既存パスとシステムパスを結合（重複があってもQt側でよしなに処理されるが、念のため順序維持）
+        # 優先度は 先頭 > 後尾 なので、既存(恐らくNuitka内部)を優先し、無ければシステムを見る形にする
+        final_path = ":".join(new_paths)
+        os.environ['QT_PLUGIN_PATH'] = final_path
+        print(f"[INFO] Updated QT_PLUGIN_PATH: {final_path}")
+# --------------------------------------------------
+
 def main():
     global app
+    
+    # ★★★ アプリケーション起動前にIME設定を行う ★★★
+    detect_and_setup_linux_ime()
     
     # 修正箇所: Windowsの高DPI設定を強化 (Nuitka exe対策)
     if sys.platform == 'win32':
