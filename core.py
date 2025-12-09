@@ -1,8 +1,4 @@
 # core.py
-# 認識範囲選択、ウィンドウ検出、画像保存処理を担当
-# ★★★ 修正: タイマースケジュール構築ロジックを「絶対時刻指定」に対応 ★★★
-# ★★★ 修正: 日またぎ判定（現在時刻より前なら明日の時刻とする）を実装 ★★★
-# ★★★ 修正: enabledフラグによるフィルタリングを適用 ★★★
 
 import sys
 import threading
@@ -12,13 +8,15 @@ import numpy as np
 import os
 import psutil
 import subprocess
-from datetime import datetime, timedelta # 日付計算用に追加
-from PySide6.QtCore import QObject, Signal, Slot, Qt
+from datetime import datetime, timedelta
+# ★★★ 修正: QTimer を追加インポート ★★★
+from PySide6.QtCore import QObject, Signal, Slot, Qt, QTimer
 from PySide6.QtWidgets import QMessageBox, QApplication 
 from pathlib import Path
 from pynput import mouse
 from concurrent.futures import ThreadPoolExecutor
 from threading import Timer
+from contextlib import contextmanager
 
 from collections import deque
 from PIL import Image
@@ -31,6 +29,8 @@ from monitoring_states import IdleState, PriorityState, CountdownState, Sequence
 
 from core_monitoring import MonitoringProcessor
 from core_selection import SelectionHandler
+
+from custom_input_dialog import ask_string_custom
 
 if sys.platform == 'win32':
     try:
@@ -123,7 +123,6 @@ class CoreEngine(QObject):
         self.normal_template_cache = {}
         self.backup_template_cache = {}
         
-        # タイマーセッション管理用 (絶対時刻制になったため T0 は不要だが、セッション状態として保持)
         self.timer_session_active = False 
         self.timer_schedule_cache = {}
         
@@ -203,6 +202,28 @@ class CoreEngine(QObject):
 
         self.match_detected_at = {}
         self.consecutive_capture_failures = 0
+
+    @contextmanager
+    def temporary_listener_pause(self):
+        """
+        ダイアログ表示中にマウスフックを一時停止するコンテキストマネージャ。
+        QTimerのエラーを修正済み。
+        """
+        was_alive = False
+        if self.mouse_listener and self.mouse_listener.is_alive():
+            self.logger.log("[DEBUG] Pausing mouse listener for dialog...")
+            self._stop_global_mouse_listener()
+            was_alive = True
+            QApplication.processEvents() 
+            time.sleep(0.1)
+        
+        try:
+            yield
+        finally:
+            if was_alive:
+                self.logger.log("[DEBUG] Resuming mouse listener...")
+                # QTimerを使って少し遅延させて再開（クリックの誤爆防止）
+                QTimer.singleShot(300, self._start_global_mouse_listener)
 
     def capture_image_for_registration(self):
         self.selection_handler.capture_image_for_registration()
@@ -350,17 +371,17 @@ class CoreEngine(QObject):
             try:
                 self.mouse_listener = mouse.Listener(on_click=self._on_global_click)
                 self.mouse_listener.start()
-            except Exception as e: self.logger.log(f"log_error_listener_start: Exception during listener.start(): {e}", str(e)); self.mouse_listener = None
-        else: self.logger.log("[WARN] Mouse listener object was not None before start attempt. State issue?")
+            except Exception as e: self.logger.log(f"log_error_listener_start: {e}"); self.mouse_listener = None
 
     def _stop_global_mouse_listener(self):
-        if self.mouse_listener and self.mouse_listener.is_alive():
-            try:
-                self.mouse_listener.stop()
-                time.sleep(0.1) 
-            except Exception as e: 
-                self.logger.log("log_warn_listener_stop", str(e))
-        self.mouse_listener = None
+        if self.mouse_listener:
+            if self.mouse_listener.is_alive():
+                try:
+                    self.mouse_listener.stop()
+                    self.mouse_listener.join(timeout=0.5)
+                except Exception as e: 
+                    self.logger.log("log_warn_listener_stop", str(e))
+            self.mouse_listener = None
 
     def _on_global_click(self, x, y, button, pressed):
         if pressed and button == mouse.Button.middle:
@@ -463,70 +484,61 @@ class CoreEngine(QObject):
             self.logger.log("log_cache_build_error", str(e))
             self.cacheBuildFinished.emit(False)
 
+    def on_folder_settings_changed(self):
+        self.logger.log("log_folder_settings_changed")
+        self.ui_manager.set_tree_enabled(False)
+        
+        # ★★★ 修正: スレッドプールがシャットダウン済みの場合のエラーを回避 ★★★
+        if self.thread_pool: 
+            try:
+                self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
+            except RuntimeError:
+                # アプリ終了時などに発生しやすいので無視するかログ出すだけにする
+                self.logger.log("[WARN] Thread pool is shutting down. Skipping cache rebuild.")
+                self.ui_manager.set_tree_enabled(True)
+        else: 
+            self.ui_manager.set_tree_enabled(True)
+
     def _build_template_cache(self):
         with self.cache_lock:
             current_app_name = self.environment_tracker.recognition_area_app_title
             (self.normal_template_cache, self.backup_template_cache, self.priority_timers, self.folder_children_map) = \
                 self.template_manager.build_cache(self.app_config, self.current_window_scale, self.effective_capture_scale, self.is_monitoring, self.priority_timers, current_app_name)
 
-    # --- ★★★ 修正: タイマースケジュール構築 (絶対時刻 & フィルタリング) ★★★ ---
     def _build_timer_schedule(self):
         self.timer_schedule_cache = {}
-        # 監視が始まっていなくても、スケジュール自体は設定に基づいて計算しておく
-        # (ただし、実行には monitoring loop が必要)
-
         with self.cache_lock:
             all_caches = list(self.normal_template_cache.items()) + list(self.backup_template_cache.items())
-            
             now = datetime.now()
-            
             for path, data in all_caches:
                 settings = data.get('settings', {})
                 timer_conf = settings.get('timer_mode', {})
-                
                 if timer_conf.get('enabled', False):
                     actions = []
-                    
-                    # 基準となるID1の時刻を取得 (なければスキップ)
-                    # UI側で全てのIDの絶対時刻を計算・保存しているので、それを読み込む
-                    
                     saved_actions = timer_conf.get('actions', [])
                     for act in saved_actions:
-                        # --- 1. Enabled チェック ---
                         if not act.get('enabled', False):
                             continue
-                        
-                        # --- 2. 時刻解析とターゲット日時の決定 ---
                         time_str = act.get('display_time', "20:00:00")
                         try:
                             t_time = datetime.strptime(time_str, "%H:%M:%S").time()
-                            # 今日の日付と結合
                             target_dt = datetime.combine(now.date(), t_time)
-                            
-                            # 日またぎ判定: もしターゲット時刻が現在時刻より前なら、明日の時刻とする
-                            # (例: 現在21:00で、設定が20:00なら、明日の20:00)
                             if target_dt < now:
                                 target_dt += timedelta(days=1)
-                            
                             act_copy = act.copy()
                             act_copy['target_time'] = target_dt.timestamp()
                             act_copy['executed'] = False
                             actions.append(act_copy)
-                            
                         except ValueError:
                             self.logger.log(f"[WARN] Invalid time format for {Path(path).name}: {time_str}")
                             continue
-                    
-                    # 時間順にソート
                     actions.sort(key=lambda x: x['target_time'])
-                    
                     if actions:
                         self.timer_schedule_cache[path] = {
-                            "approach_time": timer_conf.get('approach_time', 5) * 60, # 分 -> 秒
+                            "approach_time": timer_conf.get('approach_time', 5) * 60, 
                             "sequence_interval": timer_conf.get('sequence_interval', 1.0),
                             "actions": actions
                         }
-            
             if self.timer_schedule_cache:
                 self.logger.log(f"[INFO] Timer schedule built for {len(self.timer_schedule_cache)} items.")
 
@@ -547,7 +559,6 @@ class CoreEngine(QObject):
             self.is_monitoring = True; self.transition_to(IdleState(self)); self._click_count = 0; self._cooldown_until = 0; self._last_clicked_path = None; self.screen_stability_hashes.clear(); self.last_successful_click_time = 0; self.is_eco_cooldown_active = False; self._last_eco_check_time = time.time(); self.match_detected_at.clear()
             
             self._session_context['consecutive_clicks'] = 0
-            
             self.timer_session_active = True
             
             self.ui_manager.set_tree_enabled(False)
@@ -572,10 +583,6 @@ class CoreEngine(QObject):
             self.match_detected_at.clear()
             self.priority_timers.clear()
             self.folder_cooldowns.clear() 
-            
-            # タイマーセッションは維持するが、再開時にスケジュール再計算させるため特にリセットはしない
-            # (monitoring_loopが止まるので実行はされない)
-            
             self.updateStatus.emit("idle", "green")
 
     def delete_selected_items(self, paths_to_delete: list):
@@ -597,8 +604,16 @@ class CoreEngine(QObject):
         else: self.ui_manager.set_tree_enabled(True)
 
     def create_folder(self):
-        from PySide6.QtWidgets import QInputDialog 
-        folder_name, ok = QInputDialog.getText(self.ui_manager, self.locale_manager.tr("create_folder_title"), self.locale_manager.tr("create_folder_prompt"))
+        lm = self.locale_manager.tr
+        
+        # ★★★ フリーズ対策: ダイアログ呼び出し前にリスナーを停止 ★★★
+        with self.temporary_listener_pause():
+            folder_name, ok = ask_string_custom(
+                self.ui_manager, 
+                lm("create_folder_title"), 
+                lm("create_folder_prompt")
+            )
+        
         if ok and folder_name:
             success, message_key_or_text = self.config_manager.create_folder(folder_name)
             if success:

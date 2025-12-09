@@ -64,28 +64,30 @@ class RecAreaSelectionDialog(QDialog):
         
         def create_btn(icon_name, text_key, icon_color):
             btn = QPushButton(f" {lm(text_key)}")
-            btn.setIcon(qta.icon(icon_name, color=icon_color))
+            # 安全なアイコン生成 (qtawesomeのエラー回避)
+            try:
+                btn.setIcon(qta.icon(icon_name, color=icon_color))
+            except:
+                pass
             btn.setIconSize(QSize(20, 20))
             btn.setCursor(Qt.PointingHandCursor)
             btn.setMinimumHeight(40) 
             return btn
         
-        # アイコン色は識別しやすいように色分けを残す
-        self.rect_button = create_btn('fa5s.vector-square', "rec_area_dialog_rect_button", "#ff9800") # オレンジ
+        self.rect_button = create_btn('fa5s.vector-square', "rec_area_dialog_rect_button", "#ff9800")
         self.rect_button.clicked.connect(lambda: self.on_select("rectangle"))
         button_layout.addWidget(self.rect_button)
         
-        self.window_button = create_btn('fa5s.window-maximize', "rec_area_dialog_window_button", "#2196f3") # 青
+        self.window_button = create_btn('fa5s.window-maximize', "rec_area_dialog_window_button", "#2196f3")
         self.window_button.clicked.connect(lambda: self.on_select("window"))
         button_layout.addWidget(self.window_button)
 
-        self.fullscreen_button = create_btn('fa5s.expand', "rec_area_dialog_fullscreen_button", "#4caf50") # 緑
+        self.fullscreen_button = create_btn('fa5s.expand', "rec_area_dialog_fullscreen_button", "#4caf50")
         self.fullscreen_button.clicked.connect(lambda: self.on_select("fullscreen"))
         button_layout.addWidget(self.fullscreen_button)
 
         layout.addLayout(button_layout)
         
-        # キャンセル方法のヒント
         hint_label = QLabel("(ESC to Cancel)")
         hint_label.setStyleSheet("color: #90a4ae; font-size: 10px; font-weight: normal; border: none;")
         hint_label.setAlignment(Qt.AlignCenter)
@@ -110,7 +112,6 @@ class FolderSettingsDialog(QDialog):
         
         self.setWindowTitle(lm("folder_dialog_title", folder_name))
         
-        # ダイアログ全体のスタイル設定 (詳細な配色はmain.pyのCSSも効くが、念のため指定)
         self.setStyleSheet("""
             QDialog {
                 background-color: #ffffff;
@@ -137,16 +138,14 @@ class FolderSettingsDialog(QDialog):
             }
         """)
         
-        # --- ▼▼▼ 修正箇所: メインレイアウトの構築変更 ▼▼▼ ---
         self.layout = QVBoxLayout(self)
         self.layout.setSpacing(15)
         self.layout.setContentsMargins(20, 20, 20, 20)
 
-        # 左右分割用の水平レイアウトを作成
         h_container = QHBoxLayout()
-        h_container.setSpacing(20) # 左右の間隔
+        h_container.setSpacing(20)
 
-        # --- 【左列】モード選択 ---
+        # --- モード選択 ---
         mode_box = QGroupBox(lm("folder_dialog_group_mode"))
         mode_layout = QVBoxLayout()
         mode_layout.setSpacing(8)
@@ -177,20 +176,15 @@ class FolderSettingsDialog(QDialog):
         mode_layout.addWidget(self.radio_priority_image)
         mode_layout.addWidget(self.radio_priority_timer)
         mode_layout.addWidget(self.radio_priority_sequence)
-        
-        # 下に空白を入れて上詰めにする
         mode_layout.addStretch()
         
         mode_box.setLayout(mode_layout)
-        
-        # 左列にモードボックスを追加 (幅の比率を少し小さめに)
         h_container.addWidget(mode_box, 1)
         
-        # --- 【右列】詳細設定エリア ---
+        # --- 詳細設定 ---
         details_layout = QVBoxLayout()
         details_layout.setSpacing(12)
 
-        # ヘルパー: スピンボックス行作成
         def create_spin_row(label_text, suffix, box_widget):
             row = QHBoxLayout()
             lbl = QLabel(label_text)
@@ -198,7 +192,6 @@ class FolderSettingsDialog(QDialog):
             spin = QSpinBox()
             spin.setRange(1, 3600)
             spin.setSuffix(suffix)
-            # スピンボックスの幅を確保
             spin.setFixedWidth(100)
             row.addWidget(spin)
             row.addStretch()
@@ -219,18 +212,14 @@ class FolderSettingsDialog(QDialog):
         self.timer_priority_box = QGroupBox(lm("folder_dialog_group_timer"))
         t_layout = QGridLayout()
         t_layout.setVerticalSpacing(10)
-        
         t_layout.addWidget(QLabel(lm("folder_dialog_timer_interval")), 0, 0)
         self.interval_spin = QSpinBox(); self.interval_spin.setRange(1, 999); self.interval_spin.setSuffix(lm("folder_dialog_suffix_minutes_interval"))
         self.interval_spin.setFixedWidth(100)
         t_layout.addWidget(self.interval_spin, 0, 1)
-        
         t_layout.addWidget(QLabel(lm("folder_dialog_timer_timeout")), 1, 0)
         self.timeout_spin = QSpinBox(); self.timeout_spin.setRange(1, 999); self.timeout_spin.setSuffix(lm("folder_dialog_suffix_minutes_timeout"))
         self.timeout_spin.setFixedWidth(100)
         t_layout.addWidget(self.timeout_spin, 1, 1)
-        
-        # 列の伸縮調整
         t_layout.setColumnStretch(2, 1) 
         self.timer_priority_box.setLayout(t_layout)
         details_layout.addWidget(self.timer_priority_box)
@@ -240,37 +229,17 @@ class FolderSettingsDialog(QDialog):
         self.sequence_interval_spin = create_spin_row(lm("folder_dialog_sequence_interval"), lm("folder_dialog_suffix_seconds"), self.sequence_priority_box)
         details_layout.addWidget(self.sequence_priority_box)
 
-        # 下に空白を入れて上詰めにする
         details_layout.addStretch()
-
-        # 右列に詳細レイアウトを追加 (幅の比率を少し大きめに)
         h_container.addLayout(details_layout, 2)
-
-        # メインレイアウトに左右コンテナを追加
         self.layout.addLayout(h_container)
-        # --- ▲▲▲ 修正完了 ▲▲▲ ---
 
-        # --- 表示制御接続 ---
         self.radio_cooldown.toggled.connect(self.cooldown_box.setEnabled)
         self.radio_priority_image.toggled.connect(self.image_priority_box.setEnabled)
         self.radio_priority_timer.toggled.connect(self.timer_priority_box.setEnabled)
         self.radio_priority_sequence.toggled.connect(self.sequence_priority_box.setEnabled)
         
-        # --- ツールチップ ---
-        self.radio_cooldown.setToolTip(lm("folder_dialog_tooltip_cooldown"))
-        self.radio_priority_image.setToolTip(lm("folder_dialog_tooltip_image"))
-        self.radio_priority_timer.setToolTip(lm("folder_dialog_tooltip_timer"))
-        self.radio_priority_sequence.setToolTip(lm("folder_dialog_tooltip_sequence"))
-
-        # --- ボタン ---
         self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        # ボタンのスタイル調整
-        self.buttons.setStyleSheet("""
-            QPushButton {
-                min-width: 80px;
-                padding: 6px;
-            }
-        """)
+        self.buttons.setStyleSheet("QPushButton { min-width: 80px; padding: 6px; }")
         self.buttons.accepted.connect(self.accept)
         self.buttons.rejected.connect(self.reject)
         self.layout.addWidget(self.buttons)
@@ -292,7 +261,6 @@ class FolderSettingsDialog(QDialog):
         self.timeout_spin.setValue(settings.get('priority_timeout', 5))
         self.sequence_interval_spin.setValue(settings.get('sequence_interval', 3)) 
         
-        # 初期状態反映
         self.cooldown_box.setEnabled(mode == 'cooldown')
         self.image_priority_box.setEnabled(mode == 'priority_image')
         self.timer_priority_box.setEnabled(mode == 'priority_timer')
@@ -358,12 +326,9 @@ class InitializationDialog(QDialog):
                 return
 
             self.logger.log("log_linux_workaround_start")
-            
             original_state_checked = opencl_checkbox.isChecked()
-            
             opencl_checkbox.setChecked(not original_state_checked)
             QApplication.processEvents()
-
             opencl_checkbox.setChecked(original_state_checked)
             QApplication.processEvents()
 

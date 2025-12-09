@@ -34,6 +34,8 @@ from dialogs import RecAreaSelectionDialog
 from custom_widgets import ScaledPixmapLabel, InteractivePreviewLabel
 from preview_mode_manager import PreviewModeManager
 
+from custom_input_dialog import ask_string_custom
+
 try:
     OPENCL_AVAILABLE = cv2.ocl.haveOpenCL()
 except:
@@ -127,17 +129,13 @@ class UIManager(QMainWindow):
         QTimer.singleShot(0, lambda: self.update_image_preview(None, None))
         QTimer.singleShot(0, self._update_capture_button_state)
 
-    # ★★★ 修正: QtAwesomeアイコンをQImageに焼き付けて静的化する ★★★
     def _safe_icon(self, icon_name, color=None, size=None):
         try:
-            # 1. qtawesomeでアイコンオブジェクト生成
             if color:
                 base_icon = qta.icon(icon_name, color=color)
             else:
                 base_icon = qta.icon(icon_name)
             
-            # 2. メモリ上のQImageに描画 (Type 3 - 安全)
-            # サイズ指定がなければデフォルト24x24
             s = size if size else QSize(24, 24)
             image = QImage(s, QImage.Format_ARGB32_Premultiplied)
             image.fill(Qt.transparent)
@@ -145,13 +143,10 @@ class UIManager(QMainWindow):
             painter = QPainter()
             if painter.begin(image):
                 try:
-                    # アイコンをQImageに描画
                     base_icon.paint(painter, QRect(0, 0, s.width(), s.height()))
                 finally:
                     painter.end()
             
-            # 3. 焼き付けた画像からQIconを生成して返す
-            # これにより、以降の再描画でqtawesome内部のQPainter(QPixmap)が呼ばれるのを防ぐ
             return QIcon(QPixmap.fromImage(image))
 
         except Exception as e:
@@ -180,24 +175,19 @@ class UIManager(QMainWindow):
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(0)
 
-        # 1. ヘッダーエリア
         self._setup_header(self.main_layout)
 
-        # コンテンツエリア
         content_frame = QFrame()
         self.content_layout = QHBoxLayout(content_frame)
         self.content_layout.setContentsMargins(10, 10, 10, 10)
         self.content_layout.setSpacing(15)
         
-        # 2. 左パネル
         self.left_panel = LeftPanel(self, self.content_layout, self.config_manager, self.logger, self.locale_manager)
 
-        # 3. 右パネル
         self._setup_right_panel(self.content_layout)
 
         self.main_layout.addWidget(content_frame)
         
-        # --- タブ設定 ---
         self._setup_tab_preview()
         self._setup_tab_rec_area()
         
@@ -217,7 +207,6 @@ class UIManager(QMainWindow):
         def create_header_btn(icon_name, text_key, checkable=False, primary=False):
             btn = QPushButton()
             color = 'white' if primary else '#5f6368' 
-            # 修正: _safe_icon を使用 (サイズ指定)
             btn.setIcon(self._safe_icon(icon_name, color=color, size=QSize(18, 18)))
             btn.setIconSize(QSize(18, 18))
             
@@ -341,7 +330,6 @@ class UIManager(QMainWindow):
         
         buttons_layout = QHBoxLayout()
         self.set_rec_area_button_main_ui = QPushButton()
-        # 修正: _safe_icon を使用
         self.set_rec_area_button_main_ui.setIcon(self._safe_icon('fa5s.crop', color='#546e7a'))
         self.set_rec_area_button_main_ui.setStyleSheet("""
             QPushButton {
@@ -356,7 +344,6 @@ class UIManager(QMainWindow):
         """)
         
         self.clear_rec_area_button_main_ui = QPushButton()
-        # 修正: _safe_icon を使用
         self.clear_rec_area_button_main_ui.setIcon(self._safe_icon('fa5s.times', color='#546e7a'))
         self.clear_rec_area_button_main_ui.setStyleSheet("""
             QPushButton {
@@ -514,7 +501,6 @@ class UIManager(QMainWindow):
         
         self.item_settings_widgets['set_roi_variable_button'] = QPushButton()
         self.item_settings_widgets['set_roi_variable_button'].setCheckable(True)
-        # 修正: _safe_icon を使用
         self.item_settings_widgets['set_roi_variable_button'].setIcon(self._safe_icon('fa5s.vector-square', color='#37474f'))
         self.item_settings_widgets['set_roi_variable_button'].setFixedWidth(180) 
 
@@ -682,7 +668,6 @@ class UIManager(QMainWindow):
         dialog = RecAreaSelectionDialog(self.locale_manager, self)
         dialog.selectionMade.connect(self._handle_rec_area_selection)
         
-        # --- 表示位置の計算ロジック (上下判定・UIモード別処理) ---
         cursor_pos = QCursor.pos()
         screen = QApplication.screenAt(cursor_pos)
         if not screen:
@@ -691,29 +676,19 @@ class UIManager(QMainWindow):
         screen_rect = screen.geometry()
         screen_center_y = screen_rect.center().y()
         
-        # ダイアログの高さ (dialogs.pyで setFixedSize されている値)
         dialog_height = dialog.height()
         
         final_pos = cursor_pos
 
-        # 2. 押された位置の判定はメインUIと最小UIで別処理にする
         if self.is_minimal_mode:
-            # --- 最小UIモードの場合 ---
-            # 1. 画面中央より上なら左上起点、下なら左下起点
             if cursor_pos.y() < screen_center_y:
-                # 上半分: そのまま (左上起点)
                 final_pos = cursor_pos
             else:
-                # 下半分: Y座標を高さ分マイナス (左下起点)
                 final_pos = QPoint(cursor_pos.x(), cursor_pos.y() - dialog_height)
         else:
-            # --- メインUIモードの場合 ---
-            # 1. 画面中央より上なら左上起点、下なら左下起点
             if cursor_pos.y() < screen_center_y:
-                # 上半分: そのまま (左上起点)
                 final_pos = cursor_pos
             else:
-                # 下半分: Y座標を高さ分マイナス (左下起点)
                 final_pos = QPoint(cursor_pos.x(), cursor_pos.y() - dialog_height)
         
         dialog.move(final_pos)
@@ -934,7 +909,6 @@ class UIManager(QMainWindow):
         is_idle = False 
 
         def set_monitor_btn(icon, text, primary=False):
-            # 修正: _safe_icon を使用
             self.monitor_button.setIcon(self._safe_icon(icon, color='white' if primary else '#5f6368'))
             self.monitor_button.setText(f" {text}")
             if primary:
@@ -1012,7 +986,6 @@ class UIManager(QMainWindow):
         
         tooltip = ""
         if not is_rec_area_set:
-            # ★ 修正: 認識範囲未設定時のツールチップキーを変更
             tooltip = self.locale_manager.tr("warn_capture_disabled_scale")
         elif is_disabled_by_scale:
             tooltip = self.locale_manager.tr("warn_capture_disabled_scale")
@@ -1021,7 +994,6 @@ class UIManager(QMainWindow):
             self.main_capture_button.setEnabled(enable_capture)
             self.main_capture_button.setToolTip(tooltip)
             
-            # --- グレーアウト処理 (修正: 通常色をグレーに) ---
             if enable_capture:
                 self.main_capture_button.setStyleSheet("""
                     QPushButton {
@@ -1034,7 +1006,6 @@ class UIManager(QMainWindow):
                     }
                     QPushButton:hover { background-color: #f1f3f4; }
                 """)
-                # 修正: _safe_icon を使用
                 self.main_capture_button.setIcon(self._safe_icon('fa5s.camera', color='#5f6368'))
             else:
                 self.main_capture_button.setStyleSheet("""
@@ -1047,7 +1018,6 @@ class UIManager(QMainWindow):
                         font-weight: bold;
                     }
                 """)
-                # 修正: _safe_icon を使用
                 self.main_capture_button.setIcon(self._safe_icon('fa5s.camera', color='#bdbdbd'))
             
         if self.floating_window and hasattr(self.floating_window, 'capture_button'): 
@@ -1103,7 +1073,13 @@ class UIManager(QMainWindow):
     
     def _get_filename_from_user(self):
         lm = self.locale_manager.tr
-        return QInputDialog.getText(self, lm("dialog_filename_prompt_title"), lm("dialog_filename_prompt_text"))
+        
+        # ★★★ フリーズ対策: ダイアログ呼び出し前にリスナーを停止 ★★★
+        if self.core_engine:
+            with self.core_engine.temporary_listener_pause():
+                return ask_string_custom(self, lm("dialog_filename_prompt_title"), lm("dialog_filename_prompt_text"))
+        
+        return ask_string_custom(self, lm("dialog_filename_prompt_title"), lm("dialog_filename_prompt_text"))
     
     @Slot()
     def on_capture_failed(self):

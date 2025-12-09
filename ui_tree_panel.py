@@ -1,6 +1,6 @@
 # ui_tree_panel.py
 # 右クリックメニューに「タイマー設定」を追加
-# ★★★ 修正: タイマー設定が有効な画像にオレンジ色のインジケータを表示 ★★★
+# ★★★ 修正: リネーム時とタイマー設定時にマウスフックを一時停止するロジックを追加 ★★★
 
 import sys
 import os
@@ -19,6 +19,8 @@ import qtawesome as qta
 from image_tree_widget import DraggableTreeWidget
 from dialogs import FolderSettingsDialog
 from timer_ui import TimerSettingsDialog
+
+from custom_input_dialog import ask_string_custom
 
 class LeftPanel(QObject):
     """
@@ -312,16 +314,14 @@ class LeftPanel(QObject):
                 image_item = QTreeWidgetItem(parent_widget, [item_data['name']])
                 image_item.setData(0, Qt.UserRole, item_data['path'])
                 
-                # ★★★ 修正: タイマー設定が有効な場合、オレンジ色のインジケータを表示 ★★★
                 settings = item_data.get('settings', {})
                 is_timer_enabled = settings.get('timer_mode', {}).get('enabled', False)
                 
                 icon_color = Qt.transparent
                 if is_timer_enabled:
-                    icon_color = QColor("#ff9800") # オレンジ
+                    icon_color = QColor("#ff9800") 
                 
                 image_item.setIcon(0, self.create_colored_icon(icon_color))
-                # ★★★ 修正完了 ★★★
                 
                 brush = QBrush(QColor("#37474f"))
                 image_item.setForeground(0, brush)
@@ -424,7 +424,10 @@ class LeftPanel(QObject):
     def _open_timer_settings(self, path):
         current_settings = self.config_manager.load_item_setting(path)
         
-        dialog = TimerSettingsDialog(path, path.name, current_settings, self.locale_manager, self.ui_manager)
+        # ★★★ 修正: core_engine を渡すことでタイマー画面でもリスナー停止機能を使えるようにする ★★★
+        dialog = TimerSettingsDialog(path, path.name, current_settings, self.locale_manager, 
+                                     parent=self.ui_manager, 
+                                     core_engine=self.core_engine)
         if dialog.exec():
             timer_data = dialog.get_settings()
             
@@ -469,13 +472,22 @@ class LeftPanel(QObject):
             
         current_base_name = Path(current_name).stem
 
-        new_name, ok = QInputDialog.getText(
-            self.ui_manager, 
-            lm("rename_dialog_title"), 
-            lm("rename_dialog_prompt"), 
-            QLineEdit.EchoMode.Normal, 
-            current_base_name
-        )
+        # ★★★ フリーズ対策: ダイアログ呼び出し前にリスナーを停止 ★★★
+        if self.core_engine:
+            with self.core_engine.temporary_listener_pause():
+                new_name, ok = ask_string_custom(
+                    self.ui_manager, 
+                    lm("rename_dialog_title"), 
+                    lm("rename_dialog_prompt"), 
+                    current_base_name
+                )
+        else:
+            new_name, ok = ask_string_custom(
+                self.ui_manager, 
+                lm("rename_dialog_title"), 
+                lm("rename_dialog_prompt"), 
+                current_base_name
+            )
 
         if not ok:
             self.logger.log("log_rename_cancelled")

@@ -3,23 +3,25 @@
 import sys
 import os
 import socket
-import ctypes
-import subprocess  # 追加: プロセス確認用
+import ctypes 
 
-# 実行されたスクリプト自身の場所を特定し、モジュール検索パスの先頭に追加する
+# パス設定
 try:
     if getattr(sys, 'frozen', False):
         script_directory = os.path.dirname(sys.executable)
     else:
         script_directory = os.path.dirname(os.path.abspath(__file__))
-    
     sys.path.insert(0, script_directory)
 except NameError:
     sys.path.insert(0, os.getcwd())
 
+# IME設定 (Zenityを使うなら必須ではないが、念のため残す)
+if sys.platform == 'linux':
+    if "QT_IM_MODULE" not in os.environ:
+        os.environ["QT_IM_MODULE"] = "fcitx"
+
 from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import QObject, Signal, QTimer, QProcess, Qt
-
 from qt_material import apply_stylesheet
 
 from ui import UIManager
@@ -28,7 +30,6 @@ from capture import CaptureManager
 from config import ConfigManager
 from dialogs import InitializationDialog
 from locale_manager import LocaleManager
-
 
 LOCK_PORT = 54321
 _lock_socket = None
@@ -43,402 +44,108 @@ def check_and_lock():
         _lock_socket = None
         return False
 
-app = None
-
 class Logger(QObject):
     logReady = Signal(str)
-    
     def __init__(self, ui_manager=None):
         super().__init__()
         self.ui_manager = ui_manager
         self.locale_manager = None 
-
     def set_ui(self, ui_manager):
         self.ui_manager = ui_manager
         self.logReady.connect(self.ui_manager.update_log)
-
     def set_locale_manager(self, locale_manager):
         self.locale_manager = locale_manager
-
     def log(self, message: str, *args, force=False):
         try:
-            if self.locale_manager:
-                translated_message = self.locale_manager.tr(message, *args)
-            else:
-                translated_message = message % args if args else message
-        except Exception:
-            translated_message = f"{message} (args: {args})"
-
+            if self.locale_manager: translated_message = self.locale_manager.tr(message, *args)
+            else: translated_message = message % args if args else message
+        except Exception: translated_message = f"{message} (args: {args})"
         print(f"[LOG] {translated_message}")
         self.logReady.emit(translated_message)
 
 def restart_application():
     global app, _lock_socket
-    if not app:
-        print("[ERROR] Application instance not found for restart.")
-        return
-
+    if not app: return
     if _lock_socket:
-        try:
-            _lock_socket.close()
-            _lock_socket = None
-            print("[INFO] Lock socket released for restart.")
-        except Exception as e:
-            print(f"[WARN] Failed to close lock socket: {e}")
-
+        try: _lock_socket.close(); _lock_socket = None
+        except Exception: pass
     executable = sys.executable
     script_path = os.path.abspath(sys.argv[0])
-    
     if executable.lower().endswith("python.exe") or executable.lower().endswith("python"):
         args = [script_path] + sys.argv[1:]
         process_path = executable
     else:
         args = sys.argv[1:]
         process_path = executable
-
-    print(f"[INFO] Attempting to restart application...")
     QProcess.startDetached(process_path, args)
     app.quit()
 
-# --- 【追加】Linux IME 自動セットアップ関数 ---
-def detect_and_setup_linux_ime():
-    """
-    Linux環境において、システムで稼働中のIME（Fcitx/IBus）を検出し、
-    このアプリケーションプロセス内限定で環境変数を適用する。
-    また、Nuitka対策としてシステムプラグインパスを追加する。
-    """
-    if not sys.platform.startswith('linux'):
-        return
-
-    # 1. IMEモジュールの自動設定 (QT_IM_MODULE)
-    # ユーザーが既に手動で設定している場合は何もしない
-    if 'QT_IM_MODULE' not in os.environ:
-        xmodifiers = os.environ.get('XMODIFIERS', '')
-        target_im = None
-
-        # 環境変数から推測
-        if 'fcitx' in xmodifiers:
-            target_im = 'fcitx'
-        elif 'ibus' in xmodifiers:
-            target_im = 'ibus'
-        else:
-            # プロセスから推測 (pgrep)
-            try:
-                # fcitx を探す
-                res_fcitx = subprocess.run(['pgrep', 'fcitx'], capture_output=True)
-                if res_fcitx.returncode == 0:
-                    target_im = 'fcitx'
-                else:
-                    # ibus を探す
-                    res_ibus = subprocess.run(['pgrep', 'ibus-daemon'], capture_output=True)
-                    if res_ibus.returncode == 0:
-                        target_im = 'ibus'
-            except Exception:
-                pass
-
-        if target_im:
-            print(f"[INFO] Detected active IME: {target_im}. Setting QT_IM_MODULE for this session.")
-            os.environ['QT_IM_MODULE'] = target_im
-        else:
-            print("[INFO] No specific IME detected. Using system default.")
-
-    # 2. システムプラグインパスの継承 (QT_PLUGIN_PATH)
-    # Nuitkaでビルドした場合、Qtは内部パスしか見ないことがあるため、システムのパスも教える
-    current_plugin_path = os.environ.get('QT_PLUGIN_PATH', '')
-    
-    # 一般的なLinuxディストリビューションのQt6プラグインパス
-    system_paths = [
-        '/usr/lib/x86_64-linux-gnu/qt6/plugins', # Debian/Ubuntu
-        '/usr/lib/qt6/plugins',                  # Arch/Fedora
-        '/usr/lib64/qt6/plugins'                 # RHEL/CentOS/Fedora
-    ]
-    
-    new_paths = []
-    if current_plugin_path:
-        new_paths.append(current_plugin_path)
-    
-    for path in system_paths:
-        if os.path.exists(path):
-            new_paths.append(path)
-            
-    if new_paths:
-        # 既存パスとシステムパスを結合（重複があってもQt側でよしなに処理されるが、念のため順序維持）
-        # 優先度は 先頭 > 後尾 なので、既存(恐らくNuitka内部)を優先し、無ければシステムを見る形にする
-        final_path = ":".join(new_paths)
-        os.environ['QT_PLUGIN_PATH'] = final_path
-        print(f"[INFO] Updated QT_PLUGIN_PATH: {final_path}")
-# --------------------------------------------------
-
 def main():
     global app
-    
-    # ★★★ アプリケーション起動前にIME設定を行う ★★★
-    detect_and_setup_linux_ime()
-    
-    # 修正箇所: Windowsの高DPI設定を強化 (Nuitka exe対策)
     if sys.platform == 'win32':
-        try:
-            # Windows 8.1 以降向けの強力な設定 (PROCESS_SYSTEM_DPI_AWARE = 1)
-            ctypes.windll.shcore.SetProcessDpiAwareness(1)
-        except Exception:
-            try:
-                # Windows Vista/7 向けのフォールバック
-                ctypes.windll.user32.SetProcessDPIAware()
-            except Exception:
-                pass
+        try: ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        except Exception: pass
 
     app = QApplication.instance() or QApplication(sys.argv)
     
-    # --- テーマ適用 ---
-    extra = {
-        'font_family': 'Meiryo UI, Yu Gothic UI, Segoe UI, sans-serif',
-        'font_size': '13px',
-        'density_scale': '-1',
-    }
-    
+    # テーマ設定
+    extra = {'font_family': 'Meiryo UI, Yu Gothic UI, Segoe UI, sans-serif', 'font_size': '13px', 'density_scale': '-1'}
     try:
         apply_stylesheet(app, theme='light_blue.xml', extra=extra)
-        
-        # ★ 配色カスタマイズ CSS (修正版: ブランチライン表示) ★
+        # CSSは変更せずそのまま
         custom_style = """
-            /* 基本文字色 */
-            QWidget {
-                color: #37474f;
-                font-family: 'Meiryo UI', 'Yu Gothic UI', sans-serif;
-            }
-
-            /* --- グローバル: ボタンの枠線色を強制的にグレーに --- */
-            QPushButton {
-                color: #37474f;
-                border: 1px solid #cfd8dc;
-                background-color: #ffffff;
-                border-radius: 4px;
-                padding: 4px 12px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #eceff1;
-                border-color: #b0bec5;
-            }
-            QPushButton:pressed {
-                background-color: #cfd8dc;
-            }
-
-            /* --- チェックボックス & ラジオボタン --- */
-            QCheckBox, QRadioButton {
-                color: #37474f;
-                spacing: 8px;
-            }
-
-            QCheckBox::indicator, QRadioButton::indicator {
-                width: 16px;
-                height: 16px;
-                background-color: #ffffff;
-                border: 1px solid #90a4ae;
-                border-radius: 3px;
-            }
-            QRadioButton::indicator {
-                border-radius: 8px;
-            }
-
-            QCheckBox::indicator:hover, QRadioButton::indicator:hover {
-                border-color: #546e7a;
-                background-color: #eceff1;
-            }
-
-            QCheckBox::indicator:checked {
-                background-color: #546e7a;
-                border: 1px solid #546e7a;
-            }
-            QRadioButton::indicator:checked {
-                background-color: #546e7a;
-                border: 1px solid #546e7a;
-            }
-
-            /* --- ツリービュー (色変更のみ実施) --- */
-            QTreeWidget {
-                color: #263238;
-                background-color: #ffffff;
-                alternate-background-color: #f5f5f5;
-                outline: none;
-                border: 1px solid #cfd8dc;
-            }
-            
-            /* ブランチラインの基本設定 */
-            QTreeWidget::branch {
-                background: palette(base);
-            }
-
-            /* 縦線（siblings がある場合） */
-            QTreeWidget::branch:has-siblings:!adjoins-item {
-                border-image: none;
-                /* 色を #b0bec5 から transparent に変更 */
-                border-left: 1px solid transparent;
-            }
-
-            /* L字型（siblings があり、アイテムに隣接） */
-            QTreeWidget::branch:has-siblings:adjoins-item {
-                border-image: none;
-                /* 色を #b0bec5 から transparent に変更 */
-                border-left: 1px solid transparent;
-                border-top: 1px solid transparent;
-            }
-
-            /* 終端L字型（siblings なし、アイテムに隣接） */
-            QTreeWidget::branch:!has-children:!has-siblings:adjoins-item {
-                border-image: none;
-                /* 色を #b0bec5 から transparent に変更 */
-                border-left: 1px solid transparent;
-                border-top: 1px solid transparent;
-            }
-
-            /* 閉じた状態の矢印（▶）の左側の線 */
-            QTreeWidget::branch:has-children:!has-siblings:closed,
-            QTreeWidget::branch:closed:has-children:has-siblings {
-                border-image: none;
-                /* 色を #b0bec5 から transparent に変更 */
-                border-left: 1px solid transparent;
-            }
-
-            /* 開いた状態の矢印（▼）の左側の線 */
-            QTreeWidget::branch:open:has-children:!has-siblings,
-            QTreeWidget::branch:open:has-children:has-siblings {
-                border-image: none;
-                /* 色を #b0bec5 から transparent に変更 */
-                border-left: 1px solid transparent;
-            }
-
-            /* 矢印インジケーター（閉じた状態: ▶） */
-            QTreeWidget::branch:has-children:closed {
-                background: palette(base);
-            }
-
-            /* 矢印インジケーター（開いた状態: ▼） */
-            QTreeWidget::branch:has-children:open {
-                background: palette(base);
-            }
-
-            /* 選択行のハイライト */
-            QTreeWidget::item:selected {
-                background-color: #eceff1;
-                color: #000000;
-                border: 1px solid #b0bec5;
-                border-radius: 4px;
-            }
-
-            /* --- スクロールバー --- */
-            QScrollBar:vertical {
-                background: #f5f5f5;
-                width: 12px;
-            }
-            QScrollBar::handle:vertical {
-                background: #90a4ae;
-                min-height: 20px;
-                border-radius: 6px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background: #78909c;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-
-            /* --- 入力欄 (修正: フォントサイズ標準化・パディング縮小) --- */
-            QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
-                color: #000000;
-                background-color: #ffffff;
-                border: 1px solid #cfd8dc;
-                border-radius: 4px;
-                padding: 2px 4px; /* パディングを縮小 */
-                selection-background-color: #78909c;
-                selection-color: #ffffff;
-                /* font-weight: bold; を削除 */
-                /* font-size: 14px; を削除 (標準サイズへ) */
-            }
-            
-            QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {
-                border: 1px solid #546e7a;
-            }
-            
-            /* --- スピンボックスの矢印 --- */
-            QAbstractSpinBox::up-button, QAbstractSpinBox::down-button {
-                border: none;
-                background: transparent;
-                width: 16px; /* 幅を少し縮小 */
-            }
-            QAbstractSpinBox::up-arrow { 
-                image: none; 
-                border-left: 4px solid transparent;
-                border-right: 4px solid transparent;
-                border-bottom: 4px solid #546e7a; 
-            }
-            QAbstractSpinBox::down-arrow { 
-                image: none; 
-                border-left: 4px solid transparent;
-                border-right: 4px solid transparent;
-                border-top: 4px solid #546e7a; 
-            }
-
-            /* 使い方タブ */
-            QTextEdit {
-                color: #212121;
-                background-color: #ffffff;
-                border: 1px solid #cfd8dc;
-            }
-            
-            /* 無効化状態 */
-            QWidget:disabled {
-                color: #bdbdbd;
-                border-color: #e0e0e0;
-            }
+            QWidget { color: #37474f; font-family: 'Meiryo UI', 'Yu Gothic UI', sans-serif; }
+            QPushButton { color: #37474f; border: 1px solid #cfd8dc; background-color: #ffffff; border-radius: 4px; padding: 4px 12px; font-weight: bold; }
+            QPushButton:hover { background-color: #eceff1; border-color: #b0bec5; }
+            QPushButton:pressed { background-color: #cfd8dc; }
+            QCheckBox, QRadioButton { color: #37474f; spacing: 8px; }
+            QCheckBox::indicator, QRadioButton::indicator { width: 16px; height: 16px; background-color: #ffffff; border: 1px solid #90a4ae; border-radius: 3px; }
+            QRadioButton::indicator { border-radius: 8px; }
+            QCheckBox::indicator:hover, QRadioButton::indicator:hover { border-color: #546e7a; background-color: #eceff1; }
+            QCheckBox::indicator:checked, QRadioButton::indicator:checked { background-color: #546e7a; border: 1px solid #546e7a; }
+            QTreeWidget { color: #263238; background-color: #ffffff; alternate-background-color: #f5f5f5; outline: none; border: 1px solid #cfd8dc; }
+            QTreeWidget::branch { background: palette(base); }
+            QTreeWidget::branch:has-siblings:!adjoins-item { border-image: none; border-left: 1px solid transparent; }
+            QTreeWidget::branch:has-siblings:adjoins-item { border-image: none; border-left: 1px solid transparent; border-top: 1px solid transparent; }
+            QTreeWidget::branch:!has-children:!has-siblings:adjoins-item { border-image: none; border-left: 1px solid transparent; border-top: 1px solid transparent; }
+            QTreeWidget::branch:has-children:!has-siblings:closed, QTreeWidget::branch:closed:has-children:has-siblings { border-image: none; border-left: 1px solid transparent; }
+            QTreeWidget::branch:open:has-children:!has-siblings, QTreeWidget::branch:open:has-children:has-siblings { border-image: none; border-left: 1px solid transparent; }
+            QTreeWidget::branch:has-children:closed { background: palette(base); }
+            QTreeWidget::branch:has-children:open { background: palette(base); }
+            QTreeWidget::item:selected { background-color: #eceff1; color: #000000; border: 1px solid #b0bec5; border-radius: 4px; }
+            QScrollBar:vertical { background: #f5f5f5; width: 12px; }
+            QScrollBar::handle:vertical { background: #90a4ae; min-height: 20px; border-radius: 6px; }
+            QScrollBar::handle:vertical:hover { background: #78909c; }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
+            QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox { color: #000000; background-color: #ffffff; border: 1px solid #cfd8dc; border-radius: 4px; padding: 2px 4px; selection-background-color: #78909c; selection-color: #ffffff; }
+            QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus { border: 1px solid #546e7a; }
+            QAbstractSpinBox::up-button, QAbstractSpinBox::down-button { border: none; background: transparent; width: 16px; }
+            QAbstractSpinBox::up-arrow { image: none; border-left: 4px solid transparent; border-right: 4px solid transparent; border-bottom: 4px solid #546e7a; }
+            QAbstractSpinBox::down-arrow { image: none; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 4px solid #546e7a; }
+            QTextEdit { color: #212121; background-color: #ffffff; border: 1px solid #cfd8dc; }
+            QWidget:disabled { color: #bdbdbd; border-color: #e0e0e0; }
         """
         app.setStyleSheet(app.styleSheet() + custom_style)
-        
-    except Exception as e:
-        print(f"[WARN] Failed to apply qt-material theme: {e}")
+    except Exception as e: print(f"[WARN] Failed to apply theme: {e}")
 
     logger = Logger()
     locale_manager = LocaleManager()
     logger.set_locale_manager(locale_manager)
 
     if not check_and_lock():
-        error_box = QMessageBox()
-        error_box.setWindowTitle(locale_manager.tr("error_already_running_title"))
-        error_box.setIcon(QMessageBox.Icon.Warning)
-        error_box.setText(locale_manager.tr("error_already_running_text"))
-        error_box.setStandardButtons(QMessageBox.StandardButton.Ok)
-        error_box.exec()
         sys.exit(1)
     
     config_manager = ConfigManager(logger)
     capture_manager = CaptureManager(logger)
-    
-    ui_manager = UIManager(
-        core_engine=None,
-        capture_manager=capture_manager,
-        config_manager=config_manager,
-        logger=logger,
-        locale_manager=locale_manager
-    )
-    
+    ui_manager = UIManager(None, capture_manager, config_manager, logger, locale_manager)
     logger.set_ui(ui_manager)
-    
-    core_engine = CoreEngine(
-        ui_manager=ui_manager,
-        capture_manager=capture_manager,
-        config_manager=config_manager,
-        logger=logger,
-        locale_manager=locale_manager
-    )
-    
+    core_engine = CoreEngine(ui_manager, capture_manager, config_manager, logger, locale_manager)
     ui_manager.core_engine = core_engine
-    ui_manager.logger = logger
     
     core_engine.updateStatus.connect(ui_manager.set_status)
     core_engine.updatePreview.connect(ui_manager.update_image_preview)
     core_engine.updateRecAreaPreview.connect(ui_manager.update_rec_area_preview)
     core_engine.cacheBuildFinished.connect(ui_manager.on_cache_build_finished)
-    
     core_engine.selectionProcessStarted.connect(ui_manager.on_selection_process_started)
     core_engine.selectionProcessFinished.connect(ui_manager.on_selection_process_finished)
     core_engine.windowScaleCalculated.connect(ui_manager.on_window_scale_calculated)
@@ -468,11 +175,7 @@ def main():
         primary_screen = app.primaryScreen()
         if primary_screen:
             primary_screen.geometryChanged.connect(core_engine.on_screen_geometry_changed)
-            logger.log("log_screen_geometry_listener_attached")
-        else:
-            logger.log("log_screen_geometry_listener_failed")
-    except Exception as e:
-        logger.log("log_screen_geometry_listener_error", str(e))
+    except Exception: pass
 
     ui_manager.set_tree_enabled(False)
     capture_manager.prime_mss()
@@ -486,11 +189,7 @@ def main():
             try:
                 dialog = InitializationDialog(core_engine, logger, locale_manager, ui_manager)
                 dialog.exec()
-            except ImportError:
-                logger.log("init_dialog_error_not_found")
-            except Exception as e:
-                logger.log("init_dialog_error_exec", str(e))
-        
+            except Exception: pass
         QTimer.singleShot(200, run_initialization_dialog)
     
     sys.exit(app.exec())
