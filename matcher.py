@@ -1,5 +1,5 @@
 # matcher.py
-# ★★★ (リファクタリング) マッチングロジックを戦略ごとに分割し、可読性を向上 ★★★
+# ★★★ 復旧: core_monitoring.py が必要とする関数ベースの実装に戻します ★★★
 
 import cv2
 from PIL import Image

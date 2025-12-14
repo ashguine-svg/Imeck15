@@ -1,9 +1,14 @@
 # main.py
+# ★★★ 修正: 2重起動時に既存の翻訳キーを使って警告メッセージを表示 ★★★
 
 import sys
 import os
 import socket
-import ctypes 
+import ctypes
+import requests  # 追加: ダウンロード用
+import logging   # 追加: ログ用
+import time      # 追加: リトライ待機用
+from pathlib import Path # 追加: パス操作用
 
 # パス設定
 try:
@@ -15,7 +20,7 @@ try:
 except NameError:
     sys.path.insert(0, os.getcwd())
 
-# IME設定 (Zenityを使うなら必須ではないが、念のため残す)
+# IME設定
 if sys.platform == 'linux':
     if "QT_IM_MODULE" not in os.environ:
         os.environ["QT_IM_MODULE"] = "fcitx"
@@ -24,12 +29,16 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import QObject, Signal, QTimer, QProcess, Qt
 from qt_material import apply_stylesheet
 
+# 既存モジュールのインポート
 from ui import UIManager
 from core import CoreEngine
 from capture import CaptureManager
 from config import ConfigManager
 from dialogs import InitializationDialog
 from locale_manager import LocaleManager
+
+# 追加: OCR言語マッピングのインポート
+from ocr_manager import LOCALE_TO_TESS_CODE
 
 LOCK_PORT = 54321
 _lock_socket = None
@@ -63,6 +72,99 @@ class Logger(QObject):
         print(f"[LOG] {translated_message}")
         self.logReady.emit(translated_message)
 
+# ----------------------------------------------------------------------
+# 追加機能: Tesseract初期化と自動ダウンロード (リトライ版)
+# ----------------------------------------------------------------------
+def initialize_tesseract(logger_instance, config_manager):
+    """
+    OCR機能に必要なデータと環境変数をセットアップします。
+    ホームディレクトリ下の click_pic/tessdata に英語(eng)と現在のアプリ設定言語をダウンロードします。
+    """
+    tessdata_dir = Path.home() / "click_pic" / "tessdata"
+
+    # 1. 保存先ディレクトリの作成
+    if not tessdata_dir.exists():
+        try:
+            tessdata_dir.mkdir(parents=True, exist_ok=True)
+            logger_instance.log(f"[INIT] ディレクトリを作成しました: {tessdata_dir}")
+        except Exception as e:
+            logger_instance.log(f"[ERROR] tessdataディレクトリ作成失敗: {e}")
+            return False
+
+    # 2. 環境変数 TESSDATA_PREFIX の設定
+    os.environ['TESSDATA_PREFIX'] = str(tessdata_dir)
+    logger_instance.log(f"[INIT] TESSDATA_PREFIX を設定: {tessdata_dir}")
+
+    # 3. ダウンロード対象の言語リストを作成
+    required_langs = {'eng'} # 英語は基本機能として必須
+    
+    # アプリ設定から現在の言語を取得
+    try:
+        app_config = config_manager.load_app_config()
+        current_locale = app_config.get("language", "en_US")
+        
+        target_tess_code = LOCALE_TO_TESS_CODE.get(current_locale)
+        if target_tess_code:
+            required_langs.add(target_tess_code)
+            
+    except Exception as e:
+        logger_instance.log(f"[WARN] 設定読み込み中にエラー発生。デフォルト(eng)のみ確認します: {e}")
+
+    logger_instance.log(f"[INIT] OCR言語データを確認中: {list(required_langs)}")
+
+    # 4. 学習データのダウンロード (高速版 tessdata_fast)
+    base_url = "https://github.com/tesseract-ocr/tessdata_fast/raw/main/{}.traineddata"
+    headers = {'User-Agent': 'Mozilla/5.0'} 
+
+    all_success = True
+    
+    MAX_RETRIES = 3
+    RETRY_DELAY = 2 # 秒
+
+    for lang in required_langs:
+        file_path = tessdata_dir / f"{lang}.traineddata"
+        
+        if not file_path.exists():
+            logger_instance.log(f"[INIT] {lang}.traineddata がありません。ダウンロード中...")
+            
+            # リトライループ
+            download_success = False
+            last_error = None
+            
+            for attempt in range(MAX_RETRIES):
+                try:
+                    url = base_url.format(lang)
+                    # タイムアウト設定
+                    response = requests.get(url, headers=headers, stream=True, timeout=30)
+                    response.raise_for_status()
+                    
+                    with open(file_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            f.write(chunk)
+                    
+                    logger_instance.log(f"[INIT] ダウンロード完了: {lang}")
+                    download_success = True
+                    break # 成功したらループを抜ける
+                    
+                except Exception as e:
+                    last_error = e
+                    if attempt < MAX_RETRIES - 1:
+                        logger_instance.log(f"[WARN] ダウンロード失敗 ({attempt+1}/{MAX_RETRIES})。{RETRY_DELAY}秒後に再試行します: {e}")
+                        time.sleep(RETRY_DELAY)
+                        # 失敗した不完全なファイルがあれば削除してリトライ
+                        if file_path.exists():
+                            try: file_path.unlink()
+                            except: pass
+            
+            if not download_success:
+                logger_instance.log(f"[ERROR] {lang} のダウンロードに失敗しました (Final): {last_error}")
+                all_success = False
+        else:
+            # 既に存在する場合は何もしない
+            pass
+
+    return all_success
+
 def restart_application():
     global app, _lock_socket
     if not app: return
@@ -92,7 +194,6 @@ def main():
     extra = {'font_family': 'Meiryo UI, Yu Gothic UI, Segoe UI, sans-serif', 'font_size': '13px', 'density_scale': '-1'}
     try:
         apply_stylesheet(app, theme='light_blue.xml', extra=extra)
-        # CSSは変更せずそのまま
         custom_style = """
             QWidget { color: #37474f; font-family: 'Meiryo UI', 'Yu Gothic UI', sans-serif; }
             QPushButton { color: #37474f; border: 1px solid #cfd8dc; background-color: #ffffff; border-radius: 4px; padding: 4px 12px; font-weight: bold; }
@@ -132,16 +233,37 @@ def main():
     locale_manager = LocaleManager()
     logger.set_locale_manager(locale_manager)
 
+    # ★★★ 修正: 2重起動時はメッセージボックスを出して終了 ★★★
     if not check_and_lock():
+        # JSON内のキーを使用
+        title = locale_manager.tr("error_already_running_title")
+        msg = locale_manager.tr("error_already_running_text")
+        
+        # 万が一キーが存在しない場合のフォールバック
+        if title == "error_already_running_title": 
+            title = "Startup Error"
+        if msg == "error_already_running_text": 
+            msg = "Imeck15 is already running."
+            
+        QMessageBox.warning(None, title, msg)
         sys.exit(1)
     
+    # ConfigManager初期化
     config_manager = ConfigManager(logger)
+
+    logger.log("OCR環境を確認中...", force=True)
+    if not initialize_tesseract(logger, config_manager):
+        logger.log("[WARN] OCRデータの準備に失敗しました。OCR機能は動作しない可能性があります。", force=True)
+    else:
+        logger.log("OCR環境の準備が完了しました。", force=True)
+
     capture_manager = CaptureManager(logger)
     ui_manager = UIManager(None, capture_manager, config_manager, logger, locale_manager)
     logger.set_ui(ui_manager)
     core_engine = CoreEngine(ui_manager, capture_manager, config_manager, logger, locale_manager)
     ui_manager.core_engine = core_engine
     
+    # シグナル接続
     core_engine.updateStatus.connect(ui_manager.set_status)
     core_engine.updatePreview.connect(ui_manager.update_image_preview)
     core_engine.updateRecAreaPreview.connect(ui_manager.update_rec_area_preview)
@@ -168,6 +290,7 @@ def main():
     ui_manager.itemsMovedIntoFolder.connect(core_engine.move_items_into_folder)
     ui_manager.moveItemOutOfFolderRequested.connect(core_engine.move_item_out_of_folder)
     ui_manager.setRecAreaMethodSelected.connect(core_engine.set_recognition_area)
+    ui_manager.saveCapturedImageRequested.connect(core_engine.handle_save_captured_image)
 
     ui_manager.connect_signals()
     

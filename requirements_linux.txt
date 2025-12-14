@@ -9,3 +9,9 @@ pynput
 pyautogui
 qtawesome
 qt-material
+pytesseract
+requests
+
+# sudo apt install tesseract-ocr libtesseract-dev
+# sudo apt install zenity
+

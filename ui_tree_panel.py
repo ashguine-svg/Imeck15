@@ -1,10 +1,12 @@
 # ui_tree_panel.py
-# 右クリックメニューに「タイマー設定」を追加
-# ★★★ 修正: リネーム時とタイマー設定時にマウスフックを一時停止するロジックを追加 ★★★
+# ★★★ 修正: OCR設定ダイアログ呼び出し時に enabled 値を正しく渡す ★★★
 
 import sys
 import os
 from pathlib import Path
+import numpy as np
+import cv2
+
 from PySide6.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QGridLayout,
     QAbstractItemView, QMessageBox, QInputDialog, QTreeWidgetItem,
@@ -19,6 +21,15 @@ import qtawesome as qta
 from image_tree_widget import DraggableTreeWidget
 from dialogs import FolderSettingsDialog
 from timer_ui import TimerSettingsDialog
+
+# --- OCR Integration Imports ---
+try:
+    from ocr_manager import OCRConfig
+    from ocr_settings_dialog import OCRSettingsDialog
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+# -------------------------------
 
 from custom_input_dialog import ask_string_custom
 
@@ -63,8 +74,8 @@ class LeftPanel(QObject):
     def create_colored_icon(self, color):
         """ステータス表示用の色付きドットアイコンを生成"""
         size = 14
-        image = QImage(size, size, QImage.Format_ARGB32_Premultiplied)
-        image.fill(Qt.transparent)
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.transparent)
 
         should_draw = False
         if isinstance(color, Qt.GlobalColor):
@@ -77,17 +88,14 @@ class LeftPanel(QObject):
             should_draw = True
 
         if should_draw:
-            painter = QPainter()
-            if painter.begin(image): 
-                try:
-                    painter.setRenderHint(QPainter.Antialiasing)
-                    painter.setBrush(QBrush(color))
-                    painter.setPen(Qt.NoPen)
-                    painter.drawEllipse(2, 2, 10, 10)
-                finally:
-                    painter.end()
+            painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setBrush(QBrush(color))
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(2, 2, 10, 10)
+            painter.end()
         
-        return QIcon(QPixmap.fromImage(image))
+        return QIcon(pixmap)
 
     def setup_ui(self, parent_layout):
         left_frame = QFrame()
@@ -290,7 +298,7 @@ class LeftPanel(QObject):
                 
                 if mode == 'normal': icon_color = QColor("#90a4ae")
                 elif mode == 'excluded': brush = QBrush(QColor("#d32f2f")); icon_color = QColor("#d32f2f")
-                elif mode == 'cooldown': brush = QBrush(QColor("#7b1fa2")); icon_color = QColor("#7b1fa2")
+                elif mode == 'cooldown': brush = QBrush(QColor("#a1887f")); icon_color = QColor("#a1887f")
                 elif mode == 'priority_image': brush = QBrush(QColor("#1976d2")); icon_color = QColor("#1976d2")
                 elif mode == 'priority_timer': brush = QBrush(QColor("#388e3c")); icon_color = QColor("#388e3c")
                 elif mode == 'priority_sequence': brush = QBrush(QColor("#0097a7")); icon_color = QColor("#0097a7")
@@ -315,11 +323,21 @@ class LeftPanel(QObject):
                 image_item.setData(0, Qt.UserRole, item_data['path'])
                 
                 settings = item_data.get('settings', {})
-                is_timer_enabled = settings.get('timer_mode', {}).get('enabled', False)
+                timer_conf = settings.get('timer_mode', {})
+                is_timer_enabled = False
+                if timer_conf and isinstance(timer_conf, dict):
+                    is_timer_enabled = timer_conf.get('enabled', False)
+                
+                ocr_conf = settings.get('ocr_settings')
+                is_ocr_enabled = False
+                if ocr_conf and isinstance(ocr_conf, dict):
+                    is_ocr_enabled = ocr_conf.get('enabled', False)
                 
                 icon_color = Qt.transparent
                 if is_timer_enabled:
-                    icon_color = QColor("#ff9800") 
+                    icon_color = QColor("#ff9800")
+                elif is_ocr_enabled:
+                    icon_color = QColor("#9c27b0")
                 
                 image_item.setIcon(0, self.create_colored_icon(icon_color))
                 
@@ -407,6 +425,11 @@ class LeftPanel(QObject):
             action_timer.setIcon(self._safe_icon('fa5s.clock', color='#546e7a'))
             action_timer.triggered.connect(lambda: self._open_timer_settings(path))
             
+            if OCR_AVAILABLE:
+                action_ocr = menu.addAction(lm("ocr_settings_btn")) 
+                action_ocr.setIcon(self._safe_icon('fa5s.font', color='#9c27b0'))
+                action_ocr.triggered.connect(lambda: self._open_ocr_settings(path))
+            
         menu.exec(self.image_tree.mapToGlobal(pos))
 
     def _open_folder_settings(self, item, path):
@@ -424,7 +447,6 @@ class LeftPanel(QObject):
     def _open_timer_settings(self, path):
         current_settings = self.config_manager.load_item_setting(path)
         
-        # ★★★ 修正: core_engine を渡すことでタイマー画面でもリスナー停止機能を使えるようにする ★★★
         dialog = TimerSettingsDialog(path, path.name, current_settings, self.locale_manager, 
                                      parent=self.ui_manager, 
                                      core_engine=self.core_engine)
@@ -436,6 +458,69 @@ class LeftPanel(QObject):
             
             self.logger.log(f"[INFO] Timer settings updated for {path.name}")
             self.ui_manager.folderSettingsChanged.emit()
+
+    def _open_ocr_settings(self, path):
+        """OCR設定ダイアログを開く"""
+        template_image = None
+        
+        if self.core_engine and self.core_engine.current_image_path == str(path):
+            template_image = self.core_engine.current_image_mat
+        
+        if template_image is None:
+            try:
+                with open(path, 'rb') as f:
+                    file_bytes = np.fromfile(f, np.uint8)
+                template_image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+            except Exception as e:
+                self.logger.log(f"[ERROR] Failed to load image for OCR: {e}")
+                return
+
+        if template_image is None:
+            QMessageBox.warning(self.ui_manager, "Error", f"Could not load image:\n{path}")
+            return
+
+        current_settings = self.config_manager.load_item_setting(path)
+        saved_ocr_settings = current_settings.get('ocr_settings', {})
+        
+        config = OCRConfig()
+        if "config" in saved_ocr_settings:
+            cfg_data = saved_ocr_settings["config"]
+            config.scale = cfg_data.get("scale", 2.0)
+            config.threshold = cfg_data.get("threshold", 128)
+            config.invert = cfg_data.get("invert", False)
+            config.numeric_mode = cfg_data.get("numeric_mode", False)
+            config.lang = cfg_data.get("lang", "eng")
+            
+        current_roi = saved_ocr_settings.get("roi", None)
+        current_condition = saved_ocr_settings.get("condition", None)
+        
+        # ★★★ 修正: 保存された有効状態を取得 (デフォルトはTrue) ★★★
+        is_enabled = saved_ocr_settings.get('enabled', True)
+
+        # ★★★ 修正: enabled引数を渡す ★★★
+        dialog = OCRSettingsDialog(template_image, config, current_roi, current_condition, enabled=is_enabled, parent=self.ui_manager)
+        
+        if dialog.exec():
+            new_config, new_roi, new_condition, new_enabled = dialog.get_result()
+            
+            ocr_data = {
+                "enabled": new_enabled,
+                "roi": new_roi,
+                "config": {
+                    "scale": new_config.scale,
+                    "threshold": new_config.threshold,
+                    "invert": new_config.invert,
+                    "numeric_mode": new_config.numeric_mode,
+                    "lang": new_config.lang
+                },
+                "condition": new_condition
+            }
+            
+            current_settings['ocr_settings'] = ocr_data
+            self.config_manager.save_item_setting(path, current_settings)
+            
+            self.logger.log(f"[INFO] OCR settings saved for {path.name}")
+            self.update_image_tree()
 
     def load_images_dialog(self):
         lm = self.locale_manager.tr
@@ -472,7 +557,6 @@ class LeftPanel(QObject):
             
         current_base_name = Path(current_name).stem
 
-        # ★★★ フリーズ対策: ダイアログ呼び出し前にリスナーを停止 ★★★
         if self.core_engine:
             with self.core_engine.temporary_listener_pause():
                 new_name, ok = ask_string_custom(

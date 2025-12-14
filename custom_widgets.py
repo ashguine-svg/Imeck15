@@ -168,6 +168,22 @@ class InteractivePreviewLabel(QLabel):
                 
                 painter.setRenderHint(QPainter.Antialiasing)
 
+                # --- 1. OCR範囲 (紫枠) の描画 ---
+                # settings辞書に 'ocr_settings' が含まれている場合に描画
+                ocr_settings = self.click_settings.get('ocr_settings')
+                if ocr_settings and ocr_settings.get('enabled') and ocr_settings.get('roi'):
+                    roi_rect = ocr_settings.get('roi') # (x, y, w, h)
+                    if roi_rect and len(roi_rect) == 4:
+                        rx, ry, rw, rh = roi_rect
+                        p_tl = to_widget_coords((rx, ry))
+                        p_br = to_widget_coords((rx + rw, ry + rh))
+                        
+                        # 紫色のペンとブラシ
+                        painter.setPen(QPen(QColor("#9c27b0"), 2, Qt.SolidLine))
+                        painter.setBrush(QColor(156, 39, 176, 60)) # 透明度設定
+                        painter.drawRect(QRectF(p_tl, p_br))
+
+                # --- 2. 通常のROI (緑枠) の描画 ---
                 if self.click_settings.get('roi_enabled'):
                     roi_mode = self.click_settings.get('roi_mode', 'fixed')
                     roi_rect_data = None
@@ -177,26 +193,31 @@ class InteractivePreviewLabel(QLabel):
                         roi_rect_data = self.click_settings.get('roi_rect_variable')
                     
                     if roi_rect_data:
+                        # (x1, y1, x2, y2)
                         p1 = to_widget_coords((roi_rect_data[0], roi_rect_data[1]))
                         p2 = to_widget_coords((roi_rect_data[2], roi_rect_data[3]))
                         painter.setPen(QPen(QColor(0, 255, 0), 2))
                         painter.setBrush(QColor(0, 255, 0, 30))
                         painter.drawRect(QRectF(p1, p2))
 
+                # --- 3. クリックポイント (赤点) の描画 ---
                 if self.click_settings.get('point_click') and self.click_settings.get('click_position'):
                     p = to_widget_coords(self.click_settings['click_position'])
                     painter.setPen(QPen(QColor(255, 50, 50), 3))
                     painter.setBrush(QColor(255, 50, 50))
                     painter.drawEllipse(p, 4, 4)
                     
+                # --- 4. クリック範囲 (青枠) の描画 ---
                 elif self.click_settings.get('range_click') and self.click_settings.get('click_rect'):
                     rect = self.click_settings['click_rect']
+                    # (x1, y1, x2, y2)
                     p1 = to_widget_coords((rect[0], rect[1]))
                     p2 = to_widget_coords((rect[2], rect[3]))
                     painter.setPen(QPen(QColor(50, 100, 255), 2))
                     painter.setBrush(Qt.NoBrush)
                     painter.drawRect(QRectF(p1, p2))
                     
+                # --- 5. ドラッグ中の描画 ---
                 if self.is_drawing:
                     p1 = to_widget_coords((self.start_pos.x(), self.start_pos.y()))
                     p2 = to_widget_coords((self.end_pos.x(), self.end_pos.y()))

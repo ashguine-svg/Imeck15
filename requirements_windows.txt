@@ -11,3 +11,8 @@ pywin32
 dxcam
 qtawesome
 qt-material
+pytesseract
+requests
+
+
+# pip install -r requirements.txt

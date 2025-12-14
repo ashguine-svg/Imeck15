@@ -1,6 +1,5 @@
 # timer_ui.py
-# タイマー連動クリック機能の設定画面 (v3.4 UI修正版 + IME対策 + フリーズ対策)
-# ★★★ 修正: 説明欄の入力時にもマウスフックを一時停止する ★★★
+# ★★★ 修正: レイアウトを左右分割に戻し、最大化・最小化ボタンを有効化 ★★★
 
 import sys
 import time
@@ -10,7 +9,7 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox, 
     QSpinBox, QDoubleSpinBox, QCheckBox, QWidget, QMessageBox,
     QAbstractItemView, QLineEdit, QSizePolicy, QStyledItemDelegate,
-    QTimeEdit, QStyle, QTabWidget, QTextEdit
+    QTimeEdit, QStyle, QTabWidget, QTextEdit, QFrame, QGridLayout
 )
 from PySide6.QtCore import Qt, Signal, QPoint, QTimer, QTime, QEvent
 from PySide6.QtGui import QPixmap, QPainter, QPen, QColor, QMouseEvent, QFont, QBrush
@@ -130,18 +129,22 @@ class ClickPreviewLabel(ScaledPixmapLabel):
 class TimerSettingsDialog(QDialog):
     def __init__(self, item_path, item_name, current_settings, locale_manager, parent=None, core_engine=None):
         super().__init__(parent)
-        self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
+        
+        # ★★★ 修正: 最大化・最小化ボタンを有効にするフラグを設定 ★★★
+        self.setWindowFlags(self.windowFlags() | Qt.WindowMinMaxButtonsHint)
+        
         self.item_path = item_path
         self.item_name = item_name
         self.settings = current_settings.get('timer_mode', {})
         self.locale_manager = locale_manager
-        self.core_engine = core_engine # ★追加: コアエンジンの保持
+        self.core_engine = core_engine
         
         title_fmt = self.locale_manager.tr("timer_settings_title", item_name)
         if title_fmt == "timer_settings_title": title_fmt = f"Timer Settings - {item_name}"
         self.setWindowTitle(title_fmt)
         
-        self.resize(1150, 780)
+        # ★★★ 修正: 指定サイズ 1000x680 ★★★
+        self.resize(1000, 680)
         
         # --- データ初期化 ---
         loaded_actions = self.settings.get('actions', [])
@@ -180,7 +183,10 @@ class TimerSettingsDialog(QDialog):
         
     def setup_ui(self):
         lm = self.locale_manager.tr
+        # ★★★ 修正: 左右分割 (HBox) に戻す ★★★
         layout = QHBoxLayout(self)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(5)
         
         # --- 左側 (タブ化) ---
         self.left_tabs = QTabWidget()
@@ -194,7 +200,7 @@ class TimerSettingsDialog(QDialog):
             QTabBar::tab {
                 background: #cfd8dc;
                 border: 1px solid #b0bec5;
-                padding: 6px 12px;
+                padding: 4px 8px;
                 margin-right: 2px;
                 color: #455a64;
                 border-top-left-radius: 4px;
@@ -214,11 +220,11 @@ class TimerSettingsDialog(QDialog):
         # タブ1: プレビュー & 設定
         self.tab_preview_widget = QWidget()
         preview_layout = QVBoxLayout(self.tab_preview_widget)
-        preview_layout.setContentsMargins(10, 10, 10, 10) 
+        preview_layout.setContentsMargins(5, 5, 5, 5)
         
         self.preview_label = ClickPreviewLabel()
         self.preview_label.setStyleSheet("border: 2px solid #546e7a; background-color: #263238;") 
-        self.preview_label.setMinimumSize(600, 450)
+        self.preview_label.setMinimumSize(500, 350)
         self.preview_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         
         pixmap = QPixmap(str(self.item_path))
@@ -227,16 +233,14 @@ class TimerSettingsDialog(QDialog):
         self.preview_label.positionClicked.connect(self.on_preview_clicked)
         
         lbl_preview = QLabel(lm("timer_preview_instruction"))
-        lbl_preview.setStyleSheet("font-weight: bold; color: #37474f; font-size: 13px; margin-bottom: 5px;")
+        lbl_preview.setStyleSheet("font-weight: bold; color: #37474f; font-size: 13px; margin-bottom: 2px;")
         
         desc_layout = QHBoxLayout()
         desc_label = QLabel(lm("timer_header_desc") + ":")
         desc_layout.addWidget(desc_label)
         
-        # IME対策: 説明入力欄
         self.desc_input = QLineEdit()
         self.desc_input.setPlaceholderText("(Click to edit)")
-        # イベントフィルタをセットしてクリックを監視
         self.desc_input.installEventFilter(self)
         self.desc_input.textChanged.connect(self.on_desc_changed)
         
@@ -263,9 +267,12 @@ class TimerSettingsDialog(QDialog):
         
         # --- 右側 (設定) ---
         right_layout = QVBoxLayout()
+        right_layout.setSpacing(5)
         
         grp_basic = QGroupBox(lm("timer_basic_settings"))
-        form_layout = QVBoxLayout(); form_layout.setSpacing(8)
+        form_layout = QVBoxLayout()
+        form_layout.setContentsMargins(10, 8, 10, 8)
+        form_layout.setSpacing(5)
         
         self.enable_cb = QCheckBox(lm("timer_enable"))
         self.enable_cb.setStyleSheet("font-weight: bold; color: #37474f;")
@@ -304,7 +311,7 @@ class TimerSettingsDialog(QDialog):
         
         self.table = QTableWidget(); self.table.setColumnCount(4)
         self.table.setHorizontalHeaderLabels([
-            "On", "ID", lm("timer_header_time"), "Exec Time (HH:mm:ss)"
+            "On", "ID", lm("timer_header_time"), "Exec Time"
         ])
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents) 
@@ -327,7 +334,7 @@ class TimerSettingsDialog(QDialog):
         
         self.coord_label = QLabel("Coord: (--, --)")
         self.coord_label.setAlignment(Qt.AlignCenter)
-        self.coord_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #424242; margin-top: 5px;")
+        self.coord_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #424242; margin-top: 2px;")
         list_layout.addWidget(self.coord_label)
         
         grp_list.setLayout(list_layout)
@@ -336,7 +343,7 @@ class TimerSettingsDialog(QDialog):
         bbox = QHBoxLayout()
         self.close_btn = QPushButton("Close")
         self.close_btn.clicked.connect(self.accept)
-        self.close_btn.setMinimumHeight(40)
+        self.close_btn.setMinimumHeight(34)
         
         bbox.addStretch(); bbox.addWidget(self.close_btn)
         right_layout.addLayout(bbox)
@@ -351,11 +358,10 @@ class TimerSettingsDialog(QDialog):
         return super().eventFilter(source, event)
 
     def _open_desc_input_dialog(self):
-        """説明入力用のTkinterダイアログを開く"""
+        """説明入力用のダイアログを開く"""
         current_text = self.desc_input.text()
         lm = self.locale_manager.tr
         
-        # ★★★ フリーズ対策: リスナー停止 ★★★
         if self.core_engine:
             with self.core_engine.temporary_listener_pause():
                 new_text, ok = ask_string_custom(
@@ -365,7 +371,6 @@ class TimerSettingsDialog(QDialog):
                     current_text
                 )
         else:
-            # 万が一CoreEngineがない場合のフォールバック
             new_text, ok = ask_string_custom(
                 self, 
                 "Edit Description", 

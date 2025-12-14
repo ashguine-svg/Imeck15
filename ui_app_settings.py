@@ -15,6 +15,13 @@ try:
 except ImportError:
     DXCAM_AVAILABLE = False
 
+# ★★★ 追加: OCR関連のインポート ★★★
+try:
+    from ocr_manager import OCRManager, get_tess_code_from_locale
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+
 OPENCL_AVAILABLE = False
 try:
     if cv2.ocl.haveOpenCL():
@@ -33,6 +40,9 @@ class AppSettingsPanel(QObject):
         self.config_manager = config_manager
         self.app_config = app_config
         self.locale_manager = locale_manager
+        
+        # OCRダウンロード管理用
+        self.ocr_download_manager = None
         
         self.app_settings_widgets = {}
         self.auto_scale_widgets = {}
@@ -72,7 +82,6 @@ class AppSettingsPanel(QObject):
     def apply_card_style(self, group_box):
         """
         QGroupBoxをモダンなカードスタイル（白背景、グレー枠線）にするヘルパー。
-        ライトグリーンを排除し、落ち着いた配色に。
         """
         group_box.setStyleSheet("""
             QGroupBox {
@@ -104,7 +113,6 @@ class AppSettingsPanel(QObject):
         self.tab_auto_scale_scroll = QScrollArea()
         self.tab_auto_scale_scroll.setWidgetResizable(True)
         self.tab_auto_scale_scroll.setFrameShape(QFrame.NoFrame)
-        # スクロールエリアの背景色も白系に
         self.tab_auto_scale_scroll.setStyleSheet("background-color: #fafafa;")
         
         container = QWidget()
@@ -298,7 +306,6 @@ class AppSettingsPanel(QObject):
         self.lw_mode_preset_label = QLabel()
         preset_layout.addWidget(self.lw_mode_preset_label)
         self.app_settings_widgets['lightweight_mode_preset'] = QComboBox()
-        # ★ 幅を広げる修正 (文字切れ防止のため200px程度確保)
         self.app_settings_widgets['lightweight_mode_preset'].setMinimumWidth(200)
         preset_layout.addWidget(self.app_settings_widgets['lightweight_mode_preset'])
         preset_layout.addStretch()
@@ -387,11 +394,9 @@ class AppSettingsPanel(QObject):
         self.app_settings_widgets['lightweight_mode_enabled'].setText(lm("app_setting_lw_mode_enable"))
         self.lw_mode_preset_label.setText(lm("app_setting_lw_mode_preset"))
         
-        # --- 修正: 設定からプリセット値を正しく反映させる ---
         self.app_settings_widgets['lightweight_mode_preset'].blockSignals(True)
         self.app_settings_widgets['lightweight_mode_preset'].clear()
         
-        # 項目リストを定義
         preset_items = [
             lm("app_setting_lw_mode_preset_standard"),    # index 0: standard
             lm("app_setting_lw_mode_preset_performance"), # index 1: performance
@@ -399,22 +404,18 @@ class AppSettingsPanel(QObject):
         ]
         self.app_settings_widgets['lightweight_mode_preset'].addItems(preset_items)
 
-        # Configから保存された設定値を取得 ('standard' / 'performance' / 'ultra')
         saved_preset_key = self.app_config.get('lightweight_mode', {}).get('preset', 'standard')
         
-        # 内部キーをインデックスにマッピング
         target_index = 0
         if saved_preset_key == 'performance':
             target_index = 1
         elif saved_preset_key == 'ultra':
             target_index = 2
         
-        # 正しいインデックスを選択
         if target_index < self.app_settings_widgets['lightweight_mode_preset'].count():
              self.app_settings_widgets['lightweight_mode_preset'].setCurrentIndex(target_index)
              
         self.app_settings_widgets['lightweight_mode_preset'].blockSignals(False)
-        # ----------------------------------------------------
 
         self.lw_mode_desc_label.setText(lm("app_setting_lw_mode_desc"))
 
@@ -553,3 +554,33 @@ class AppSettingsPanel(QObject):
             self.locale_manager.load_locale(lang_code)
             self.ui_manager.retranslate_ui()
             self.locale_manager.languageChanged.connect(self.ui_manager.retranslate_ui)
+
+            # --- ★★★ 追加: 言語変更時にOCRデータをダウンロード ★★★ ---
+            if OCR_AVAILABLE:
+                self._trigger_ocr_download(lang_code)
+
+    def _trigger_ocr_download(self, locale_code):
+        """指定されたロケールに対応するOCRデータをバックグラウンドでダウンロード"""
+        tess_code = get_tess_code_from_locale(locale_code)
+        
+        # 英語は最初から入っているはずなので、それ以外の場合のみチェック
+        if tess_code == 'eng':
+            return
+
+        # マネージャーインスタンスを作成
+        if not self.ocr_download_manager:
+            self.ocr_download_manager = OCRManager()
+            # シグナルは都度繋がないように一度だけ繋ぎたいが、インスタンスの寿命次第
+            # ここではシンプルに都度接続して完了後に切断する方法か、保持し続けるか
+            # ログ出力のみなので保持でOK
+            self.ocr_download_manager.download_finished.connect(self._on_ocr_download_finished)
+        
+        if not self.ocr_download_manager.is_language_ready(tess_code):
+            self.ui_manager.logger.log(f"[INFO] 言語データ({tess_code})をダウンロード開始...")
+            self.ocr_download_manager.download_languages([tess_code])
+
+    def _on_ocr_download_finished(self, success, msg):
+        if success:
+            self.ui_manager.logger.log(f"[INFO] OCRデータ: {msg}")
+        else:
+            self.ui_manager.logger.log(f"[WARN] OCRデータ: {msg}")

@@ -1,7 +1,9 @@
 # image_tree_widget.py
+# ★★★ 修正: D&D時の同名ファイルチェックとエラーダイアログ表示を追加 ★★★
 
 import sys
-from PySide6.QtWidgets import QTreeWidget, QTreeWidgetItem, QApplication
+# 修正: QMessageBox をインポートに追加
+from PySide6.QtWidgets import QTreeWidget, QTreeWidgetItem, QApplication, QMessageBox
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtCore import Qt, Signal
 from pathlib import Path
@@ -118,99 +120,150 @@ class DraggableTreeWidget(QTreeWidget):
         super().dragLeaveEvent(event)
 
     def dropEvent(self, event):
-        # ハイライトとダミーインジケータをクリア
+        """
+        ドロップイベント処理。
+        """
+        # 1. 視覚効果のクリア
         if self.last_highlighted_item:
             self.last_highlighted_item.setBackground(0, QBrush(Qt.transparent))
             self.last_highlighted_item = None
-
         self._remove_dummy_indicator()
 
         if event.source() != self:
             super().dropEvent(event)
             return
 
-        target_item = self.itemAt(event.position().toPoint())
+        # 2. 移動対象とターゲットの特定
         dragged_items = self.selectedItems()
-        if not dragged_items:
-            return
+        if not dragged_items: return
 
-        source_parent = dragged_items[0].parent()
+        target_item = self.itemAt(event.position().toPoint())
         pos = self.dropIndicatorPosition()
         
+        # 3. ドロップ先（親アイテム）と挿入位置（インデックス）の決定
+        dest_parent = None # NoneならRoot
+        insert_index = -1
+
         target_is_folder = False
         if target_item:
             path_str = target_item.data(0, Qt.UserRole)
             if path_str and Path(path_str).is_dir():
                 target_is_folder = True
 
-        # アイテムの複製準備
-        cloned_items_data = [(item.clone(), item.data(0, Qt.UserRole)) for item in dragged_items]
-
-        # 移動元のアイテムを削除
-        for item in dragged_items:
-            parent = item.parent()
-            if parent:
-                parent.removeChild(item)
-            else:
-                self.takeTopLevelItem(self.indexOfTopLevelItem(item))
-
-        dest_parent = None
-        insert_index = -1
-
-        # ドロップ位置の決定
-        if pos == self.DropIndicatorPosition.OnItem and target_item:
-            if target_is_folder:
-                # フォルダ内へ移動
-                dest_parent = target_item
-                insert_index = 0
-            else:
-                # 画像の「下」へ移動
-                dest_parent = target_item.parent()
-                if dest_parent:
-                    insert_index = dest_parent.indexOfChild(target_item) + 1
-                else:
-                    insert_index = self.indexOfTopLevelItem(target_item) + 1
-
+        # --- A. フォルダアイコンの上にドロップ ---
+        if pos == self.DropIndicatorPosition.OnItem and target_item and target_is_folder:
+            dest_parent = target_item
+            insert_index = 0 # フォルダの先頭へ
+        
+        # --- B. アイテムの上/下、または画像の上にドロップ ---
         elif target_item:
-            # ターゲットの上または下へ
             dest_parent = target_item.parent()
+            
+            # ターゲットの現在のインデックスを取得
             if dest_parent:
-                insert_index = dest_parent.indexOfChild(target_item)
-                if pos == self.DropIndicatorPosition.BelowItem:
-                    insert_index += 1
+                target_idx = dest_parent.indexOfChild(target_item)
             else:
-                insert_index = self.indexOfTopLevelItem(target_item)
-                if pos == self.DropIndicatorPosition.BelowItem:
-                    insert_index += 1
-        else:
-             # 空白地帯 -> 末尾へ
-             dest_parent = None
-             insert_index = self.topLevelItemCount()
+                target_idx = self.indexOfTopLevelItem(target_item)
+            
+            # OnItem(画像)なら下へ、Belowなら下へ、Aboveならその位置へ
+            if pos == self.DropIndicatorPosition.AboveItem:
+                insert_index = target_idx
+            else:
+                insert_index = target_idx + 1
 
-        # アイテムの挿入
-        inserted_items = []
+        # --- C. 何もない空間（ビューポート）にドロップ ---
+        else:
+            dest_parent = None
+            insert_index = self.topLevelItemCount() # 末尾へ
+
+        # --- ★★★ 追加: 同名ファイルチェック（移動エラー防止） ★★★ ---
+        # 移動先のディレクトリパスを特定
+        dest_dir_path = self.config_manager.base_dir
         if dest_parent:
-            for i, (item_clone, _) in enumerate(cloned_items_data):
-                dest_parent.insertChild(insert_index + i, item_clone)
-                inserted_items.append(item_clone)
-        else:
-            for i, (item_clone, _) in enumerate(cloned_items_data):
-                self.insertTopLevelItem(insert_index + i, item_clone)
-                inserted_items.append(item_clone)
+            dest_dir_path = Path(dest_parent.data(0, Qt.UserRole))
 
-        # 選択状態の復元
-        self.clearSelection()
-        if inserted_items:
-            for item in inserted_items:
+        for item in dragged_items:
+            # 同じ親の中での移動（並べ替え）ならファイル名重複チェックは不要
+            if item.parent() == dest_parent:
+                continue
+
+            src_path_str = item.data(0, Qt.UserRole)
+            if not src_path_str: continue
+            
+            src_path = Path(src_path_str)
+            target_path = dest_dir_path / src_path.name
+            
+            if target_path.exists():
+                # 重複エラーを表示して中止
+                lm = self.config_manager.logger.locale_manager
+                err_title = lm.tr("error_title_move_item_failed")
+                if err_title == "error_title_move_item_failed": err_title = "Move Error"
+                
+                err_msg = lm.tr("log_move_item_error_exists", src_path.name)
+                
+                QMessageBox.warning(self, err_title, err_msg)
+                event.ignore()
+                return
+        # -----------------------------------------------------------
+
+        # 4. 移動処理の実行 (シグナルブロックで安全確保)
+        self.blockSignals(True)
+        try:
+            source_parent = dragged_items[0].parent()
+            items_moved_list = []
+            
+            for item in dragged_items:
+                # 移動元の親とインデックスを取得
+                current_parent = item.parent()
+                if current_parent:
+                    current_idx = current_parent.indexOfChild(item)
+                else:
+                    current_idx = self.indexOfTopLevelItem(item)
+
+                # 同じ親の中での移動の場合、自分が抜けることでインデックスがずれるのを補正
+                actual_insert_index = insert_index
+                if current_parent == dest_parent:
+                    if current_idx < insert_index:
+                        actual_insert_index -= 1
+                
+                # アイテムをツリーから「引き抜く」
+                if current_parent:
+                    taken_item = current_parent.takeChild(current_idx)
+                else:
+                    taken_item = self.takeTopLevelItem(current_idx)
+                
+                # アイテムを新しい場所に「挿入する」
+                if dest_parent:
+                    dest_parent.insertChild(actual_insert_index, taken_item)
+                else:
+                    self.insertTopLevelItem(actual_insert_index, taken_item)
+                
+                # 挿入した分、次のアイテムの挿入位置をずらす
+                insert_index = actual_insert_index + 1
+                
+                items_moved_list.append(taken_item)
+
+            # 選択状態を復元
+            self.clearSelection()
+            for item in items_moved_list:
                 item.setSelected(True)
-            self.scrollToItem(inserted_items[0])
+            
+            # 通知用のパスリスト作成
+            dest_path = str(self.config_manager.base_dir)
+            if dest_parent:
+                dest_path = dest_parent.data(0, Qt.UserRole)
+            
+            source_paths = [item.data(0, Qt.UserRole) for item in items_moved_list]
 
-        # フォルダ移動シグナルの発火
+        except Exception as e:
+            print(f"[ERROR] Drag drop failed: {e}")
+        finally:
+            self.blockSignals(False)
+
+        # 5. 変更通知
         if source_parent != dest_parent:
-            dest_path = str(self.config_manager.base_dir) if dest_parent is None else dest_parent.data(0, Qt.UserRole)
-            source_paths = [path for _, path in cloned_items_data if path]
-            if source_paths and dest_path:
-                self.itemsMoved.emit(source_paths, dest_path)
+            self.itemsMoved.emit(source_paths, dest_path)
 
         self.orderUpdated.emit()
+        
         event.accept()

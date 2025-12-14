@@ -1,4 +1,5 @@
 # ui.py
+# ★★★ (修正) OCR設定時にファイルから読み直さず、現在のUI設定をベースにするよう変更 ★★★
 
 import sys
 import os
@@ -33,8 +34,20 @@ from floating_window import FloatingWindow
 from dialogs import RecAreaSelectionDialog
 from custom_widgets import ScaledPixmapLabel, InteractivePreviewLabel
 from preview_mode_manager import PreviewModeManager
+from timer_ui import TimerSettingsDialog
 
 from custom_input_dialog import ask_string_custom
+
+# --- OCR Integration Imports ---
+OCR_AVAILABLE = False
+try:
+    from ocr_manager import OCRConfig
+    from ocr_settings_dialog import OCRSettingsDialog
+    OCR_AVAILABLE = True
+except ImportError as e:
+    print(f"[WARN] OCR modules not found: {e}")
+    OCR_AVAILABLE = False
+# -------------------------------
 
 try:
     OPENCL_AVAILABLE = cv2.ocl.haveOpenCL()
@@ -55,6 +68,62 @@ class UIManager(QMainWindow):
     renameItemRequested = Signal(str, str)
     saveCapturedImageRequested = Signal(str, np.ndarray)
     
+    # --- スタイル定義 (OCRボタン用: 紫) ---
+    STYLE_OCR_BTN_ENABLED = """
+        QPushButton {
+            background-color: #9c27b0;
+            border: 1px solid #7b1fa2;
+            border-radius: 4px;
+            color: white;
+            font-weight: bold;
+            padding: 4px 10px;
+        }
+        QPushButton:hover {
+            background-color: #ab47bc;
+        }
+        QPushButton:pressed {
+            background-color: #7b1fa2;
+        }
+    """
+    STYLE_OCR_BTN_DISABLED = """
+        QPushButton {
+            background-color: #f5f5f5;
+            border: 1px solid #bdbdbd;
+            border-radius: 4px;
+            color: #9e9e9e;
+            font-weight: bold;
+            padding: 4px 10px;
+        }
+    """
+
+    # --- スタイル定義 (タイマーボタン用: オレンジ) ---
+    STYLE_TIMER_BTN_ENABLED = """
+        QPushButton {
+            background-color: #ff9800;
+            border: 1px solid #f57c00;
+            border-radius: 4px;
+            color: white;
+            font-weight: bold;
+            padding: 4px 10px;
+        }
+        QPushButton:hover {
+            background-color: #fb8c00;
+        }
+        QPushButton:pressed {
+            background-color: #f57c00;
+        }
+    """
+    STYLE_TIMER_BTN_DISABLED = """
+        QPushButton {
+            background-color: #f5f5f5;
+            border: 1px solid #bdbdbd;
+            border-radius: 4px;
+            color: #9e9e9e;
+            font-weight: bold;
+            padding: 4px 10px;
+        }
+    """
+    
     def __init__(self, core_engine, capture_manager, config_manager, logger, locale_manager):
         super().__init__(parent=None)
 
@@ -73,6 +142,12 @@ class UIManager(QMainWindow):
         self.auto_scale_widgets = {}   
         self.available_langs = {}      
         self.image_tree = None         
+        
+        # ボタンとラベルの参照用
+        self.ocr_settings_btn_main = None
+        self.ocr_info_label = None # ★追加
+        self.timer_settings_btn_main = None
+        self.timer_info_label = None # ★追加
 
         self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
 
@@ -188,7 +263,7 @@ class UIManager(QMainWindow):
 
         self.main_layout.addWidget(content_frame)
         
-        self._setup_tab_preview()
+        self._setup_tab_preview(self.preview_tabs) 
         self._setup_tab_rec_area()
         
         self.app_settings_panel = AppSettingsPanel(self, self.config_manager, self.app_config, self.locale_manager)
@@ -311,7 +386,7 @@ class UIManager(QMainWindow):
         self._setup_item_settings_group(right_layout)
         parent_layout.addWidget(right_frame, 3) 
 
-    def _setup_tab_preview(self):
+    def _setup_tab_preview(self, tab_widget):
         self.main_preview_widget = QWidget()
         layout = QVBoxLayout(self.main_preview_widget)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -322,7 +397,7 @@ class UIManager(QMainWindow):
         self.preview_label.setStyleSheet("background-color: #263238;")
         
         layout.addWidget(self.preview_label)
-        self.preview_tabs.addTab(self.main_preview_widget, "")
+        tab_widget.addTab(self.main_preview_widget, "")
 
     def _setup_tab_rec_area(self):
         rec_area_widget = QWidget()
@@ -397,12 +472,13 @@ class UIManager(QMainWindow):
 
     def _setup_item_settings_group(self, parent_layout):
         self.item_settings_group = QGroupBox()
+        # ★★★ タイトル表示用マージンを削除してスペースを確保 ★★★
         self.item_settings_group.setStyleSheet("""
             QGroupBox {
                 border: 1px solid #cfd8dc;
                 border-radius: 8px;
-                margin-top: 1.5em;
-                padding-top: 15px;
+                margin-top: 0px;  /* ここを0pxにしてタイトル用スペースを消す */
+                padding-top: 5px; /* 少し詰める */
                 background-color: #fafafa;
                 color: #37474f; 
             }
@@ -453,6 +529,7 @@ class UIManager(QMainWindow):
         self.item_settings_widgets['debounce_time'].setRange(0.0, 10.0); self.item_settings_widgets['debounce_time'].setSingleStep(0.1); self.item_settings_widgets['debounce_time'].setValue(0.0)
         layout.addWidget(self.item_settings_widgets['debounce_time'], 1, 3)
         
+        # --- Row 2: クリック設定 & OCRボタン ---
         click_type_layout = QHBoxLayout()
         click_type_layout.setSpacing(10)
         
@@ -470,13 +547,38 @@ class UIManager(QMainWindow):
         range_group_layout.addWidget(self.item_settings_widgets['random_click'])
         
         click_type_layout.addWidget(range_group_frame)
+        
+        # スペーサーを入れて右に寄せる
         click_type_layout.addStretch()
+        
+        # --- ★★★ 修正: OCR情報ラベルを追加 ★★★ ---
+        self.ocr_info_label = QLabel("----")
+        self.ocr_info_label.setStyleSheet("color: #bdbdbd; font-weight: bold; margin-right: 5px;")
+        click_type_layout.addWidget(self.ocr_info_label)
+        # ------------------------------------------------
+
+        # --- OCR設定ボタンを指定位置（デバウンスの下）に配置 ---
+        if OCR_AVAILABLE:
+            self.ocr_settings_btn_main = QPushButton()
+            self.ocr_settings_btn_main.setStyleSheet(self.STYLE_OCR_BTN_DISABLED)
+            self.ocr_settings_btn_main.setEnabled(False)
+            self.ocr_settings_btn_main.setCursor(Qt.PointingHandCursor)
+            
+            # テキストキーは翻訳で "OCR Settings" などになる
+            self.ocr_settings_btn_main.setText("OCR Settings") 
+            self.item_settings_widgets['ocr_settings_button'] = self.ocr_settings_btn_main
+            
+            self.ocr_settings_btn_main.setIcon(self._safe_icon('fa5s.font', color='#9e9e9e'))
+            
+            click_type_layout.addWidget(self.ocr_settings_btn_main)
+        # -------------------------------------------------------------------
         
         layout.addLayout(click_type_layout, 2, 0, 1, 4)
         
         separator = QFrame(); separator.setFrameShape(QFrame.Shape.HLine); separator.setFrameShadow(QFrame.Shadow.Sunken)
         layout.addWidget(separator, 3, 0, 1, 4)
         
+        # --- Row 4: ROI設定 & Timerボタン (再構築・重複なし) ---
         roi_layout = QHBoxLayout()
         roi_layout.setSpacing(10)
         
@@ -488,6 +590,7 @@ class UIManager(QMainWindow):
         self.roi_mode_group.addButton(self.item_settings_widgets['roi_mode_fixed'])
         roi_layout.addWidget(self.item_settings_widgets['roi_mode_fixed'])
         
+        # Variable Group
         var_group_frame = QFrame()
         var_group_frame.setStyleSheet("QFrame { border: 1px solid #cfd8dc; border-radius: 4px; background-color: #ffffff; }")
         var_group_layout = QHBoxLayout(var_group_frame)
@@ -495,9 +598,6 @@ class UIManager(QMainWindow):
         
         self.item_settings_widgets['roi_mode_variable'] = QRadioButton()
         self.roi_mode_group.addButton(self.item_settings_widgets['roi_mode_variable'])
-        
-        var_group_layout.addWidget(self.item_settings_widgets['roi_mode_variable'])
-        var_group_layout.addSpacing(20) 
         
         self.item_settings_widgets['set_roi_variable_button'] = QPushButton()
         self.item_settings_widgets['set_roi_variable_button'].setCheckable(True)
@@ -523,10 +623,33 @@ class UIManager(QMainWindow):
             }
         """)
         
+        var_group_layout.addWidget(self.item_settings_widgets['roi_mode_variable'])
+        var_group_layout.addSpacing(20)
         var_group_layout.addWidget(self.item_settings_widgets['set_roi_variable_button'])
         
         roi_layout.addWidget(var_group_frame)
+        
+        # スペーサーを入れて右に寄せる
         roi_layout.addStretch()
+        
+        # --- ★★★ 修正: タイマー情報ラベルを追加 ★★★ ---
+        self.timer_info_label = QLabel("--:--:--")
+        self.timer_info_label.setStyleSheet("color: #bdbdbd; font-weight: bold; margin-right: 5px;")
+        roi_layout.addWidget(self.timer_info_label)
+        # ----------------------------------------------------
+
+        # --- 追加: タイマー設定ボタン ---
+        self.timer_settings_btn_main = QPushButton()
+        self.timer_settings_btn_main.setStyleSheet(self.STYLE_TIMER_BTN_DISABLED)
+        self.timer_settings_btn_main.setEnabled(False)
+        self.timer_settings_btn_main.setCursor(Qt.PointingHandCursor)
+        self.timer_settings_btn_main.setText("Timer Settings") 
+        self.timer_settings_btn_main.setIcon(self._safe_icon('fa5s.clock', color='#9e9e9e'))
+        
+        self.item_settings_widgets['timer_settings_button'] = self.timer_settings_btn_main
+        
+        roi_layout.addWidget(self.timer_settings_btn_main)
+        # -------------------------------
         
         layout.addLayout(roi_layout, 4, 0, 1, 4)
         
@@ -583,6 +706,14 @@ class UIManager(QMainWindow):
         self.item_settings_widgets['set_roi_variable_button'].toggled.connect(
             self.preview_mode_manager._drawing_mode_button_toggled
         )
+        
+        # OCRボタンへのシグナル接続
+        if OCR_AVAILABLE and 'ocr_settings_button' in self.item_settings_widgets:
+            self.item_settings_widgets['ocr_settings_button'].clicked.connect(self._on_ocr_settings_button_clicked)
+            
+        # タイマーボタンへのシグナル接続
+        if 'timer_settings_button' in self.item_settings_widgets:
+            self.item_settings_widgets['timer_settings_button'].clicked.connect(self._on_timer_settings_button_clicked)
 
         if self.core_engine:
             self.preview_mode_manager.settings_changed_externally.connect(self._update_ui_from_preview_manager)
@@ -596,6 +727,138 @@ class UIManager(QMainWindow):
             self.saveCapturedImageRequested.connect(self.core_engine.handle_save_captured_image)
 
         self._signals_connected = True
+
+    # --- OCR設定ボタンハンドラ (修正版) ---
+    def _on_ocr_settings_button_clicked(self):
+        lm = self.locale_manager.tr 
+
+        if not OCR_AVAILABLE:
+            QMessageBox.warning(self, lm("ocr_msg_missing_title"), lm("ocr_msg_missing_text"))
+            return
+
+        path, _ = self.get_selected_item_path()
+        if not path or Path(path).is_dir():
+            QMessageBox.information(self, lm("ocr_dialog_title"), lm("ocr_info_select_item"))
+            return
+
+        file_path = Path(path)
+        if not file_path.exists():
+            return
+
+        try:
+            with open(file_path, 'rb') as f:
+                file_bytes = np.fromfile(f, np.uint8)
+            img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+            if img is None:
+                raise ValueError("Decode failed")
+        except Exception as e:
+            QMessageBox.warning(self, lm("ocr_error_load_title"), lm("ocr_error_load_text", str(e)))
+            return
+
+        # ★★★ 修正: ファイルからではなく、現在のUI設定をベースにする ★★★
+        # 1. PreviewModeManagerから現在の状態を取得
+        current_ui_settings = self.preview_mode_manager.get_settings()
+        
+        # 2. 右パネルのウィジェットの値も念のため取得して統合
+        try:
+            current_ui_settings['threshold'] = self.item_settings_widgets['threshold'].value()
+            current_ui_settings['interval_time'] = self.item_settings_widgets['interval_time'].value()
+            current_ui_settings['backup_time'] = self.item_settings_widgets['backup_time'].value()
+            current_ui_settings['debounce_time'] = self.item_settings_widgets['debounce_time'].value()
+        except Exception:
+            pass
+
+        settings = current_ui_settings
+        # --------------------------------------------------------------
+        
+        ocr_conf_dict = settings.get('ocr_settings')
+        if ocr_conf_dict is None:
+            ocr_conf_dict = {}
+
+        config = OCRConfig()
+        if "config" in ocr_conf_dict:
+            cfg_data = ocr_conf_dict["config"]
+            config.scale = cfg_data.get("scale", 2.0)
+            config.threshold = cfg_data.get("threshold", 128)
+            config.invert = cfg_data.get("invert", False)
+            config.numeric_mode = cfg_data.get("numeric_mode", False)
+            config.lang = cfg_data.get("lang", "eng")
+        
+        roi = ocr_conf_dict.get('roi', None)
+        condition = ocr_conf_dict.get('condition', None)
+        
+        # 保存された有効状態を取得 (デフォルトはTrue)
+        is_enabled = ocr_conf_dict.get('enabled', True)
+
+        try:
+            # enabled引数とparent引数を正しく渡す
+            dialog = OCRSettingsDialog(img, config, roi, condition, enabled=is_enabled, parent=self)
+            dialog.set_parent_settings(settings) 
+            
+            if dialog.exec() == QDialog.Accepted:
+                # 4つの戻り値を正しくアンパック
+                new_conf, new_roi, new_condition, new_enabled = dialog.get_result()
+                
+                new_settings = {
+                    "enabled": new_enabled,
+                    'roi': new_roi,
+                    'config': {
+                        'scale': new_conf.scale,
+                        'threshold': new_conf.threshold,
+                        'invert': new_conf.invert,
+                        'lang': new_conf.lang,
+                        'numeric_mode': new_conf.numeric_mode
+                    },
+                    'condition': new_condition
+                }
+                settings['ocr_settings'] = new_settings
+                
+                # ★ settingsに 'image_path' が含まれていない可能性があるので補完
+                if 'image_path' not in settings:
+                    settings['image_path'] = str(file_path)
+
+                self.config_manager.save_item_setting(file_path, settings)
+                
+                self.imageSettingsChanged.emit(settings)
+                
+                # アイコンの色更新のためにツリーを再描画
+                self.update_image_tree()
+                
+                self.logger.log(f"[INFO] OCR settings updated for {file_path.name}")
+                
+                # ★★★ 追加: 設定変更後にラベルを即時更新 ★★★
+                self.update_info_labels(settings)
+                
+        except Exception as e:
+            self.logger.log(f"[ERROR] Failed to open OCR dialog: {e}")
+            import traceback
+            traceback.print_exc()
+
+    # --- タイマー設定ボタンハンドラ ---
+    def _on_timer_settings_button_clicked(self):
+        path, _ = self.get_selected_item_path()
+        if not path or Path(path).is_dir():
+            QMessageBox.information(self, "Timer Settings", "Please select an image item first from the list.")
+            return
+
+        file_path = Path(path)
+        current_settings = self.config_manager.load_item_setting(file_path)
+        
+        dialog = TimerSettingsDialog(file_path, file_path.name, current_settings, self.locale_manager, 
+                                     parent=self, 
+                                     core_engine=self.core_engine)
+        if dialog.exec():
+            timer_data = dialog.get_settings()
+            
+            current_settings['timer_mode'] = timer_data
+            self.config_manager.save_item_setting(file_path, current_settings)
+            
+            self.logger.log(f"[INFO] Timer settings updated for {file_path.name}")
+            # 設定変更を通知して再読み込みなどをトリガー
+            self.imageSettingsChanged.emit(current_settings)
+            
+            # ★★★ 追加: 設定変更後にラベルを即時更新 ★★★
+            self.update_info_labels(current_settings)
 
     def _emit_settings_for_save(self, *args):
         if not hasattr(self, 'preview_mode_manager') or not self.core_engine: return
@@ -634,6 +897,7 @@ class UIManager(QMainWindow):
                 self.item_settings_widgets['roi_mode_variable'].setChecked(True)
             else:
                 self.item_settings_widgets['roi_mode_fixed'].setChecked(True)
+            
         finally:
             if hasattr(self, 'preview_mode_manager'):
                 self.preview_mode_manager._block_all_signals(False)
@@ -695,7 +959,8 @@ class UIManager(QMainWindow):
         dialog.exec()
 
     def adjust_initial_size(self):
-        self.setMinimumWidth(0); self.resize(1000, 680)
+        # ★★★ 修正: 初期サイズを横に拡張 (1000 -> 1150) ★★★
+        self.setMinimumWidth(0); self.resize(1080, 680)
 
     def toggle_minimal_ui_mode(self):
         lm = self.locale_manager.tr; self.is_minimal_mode = not self.is_minimal_mode
@@ -790,7 +1055,9 @@ class UIManager(QMainWindow):
             else: self.usage_text.setText(f"Usage file not found: {usage_html_path}")
         except Exception as e: self.usage_text.setText(f"Error loading usage file ({usage_html_path_str}): {e}")
 
-        self.item_settings_group.setTitle(lm("group_item_settings"))
+        # ★★★ 修正箇所: タイトルを空文字に設定 ★★★
+        self.item_settings_group.setTitle("")
+        
         self.item_threshold_label.setText(lm("item_setting_threshold"))
         self.item_interval_label.setText(lm("item_setting_interval"))
         self.item_settings_widgets['backup_click'].setText(lm("item_setting_backup_click"))
@@ -810,6 +1077,14 @@ class UIManager(QMainWindow):
         self.item_settings_widgets['roi_mode_variable'].setToolTip(lm("item_setting_roi_mode_variable_tooltip"))
         self.item_settings_widgets['set_roi_variable_button'].setText(f" {lm('item_setting_roi_button')}")
         self.item_settings_widgets['set_roi_variable_button'].setToolTip(lm("item_setting_roi_button_tooltip"))
+        
+        # OCRボタンのテキスト更新
+        if 'ocr_settings_button' in self.item_settings_widgets and self.item_settings_widgets['ocr_settings_button']:
+             self.item_settings_widgets['ocr_settings_button'].setText(lm("ocr_settings_btn"))
+        
+        # タイマーボタンのテキスト更新
+        if 'timer_settings_button' in self.item_settings_widgets and self.item_settings_widgets['timer_settings_button']:
+             self.item_settings_widgets['timer_settings_button'].setText(lm("context_menu_timer_settings"))
 
         if self.core_engine:
             current_status = self.status_label.text()
@@ -1051,6 +1326,112 @@ class UIManager(QMainWindow):
             self.preview_mode_manager.sync_from_external(is_folder_or_no_data)
 
         self.item_settings_group.setEnabled(not is_folder_or_no_data)
+        
+        # --- OCRボタンのスタイル・有効状態を切り替え ---
+        if self.ocr_settings_btn_main:
+            if is_folder_or_no_data:
+                self.ocr_settings_btn_main.setStyleSheet(self.STYLE_OCR_BTN_DISABLED)
+                self.ocr_settings_btn_main.setEnabled(False)
+                # アイコン色もグレーに
+                self.ocr_settings_btn_main.setIcon(self._safe_icon('fa5s.font', color='#9e9e9e'))
+            else:
+                self.ocr_settings_btn_main.setStyleSheet(self.STYLE_OCR_BTN_ENABLED)
+                self.ocr_settings_btn_main.setEnabled(True)
+                # アイコン色を白に
+                self.ocr_settings_btn_main.setIcon(self._safe_icon('fa5s.font', color='#ffffff'))
+        # ----------------------------------------------------
+
+        # --- タイマーボタンのスタイル・有効状態を切り替え ---
+        if self.timer_settings_btn_main:
+            if is_folder_or_no_data:
+                self.timer_settings_btn_main.setStyleSheet(self.STYLE_TIMER_BTN_DISABLED)
+                self.timer_settings_btn_main.setEnabled(False)
+                # アイコン色もグレーに
+                self.timer_settings_btn_main.setIcon(self._safe_icon('fa5s.clock', color='#9e9e9e'))
+            else:
+                self.timer_settings_btn_main.setStyleSheet(self.STYLE_TIMER_BTN_ENABLED)
+                self.timer_settings_btn_main.setEnabled(True)
+                # アイコン色を白に
+                self.timer_settings_btn_main.setIcon(self._safe_icon('fa5s.clock', color='#ffffff'))
+        # ----------------------------------------------------
+        
+        # ★★★ 追加: 情報ラベルの更新 ★★★
+        self.update_info_labels(settings_data)
+
+    def update_info_labels(self, settings):
+        """OCR情報ラベルとタイマー情報ラベルを更新する（バッジスタイル）"""
+        
+        # 共通のベーススタイル (角丸、パディング、フォント)
+        base_style = """
+            border-radius: 4px;
+            padding: 2px 8px;
+            margin-right: 8px;
+            font-weight: bold;
+            font-family: Consolas, monospace;
+        """
+        
+        # 無効時のスタイル (グレー背景)
+        disabled_style = base_style + """
+            background-color: #f5f5f5;
+            color: #bdbdbd;
+            border: 1px solid #e0e0e0;
+        """
+        
+        # OCR有効時のスタイル (薄い紫背景)
+        ocr_enabled_style = base_style + """
+            background-color: #f3e5f5;
+            color: #7b1fa2;
+            border: 1px solid #e1bee7;
+        """
+        
+        # タイマー有効時のスタイル (薄いオレンジ背景)
+        timer_enabled_style = base_style + """
+            background-color: #fff3e0;
+            color: #f57c00;
+            border: 1px solid #ffe0b2;
+        """
+        
+        # --- OCR Label ---
+        ocr_text = "----"
+        ocr_style = disabled_style
+        
+        if settings:
+            ocr_conf = settings.get('ocr_settings', {})
+            # OCRが有効、かつコンフィグが存在する場合
+            if ocr_conf and ocr_conf.get('enabled', False):
+                cond = ocr_conf.get('condition', {})
+                op = cond.get('operator', '')
+                val = str(cond.get('value', ''))
+                
+                # 表示用に短縮
+                if op == "Contains": op = "Cont."
+                elif op == "Equals": op = "Eq."
+                elif op == "Regex": op = "Reg."
+                
+                ocr_text = f"{op} {val}"
+                ocr_style = ocr_enabled_style
+        
+        if self.ocr_info_label:
+            self.ocr_info_label.setText(ocr_text)
+            self.ocr_info_label.setStyleSheet(ocr_style)
+
+        # --- Timer Label ---
+        timer_text = "--:--:--"
+        timer_style = disabled_style
+        
+        if settings:
+            timer_conf = settings.get('timer_mode', {})
+            if timer_conf and timer_conf.get('enabled', False):
+                actions = timer_conf.get('actions', [])
+                # ID1を探す
+                id1_action = next((a for a in actions if a.get('id') == 1), None)
+                if id1_action:
+                    timer_text = id1_action.get('display_time', "--:--:--")
+                    timer_style = timer_enabled_style
+        
+        if self.timer_info_label:
+            self.timer_info_label.setText(timer_text)
+            self.timer_info_label.setStyleSheet(timer_style)
    
     def on_selection_process_started(self):
         if self.is_minimal_mode and self.floating_window: 
