@@ -29,6 +29,7 @@ Imeck15 goes beyond simple auto-clicking with advanced logic capabilities:
 
   * **📷 Image Recognition & Auto-Clicking:** Detects registered template images and clicks specific coordinates or random ranges.
   * **🔤 OCR Text Recognition (New\!):** Reads numbers or text from specified areas. You can set conditions (e.g., "Click only if HP \< 50%" or "Stop if text equals 'MAX'").
+      * [cite_start]**🆕 v1.8.1 Enhanced Setup:** The OCR settings screen now features **Real-time Feedback**[cite: 2, 6, 7]. When configuring a target area, the system immediately displays the recognized text and validates the coordinates. This allows you to visually verify that your scan area is perfectly aligned before saving.
   * **📂 Smart Folder Modes:** Create complex scenarios without coding by assigning modes to folders:
       * **Sequence Priority (Cyan):** Clicks images in a strict step-by-step order. Great for login bonuses or tutorials.
       * **Cooldown (Purple):** Pauses the entire folder for a set time after any image is clicked. Perfect for "Close Ad" buttons.
@@ -61,9 +62,9 @@ Please follow the instructions for your specific Operating System below.
 
 To use the new OCR features, you must install the Tesseract OCR engine on your system.
 
-1.  Download the installer (e.g., `tesseract-ocr-w64-setup-v5.x.x.exe`) from the **[UB-Mannheim GitHub](https://github.com/UB-Mannheim/tesseract/wiki)**.
+1.  [cite_start]Download the installer (e.g., `tesseract-ocr-w64-setup-v5.x.x.exe`) from the **[UB-Mannheim GitHub](https://github.com/UB-Mannheim/tesseract/wiki)**[cite: 12].
 2.  Run the installer.
-3.  **Important:** During installation, check "Additional Script Data" -\> **"Japanese"** (and any other languages you need).
+3.  [cite_start]**Important:** During installation, check "Additional Script Data" -\> **"Japanese"** (and any other languages you need)[cite: 12].
 4.  Adding Tesseract to your system `PATH` is recommended but usually detected automatically by the app.
 
 **Step 2: Download Imeck15**
@@ -107,11 +108,11 @@ python main.py
 ### 🐧 Linux (MX Linux / Ubuntu / Debian) Installation
 
 **⚠️ Important: System Packages**
-You must install system tools for window management (`xdotool`, `xwininfo`) and OCR (`tesseract-ocr`, `zenity`).
+[cite_start]You must install system tools for window management (`xdotool`, `xwininfo`) and OCR (`tesseract-ocr`, `zenity`)[cite: 13].
 
 **Step 1: Install System Tools**
 
-Run the following commands to install necessary system packages:
+[cite_start]Run the following commands to install necessary system packages[cite: 14]:
 
 ```bash
 sudo apt update
