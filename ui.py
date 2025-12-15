@@ -960,7 +960,7 @@ class UIManager(QMainWindow):
 
     def adjust_initial_size(self):
         # ★★★ 修正: 初期サイズを横に拡張 (1000 -> 1150) ★★★
-        self.setMinimumWidth(0); self.resize(1080, 680)
+        self.setMinimumWidth(0); self.resize(1000, 680)
 
     def toggle_minimal_ui_mode(self):
         lm = self.locale_manager.tr; self.is_minimal_mode = not self.is_minimal_mode

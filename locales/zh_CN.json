@@ -1,6 +1,6 @@
 {
     "language_name": "简体中文",
-    "window_title": "Imeck15 v1.8.0.0 多语言版",
+    "window_title": "Imeck15 v1.8.1.0 多语言版",
     "monitor_button_start": "开始监控",
     "monitor_button_stop": "停止监控",
     "monitor_button_tooltip": "开始监控。<br>右键双击停止<br>右键三击开始",
@@ -507,5 +507,7 @@
     "ocr_guide_title": "Tesseract OCR 安装指南",
     "ocr_guide_btn_download": "打开下载页面",
     "ocr_guide_windows_content": "<h3>Windows - Tesseract OCR 安装</h3><p>要使用 OCR 功能，需要安装 Tesseract OCR 引擎。</p><ol><li>点击下方按钮下载安装程序 (<b>tesseract-ocr-w64-setup-x.x.x.exe</b>)。</li><li>运行安装程序进行安装。</li><li><b>重要：</b>在组件选择时，请勾选 [Script Data] -> [Chinese]。<br>(应用程序会自动下载数据，但在此处安装可确保稳定性)</li><li>安装后请重启应用程序。</li></ol><p>如果是默认安装路径 (C:\\Program Files\\Tesseract-OCR)，将会被自动检测。</p>",
-    "ocr_guide_linux_content": "<h3>Linux - Tesseract OCR 安装</h3><p>请使用包管理器安装 Tesseract OCR。</p><p><b>Ubuntu / Debian / Linux Mint:</b></p><pre style='background-color:#eee; padding:5px;'>sudo apt update\nsudo apt install tesseract-ocr libtesseract-dev</pre><p><b>Fedora:</b></p><pre style='background-color:#eee; padding:5px;'>sudo dnf install tesseract</pre><p><b>Arch Linux:</b></p><pre style='background-color:#eee; padding:5px;'>sudo pacman -S tesseract</pre><p>安装后请重启应用程序。</p>"
+    "ocr_guide_linux_content": "<h3>Linux - Tesseract OCR 安装</h3><p>请使用包管理器安装 Tesseract OCR。</p><p><b>Ubuntu / Debian / Linux Mint:</b></p><pre style='background-color:#eee; padding:5px;'>sudo apt update\nsudo apt install tesseract-ocr libtesseract-dev</pre><p><b>Fedora:</b></p><pre style='background-color:#eee; padding:5px;'>sudo dnf install tesseract</pre><p><b>Arch Linux:</b></p><pre style='background-color:#eee; padding:5px;'>sudo pacman -S tesseract</pre><p>安装后请重启应用程序。</p>",
+    "ocr_lbl_result_img": "处理后的图像 (Tesseract 输入)",
+    "ocr_lbl_result_text": "原始数据 (RAW)"
 }

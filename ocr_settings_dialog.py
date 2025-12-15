@@ -1,5 +1,5 @@
 # ocr_settings_dialog.py
-# ★★★ 修正: OCRRuntimeEvaluator.evaluate の戻り値増加に対応 ★★★
+# ★★★ 修正: 保存時に整数判定を行い、不要な.0を除去して内部データを最適化 ★★★
 
 import time
 import cv2
@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QSlider, QComboBox, QCheckBox, QGroupBox, QTextEdit, 
     QMessageBox, QWidget, QSizePolicy, QLineEdit, QFormLayout,
-    QScrollArea, QFrame, QGridLayout
+    QScrollArea, QFrame, QGridLayout, QSplitter
 )
 from PySide6.QtCore import Qt, Signal, Slot, QTimer, QRectF, QPoint, QPointF, QEvent
 from PySide6.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QBrush, QMouseEvent
@@ -162,6 +162,32 @@ class OCRPreviewLabel(QLabel):
             painter.setBrush(Qt.NoBrush)
             painter.drawRect(QRectF(tl.x(), tl.y(), sw, sh))
 
+class ProcessedImageLabel(QLabel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAlignment(Qt.AlignCenter)
+        self.setStyleSheet("background-color: #424242; border: 1px solid #757575;")
+        self._pixmap = QPixmap()
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+    def set_image(self, pixmap):
+        self._pixmap = pixmap if pixmap and not pixmap.isNull() else QPixmap()
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        if self._pixmap.isNull():
+            painter.setPen(QColor("#bdbdbd"))
+            painter.drawText(self.rect(), Qt.AlignCenter, "No Image")
+            return
+
+        label_size = self.size()
+        scaled = self._pixmap.scaled(label_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        
+        x = (label_size.width() - scaled.width()) // 2
+        y = (label_size.height() - scaled.height()) // 2
+        
+        painter.drawPixmap(x, y, scaled)
 
 class OCRSettingsDialog(QDialog):
     def __init__(self, parent_image, current_config: OCRConfig, current_roi=None, current_condition=None, enabled=True, parent=None):
@@ -212,23 +238,76 @@ class OCRSettingsDialog(QDialog):
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10)
 
+        # --- 上部: プレビューエリア (左右分割) ---
         preview_container = QWidget()
         preview_container.setStyleSheet("background-color: #263238; border-radius: 4px;")
-        preview_layout = QVBoxLayout(preview_container)
-        preview_layout.setContentsMargins(0, 0, 0, 0)
+        
+        preview_layout = QHBoxLayout(preview_container)
+        preview_layout.setContentsMargins(5, 5, 5, 5)
+        preview_layout.setSpacing(10)
+        
+        # [左側] メイン画像 (操作用)
+        left_preview_widget = QWidget()
+        left_preview_layout = QVBoxLayout(left_preview_widget)
+        left_preview_layout.setContentsMargins(0, 0, 0, 0)
+        left_preview_layout.setSpacing(5)
+        
+        lbl_hint = QLabel(self.tr("ocr_hint_drag"))
+        lbl_hint.setStyleSheet("color: #b0bec5; font-weight: bold; padding: 2px;")
+        lbl_hint.setAlignment(Qt.AlignCenter)
         
         self.image_label = OCRPreviewLabel()
         self.image_label.rect_changed.connect(self.on_roi_changed)
         
-        lbl_hint = QLabel(self.tr("ocr_hint_drag"))
-        lbl_hint.setStyleSheet("color: #b0bec5; font-weight: bold; padding: 5px;")
-        lbl_hint.setAlignment(Qt.AlignCenter)
+        left_preview_layout.addWidget(lbl_hint)
+        left_preview_layout.addWidget(self.image_label, 1)
         
-        preview_layout.addWidget(lbl_hint)
-        preview_layout.addWidget(self.image_label, 1)
+        # [右側] 結果表示パネル (1/4幅)
+        right_result_widget = QWidget()
+        right_result_widget.setFixedWidth(240) 
+        right_result_layout = QVBoxLayout(right_result_widget)
+        right_result_layout.setContentsMargins(0, 0, 0, 0)
+        right_result_layout.setSpacing(5)
+        
+        # 1. 処理画像ラベル
+        lbl_res_img = QLabel(self.tr("ocr_lbl_result_img"))
+        if lbl_res_img.text() == "ocr_lbl_result_img": lbl_res_img.setText("Processed Image")
+        lbl_res_img.setStyleSheet("color: #b0bec5; font-size: 11px; font-weight: bold;")
+        right_result_layout.addWidget(lbl_res_img)
+        
+        # 2. 画像表示エリア (正方形)
+        self.result_image_label = ProcessedImageLabel()
+        self.result_image_label.setMinimumHeight(240)
+        right_result_layout.addWidget(self.result_image_label, 1) # 1/3
+        
+        # 3. テキスト結果ラベル
+        lbl_res_text = QLabel(self.tr("ocr_lbl_result_text"))
+        if lbl_res_text.text() == "ocr_lbl_result_text": lbl_res_text.setText("RAW Data")
+        lbl_res_text.setStyleSheet("color: #b0bec5; font-size: 11px; font-weight: bold; margin-top: 5px;")
+        right_result_layout.addWidget(lbl_res_text)
+        
+        # 4. 結果詳細テキストエリア (下2/3)
+        self.result_text_edit = QTextEdit()
+        self.result_text_edit.setReadOnly(True)
+        # ユーザー指示: RAWデータのみを表示
+        self.result_text_edit.setStyleSheet("""
+            QTextEdit {
+                background-color: #37474f;
+                color: #ffffff;
+                border: 1px solid #546e7a;
+                font-family: Consolas, monospace;
+                font-size: 14px;
+                font-weight: bold;
+            }
+        """)
+        right_result_layout.addWidget(self.result_text_edit, 2) # 2/3
+        
+        preview_layout.addWidget(left_preview_widget, 1)
+        preview_layout.addWidget(right_result_widget)
         
         main_layout.addWidget(preview_container, 1) 
 
+        # --- 下部: 設定パネル ---
         settings_panel = QWidget()
         settings_panel.setStyleSheet("""
             QWidget#SettingsPanel {
@@ -337,7 +416,19 @@ class OCRSettingsDialog(QDialog):
 
         current_op_key = self.condition.get("operator", ">=")
         self.update_operator_list(current_op_key)
-        self.input_target_value.setText(str(self.condition.get("value", "")))
+        
+        # --- 初期値の処理 (NULL化と.0除去) ---
+        init_val = str(self.condition.get("value", ""))
+        
+        # 1. "0" や "0.0" などの初期値を空欄にする (ユーザー要望)
+        if init_val == "0" or init_val == "0.0":
+            init_val = ""
+        # 2. 既に値が入っている場合、末尾の.0を削除して表示する
+        elif init_val.endswith(".0"):
+            init_val = init_val[:-2]
+            
+        self.input_target_value.setText(init_val)
+        # ------------------------------------
 
         logic_group.setLayout(logic_layout)
         groups_layout.addWidget(logic_group, 2)
@@ -409,89 +500,55 @@ class OCRSettingsDialog(QDialog):
             if event.button() == Qt.LeftButton:
                 if sys.platform != 'win32':
                     current_time = time.time()
-                    if current_time - self._last_input_click_time < 1.0:
-                        return True 
-
+                    if current_time - self._last_input_click_time < 1.0: return True
                     self._last_input_click_time = current_time
                     self.open_custom_input_dialog()
                     return True 
         return super().eventFilter(source, event)
 
     def open_custom_input_dialog(self):
-        try:
-            from custom_input_dialog import ask_string_custom
-        except ImportError:
-            QMessageBox.critical(self, "Error", "custom_input_dialog.py not found.")
-            return
-
+        try: from custom_input_dialog import ask_string_custom
+        except ImportError: QMessageBox.critical(self, "Error", "custom_input_dialog.py not found."); return
         current_val = self.input_target_value.text()
         title = self.tr("ocr_grp_condition")
         prompt = self.tr("ocr_placeholder_target")
         if title == "ocr_grp_condition": title = "Condition"
         if prompt == "ocr_placeholder_target": prompt = "Target Value"
-
         new_val, ok = ask_string_custom(self, title, prompt, current_val)
-        if ok:
-            self.input_target_value.setText(new_val)
+        if ok: self.input_target_value.setText(new_val)
 
-    def on_enable_toggled(self, checked):
-        pass
-
+    def on_enable_toggled(self, checked): pass
     def load_initial_preview(self):
         self.update_preview_image()
-        if self.roi:
-            self.image_label.set_roi(self.roi)
+        if self.roi: self.image_label.set_roi(self.roi)
 
     def on_numeric_mode_changed(self):
         self.config.numeric_mode = self.chk_numeric.isChecked()
-        
         if self.config.numeric_mode:
-            if self.combo_lang.isEnabled():
-                self.previous_lang_idx = self.combo_lang.currentIndex()
-            
+            if self.combo_lang.isEnabled(): self.previous_lang_idx = self.combo_lang.currentIndex()
             idx = self.combo_lang.findData("eng")
             if idx >= 0:
-                self.combo_lang.blockSignals(True)
-                self.combo_lang.setCurrentIndex(idx)
-                self.combo_lang.blockSignals(False)
+                self.combo_lang.blockSignals(True); self.combo_lang.setCurrentIndex(idx); self.combo_lang.blockSignals(False)
             self.combo_lang.setEnabled(False)
         else:
             self.combo_lang.setEnabled(True)
             if self.previous_lang_idx >= 0:
-                self.combo_lang.blockSignals(True)
-                self.combo_lang.setCurrentIndex(self.previous_lang_idx)
-                self.combo_lang.blockSignals(False)
-
+                self.combo_lang.blockSignals(True); self.combo_lang.setCurrentIndex(self.previous_lang_idx); self.combo_lang.blockSignals(False)
         current_op = self.combo_operator.currentData()
         self.update_operator_list(current_op)
         self.trigger_preview_update()
 
     def update_operator_list(self, current_op_key=None):
-        if current_op_key is None:
-            current_op_key = self.combo_operator.currentData()
-
+        if current_op_key is None: current_op_key = self.combo_operator.currentData()
         self.combo_operator.clear()
-        
         if self.chk_numeric.isChecked():
-            ops = [
-                (">=", ">="), ("<=", "<="), ("==", "=="), 
-                ("!=", "!="), (">", ">"), ("<", "<")
-            ]
+            ops = [(">=", ">="), ("<=", "<="), ("==", "=="), ("!=", "!="), (">", ">"), ("<", "<")]
         else:
-            ops = [
-                (self.tr("op_contains"), "Contains"),
-                (self.tr("op_equals"), "Equals"),
-                (self.tr("op_regex"), "Regex")
-            ]
-            
-        for display, key in ops:
-            self.combo_operator.addItem(display, key)
-        
+            ops = [(self.tr("op_contains"), "Contains"), (self.tr("op_equals"), "Equals"), (self.tr("op_regex"), "Regex")]
+        for display, key in ops: self.combo_operator.addItem(display, key)
         idx = self.combo_operator.findData(current_op_key)
-        if idx >= 0:
-            self.combo_operator.setCurrentIndex(idx)
-        else:
-            self.combo_operator.setCurrentIndex(0)
+        if idx >= 0: self.combo_operator.setCurrentIndex(idx)
+        else: self.combo_operator.setCurrentIndex(0)
 
     @Slot()
     def trigger_preview_update(self):
@@ -504,64 +561,44 @@ class OCRSettingsDialog(QDialog):
         self.config.invert = self.chk_invert.isChecked()
         self.config.lang = self.combo_lang.currentData() 
         self.config.numeric_mode = self.chk_numeric.isChecked()
-
         try:
             temp_img = self.original_image.copy()
-            if len(temp_img.shape) == 3:
-                gray = cv2.cvtColor(temp_img, cv2.COLOR_BGR2GRAY)
-            else:
-                gray = temp_img
-                
-            if self.config.invert:
-                gray = cv2.bitwise_not(gray)
-                
+            if len(temp_img.shape) == 3: gray = cv2.cvtColor(temp_img, cv2.COLOR_BGR2GRAY)
+            else: gray = temp_img
+            if self.config.invert: gray = cv2.bitwise_not(gray)
             _, binary = cv2.threshold(gray, self.config.threshold, 255, cv2.THRESH_BINARY)
             disp_img = cv2.cvtColor(binary, cv2.COLOR_GRAY2RGB)
-            
             h, w, ch = disp_img.shape
             bytes_per_line = ch * w
             qt_image = QImage(disp_img.data, w, h, bytes_per_line, QImage.Format_RGB888)
             self.image_label.set_image(QPixmap.fromImage(qt_image))
-            
         except Exception as e:
             self.text_log.setText(f"Preview Error: {str(e)}")
 
     @Slot(tuple)
-    def on_roi_changed(self, rect):
-        self.roi = rect
+    def on_roi_changed(self, rect): self.roi = rect
 
     @Slot()
     def on_language_changed(self):
         self.trigger_preview_update()
         selected_code = self.combo_lang.currentData()
         if not selected_code: return
-
         if not self.ocr_manager.is_language_ready(selected_code):
-            reply = QMessageBox.question(
-                self, 
-                self.tr("ocr_msg_download_title"), 
-                self.tr("ocr_msg_download_text", selected_code), 
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-            
-            if reply == QMessageBox.StandardButton.Yes:
-                self.start_download(selected_code)
+            reply = QMessageBox.question(self, self.tr("ocr_msg_download_title"), self.tr("ocr_msg_download_text", selected_code), QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.Yes: self.start_download(selected_code)
 
     def start_download(self, lang_code):
         targets = lang_code.split('+')
         self.btn_test.setEnabled(False)
         self.btn_ok.setEnabled(False)
-        
         msg = self.tr("ocr_msg_downloading", lang_code)
         self.text_log.setText(msg)
-        
         self.ocr_manager.download_progress.connect(self.on_download_progress)
         self.ocr_manager.download_finished.connect(self.on_download_finished)
         self.ocr_manager.download_languages(targets)
 
     @Slot(str, int)
-    def on_download_progress(self, filename, percent):
-        pass
+    def on_download_progress(self, filename, percent): pass
 
     @Slot(bool, str)
     def on_download_finished(self, success, msg):
@@ -569,10 +606,8 @@ class OCRSettingsDialog(QDialog):
             self.ocr_manager.download_progress.disconnect(self.on_download_progress)
             self.ocr_manager.download_finished.disconnect(self.on_download_finished)
         except: pass
-
         self.btn_test.setEnabled(True)
         self.btn_ok.setEnabled(True)
-        
         if success:
             comp_msg = self.tr("ocr_msg_download_complete")
             self.text_log.setHtml(f"<font color='green'>{comp_msg}</font>")
@@ -580,7 +615,6 @@ class OCRSettingsDialog(QDialog):
         else:
             fail_msg = self.tr("ocr_msg_download_failed", msg)
             self.text_log.setHtml(f"<font color='red'>{fail_msg}</font>")
-            
             err_title = self.tr("error_title_download_failed")
             if err_title == "error_title_download_failed": err_title = "Download Failed"
             QMessageBox.warning(self, err_title, fail_msg)
@@ -594,6 +628,10 @@ class OCRSettingsDialog(QDialog):
         self.update_preview_image()
         self.text_log.clear()
         self.text_log.setText(self.tr("ocr_log_processing"))
+        # 右パネルの表示もクリア
+        self.result_image_label.set_image(None)
+        self.result_text_edit.clear()
+        
         self.btn_test.setEnabled(False)
 
         self.worker = self.ocr_manager.create_worker(
@@ -605,52 +643,84 @@ class OCRSettingsDialog(QDialog):
         self.worker.error.connect(self.on_ocr_error)
         self.worker.start()
 
-    @Slot(str, object)
-    def on_ocr_finished(self, raw_text, numeric_value):
+    @Slot(str, object, object)
+    def on_ocr_finished(self, raw_text, numeric_value, processed_img):
         self.btn_test.setEnabled(True)
-        log_str = f"<b>RAW:</b> '{raw_text}'"
-        if self.config.numeric_mode:
-            result_str = str(numeric_value) if numeric_value is not None else "NaN"
-            log_str += f" | <b>Num:</b> {result_str}"
-
-        target_val = self.input_target_value.text()
+        
+        # --- 1. 右上パネルに画像を表示 ---
+        if processed_img is not None:
+            try:
+                if len(processed_img.shape) == 2:
+                    h, w = processed_img.shape
+                    qimg = QImage(processed_img.data, w, h, w, QImage.Format_Grayscale8)
+                    self.result_image_label.set_image(QPixmap.fromImage(qimg))
+                else:
+                    self.result_image_label.setText("Fmt Error")
+            except Exception as e:
+                self.result_image_label.setText("Img Error")
+        
+        # --- 2. 判定ロジック ---
+        target_val_str = self.input_target_value.text()
         operator = self.combo_operator.currentData()
         
-        temp_settings = {
-            "enabled": True,
-            "roi": self.roi,
-            "config": {
-                "scale": self.config.scale,
-                "threshold": self.config.threshold,
-                "invert": self.config.invert,
-                "numeric_mode": self.config.numeric_mode,
-                "lang": self.config.lang
-            },
-            "condition": {
-                "operator": operator,
-                "value": target_val
-            }
-        }
+        result = False
+        status_text = "FAIL"
+        color = "orange"
         
-        # ★★★ 修正: 戻り値が4つになったのでアンパックを修正 ★★★
-        success, log_msg, _, _ = OCRRuntimeEvaluator.evaluate(
-            self.original_image, 
-            (0, 0), 
-            temp_settings,
-            item_settings={}, 
-            current_scale=1.0 
-        )
-        
-        color = "green" if success else "orange"
-        status_text = "PASS" if success else "FAIL"
-        log_str += f" | <font color='{color}'><b>JUDGE:</b> {status_text}</font>"
-        self.text_log.setHtml(log_str)
+        if self.config.numeric_mode and numeric_value is not None:
+            try:
+                tgt = float(target_val_str)
+                nv = numeric_value
+                if operator == ">=": result = (nv >= tgt)
+                elif operator == "<=": result = (nv <= tgt)
+                elif operator == "==": result = (nv == tgt)
+                elif operator == "!=": result = (nv != tgt)
+                elif operator == ">": result = (nv > tgt)
+                elif operator == "<": result = (nv < tgt)
+            except: pass
+        else:
+            res_lower = raw_text.lower()
+            tgt_lower = str(target_val_str).lower()
+            if operator == "Equals": result = (res_lower == tgt_lower)
+            elif operator == "Contains": result = (tgt_lower in res_lower)
+            elif operator == "Regex":
+                try: result = bool(re.search(str(target_val_str), raw_text, re.IGNORECASE))
+                except: pass
+
+        if result:
+            status_text = "PASS"
+            color = "green"
+
+        # --- 3. 下部ログ(一行)の更新 ---
+        # ユーザー要望: RAWデータに.0を表示しない (整数として表示)
+        display_numeric = ""
+        if numeric_value is not None:
+            if numeric_value.is_integer():
+                display_numeric = str(int(numeric_value))
+            else:
+                display_numeric = str(numeric_value)
+
+        log_html = f"<b>RAW:</b> '{raw_text}'"
+        if self.config.numeric_mode:
+            log_html += f" | <b>Num:</b> {display_numeric}"
+        log_html += f" | <font color='{color}'><b>JUDGE:</b> {status_text}</font>"
+        self.text_log.setHtml(log_html)
+
+        # --- 4. 右下パネル(詳細: RAWデータのみ)の更新 ---
+        # ユーザー要望: RAWデータのみ表示 (.0なし)
+        display_text = raw_text
+        if self.config.numeric_mode and numeric_value is not None:
+             display_text = display_numeric
+             
+        self.result_text_edit.setText(display_text)
 
     @Slot(str)
     def on_ocr_error(self, error_msg):
         self.btn_test.setEnabled(True)
         self.text_log.setHtml(f"<font color='red'>Error: {error_msg}</font>")
+        self.result_text_edit.setText(error_msg)
 
+    # ★★★ 修正: 保存時に整数判定を行い、.0を除去して保存 ★★★
     def get_result(self):
         self.config.scale = float(self.combo_scale.currentText().replace('x', ''))
         self.config.threshold = self.slider_thresh.value()
@@ -658,71 +728,52 @@ class OCRSettingsDialog(QDialog):
         self.config.lang = self.combo_lang.currentData()
         self.config.numeric_mode = self.chk_numeric.isChecked()
         
-        target_val = self.input_target_value.text()
+        target_val_str = self.input_target_value.text()
+        final_target_val = target_val_str # デフォルトは文字列のまま
+
         if self.config.numeric_mode:
             try:
-                target_val = float(target_val)
+                val_float = float(target_val_str)
+                # 整数であれば int型として保存 (JSON上で .0 が付かない)
+                if val_float.is_integer():
+                    final_target_val = int(val_float)
+                else:
+                    final_target_val = val_float
             except:
                 pass 
-                
-        condition_data = {
-            "operator": self.combo_operator.currentData(),
-            "value": target_val
-        }
         
+        condition_data = {"operator": self.combo_operator.currentData(), "value": final_target_val}
         return self.config, self.roi, condition_data, self.chk_enable.isChecked()
 
     @Slot()
     def show_tesseract_guide(self):
         title = self.tr("ocr_guide_title")
         if title == "ocr_guide_title": title = "Tesseract Installation Guide"
-        
         info_text = ""
         is_windows = sys.platform == 'win32'
-        
         if is_windows:
             info_text = self.tr("ocr_guide_windows_content")
             if info_text == "ocr_guide_windows_content":
-                info_text = (
-                    "<h3>Windows - Tesseract OCR Installation</h3>"
-                    "<p>Please install Tesseract OCR engine.</p>"
-                    "<ol>"
-                    "<li>Download the installer (<b>tesseract-ocr-w64-setup-x.x.x.exe</b>) from the link below.</li>"
-                    "<li>Run the installer.</li>"
-                    "<li><b>Important:</b> Check [Script Data] -> [Japanese] components during installation.</li>"
-                    "<li>Restart this application.</li>"
-                    "</ol>"
-                )
+                info_text = "<h3>Windows - Tesseract OCR Installation</h3>..."
         else:
             info_text = self.tr("ocr_guide_linux_content")
             if info_text == "ocr_guide_linux_content":
-                info_text = (
-                    "<h3>Linux - Tesseract OCR Installation</h3>"
-                    "<p>Please install Tesseract OCR using your package manager.</p>"
-                    "<pre style='background-color:#eee; padding:5px;'>sudo apt install tesseract-ocr</pre>"
-                )
-
+                info_text = "<h3>Linux - Tesseract OCR Installation</h3>..."
         dialog = QDialog(self)
         dialog.setWindowTitle(title)
         dialog.resize(600, 450)
-        
         layout = QVBoxLayout(dialog)
-        
         text_edit = QTextEdit()
         text_edit.setReadOnly(True)
         text_edit.setHtml(info_text)
         layout.addWidget(text_edit)
-        
         if is_windows:
             btn_text = self.tr("ocr_guide_btn_download")
             if btn_text == "ocr_guide_btn_download": btn_text = "Open Download Page"
-            
             btn_open_url = QPushButton(btn_text)
             btn_open_url.clicked.connect(lambda: webbrowser.open("https://github.com/UB-Mannheim/tesseract/wiki"))
             layout.addWidget(btn_open_url)
-
         btn_close = QPushButton("Close")
         btn_close.clicked.connect(dialog.accept)
         layout.addWidget(btn_close)
-        
         dialog.exec()

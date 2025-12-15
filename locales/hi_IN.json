@@ -1,6 +1,6 @@
 {
     "language_name": "हिन्दी",
-    "window_title": "Imeck15 v1.8.0.0 बहुभाषी संस्करण",
+    "window_title": "Imeck15 v1.8.1.0 बहुभाषी संस्करण",
     "monitor_button_start": "निगरानी शुरू करें",
     "monitor_button_stop": "निगरानी रोकें",
     "monitor_button_tooltip": "निगरानी शुरू करता है।<br>रोकने के लिए राइट डबल-क्लिक करें<br>शुरू करने के लिए राइट ट्रिपल-क्लिक करें",
@@ -506,5 +506,7 @@
     "ocr_guide_title": "Tesseract OCR इंस्टॉलेशन गाइड",
     "ocr_guide_btn_download": "डाउनलोड पेज खोलें",
     "ocr_guide_windows_content": "<h3>Windows - Tesseract OCR इंस्टॉलेशन</h3><p>OCR सुविधाओं का उपयोग करने के लिए, Tesseract OCR इंजन आवश्यक है।</p><ol><li>इंस्टॉलर (<b>tesseract-ocr-w64-setup-x.x.x.exe</b>) डाउनलोड करने के लिए नीचे दिए गए बटन पर क्लिक करें।</li><li>इंस्टॉल करने के लिए इंस्टॉलर चलाएं।</li><li><b>महत्वपूर्ण:</b> घटक चयन के दौरान, कृपया [Script Data] -> [Hindi] को चेक करें।<br>(ऐप स्वचालित रूप से डेटा डाउनलोड करता है, लेकिन यहां इंस्टॉल करना स्थिरता सुनिश्चित करता है)</li><li>इंस्टॉलेशन के बाद एप्लिकेशन को रीस्टार्ट करें।</li></ol><p>यदि यह डिफ़ॉल्ट स्थान (C:\\Program Files\\Tesseract-OCR) में इंस्टॉल है तो यह स्वचालित रूप से पता लगा लिया जाएगा।</p>",
-    "ocr_guide_linux_content": "<h3>Linux - Tesseract OCR इंस्टॉलेशन</h3><p>कृपया अपने पैकेज मैनेजर का उपयोग करके Tesseract OCR इंस्टॉल करें।</p><p><b>Ubuntu / Debian / Linux Mint:</b></p><pre style='background-color:#eee; padding:5px;'>sudo apt update\nsudo apt install tesseract-ocr libtesseract-dev</pre><p><b>Fedora:</b></p><pre style='background-color:#eee; padding:5px;'>sudo dnf install tesseract</pre><p><b>Arch Linux:</b></p><pre style='background-color:#eee; padding:5px;'>sudo pacman -S tesseract</pre><p>इंस्टॉलेशन के बाद, कृपया एप्लिकेशन को रीस्टार्ट करें।</p>"
+    "ocr_guide_linux_content": "<h3>Linux - Tesseract OCR इंस्टॉलेशन</h3><p>कृपया अपने पैकेज मैनेजर का उपयोग करके Tesseract OCR इंस्टॉल करें।</p><p><b>Ubuntu / Debian / Linux Mint:</b></p><pre style='background-color:#eee; padding:5px;'>sudo apt update\nsudo apt install tesseract-ocr libtesseract-dev</pre><p><b>Fedora:</b></p><pre style='background-color:#eee; padding:5px;'>sudo dnf install tesseract</pre><p><b>Arch Linux:</b></p><pre style='background-color:#eee; padding:5px;'>sudo pacman -S tesseract</pre><p>इंस्टॉलेशन के बाद, कृपया एप्लिकेशन को रीस्टार्ट करें।</p>",
+    "ocr_lbl_result_img": "संसाधित छवि (Tesseract इनपुट)",
+    "ocr_lbl_result_text": "रॉ डेटा (RAW)"
 }
