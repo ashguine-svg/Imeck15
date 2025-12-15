@@ -6,7 +6,7 @@
 
 Imeck15 is a powerful automation tool that recognizes specific images on your screen and automatically clicks them. It is designed to automate routine tasks with high precision and low CPU usage.
 
-**v1.8.0.0 Update:** Now supports **OCR (Optical Character Recognition)** to read numbers and text from the screen for conditional logic\!
+**v1.8.1.0 Update:** Now supports **OCR (Optical Character Recognition)** to read numbers and text from the screen for conditional logic\!
 
 -----
 
