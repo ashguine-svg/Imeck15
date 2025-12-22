@@ -36,6 +36,9 @@ class MonitoringProcessor:
         frame_counter = 0
         last_state_check_time = time.time()
 
+        # ★監視開始時にクリック時刻を初期化して、即座にタイムアウト判定されないようにする
+        self.core.last_successful_click_time = time.time()
+
         while self.core.is_monitoring:
             if self.core._recovery_in_progress:
                 time.sleep(0.5)
@@ -57,12 +60,26 @@ class MonitoringProcessor:
                 if self.core._lifecycle_hook_active:
                     hooks_conf = self.core.app_config.get('extended_lifecycle_hooks', {})
                     check_interval = hooks_conf.get('state_check_interval', 5.0)
+                    
                     if current_time - last_state_check_time > check_interval:
+                        # 1. プロセス生存確認 (既存機能)
                         pid = self.core._session_context.get('pid')
                         if pid and not psutil.pid_exists(pid):
                             self.logger.log("[WARN] Session context lost (PID missing). Triggering lifecycle hook.")
                             self.core._execute_session_recovery()
                             continue
+                        
+                        # 2. 無操作(クリックなし)判定 (新機能)
+                        timeout_mins = hooks_conf.get('inactivity_timeout_mins', 0)
+                        if timeout_mins > 0:
+                            elapsed_since_click = (current_time - self.core.last_successful_click_time) / 60.0
+                            if elapsed_since_click >= timeout_mins:
+                                self.logger.log(f"[WARN] No click detected for {elapsed_since_click:.1f} mins. Triggering recovery.")
+                                # クリック時刻をリセットしてリカバリの重複実行を防ぐ
+                                self.core.last_successful_click_time = current_time
+                                self.core._execute_session_recovery()
+                                continue
+
                         last_state_check_time = current_time
 
                 should_process, fps_last_time, frame_counter = self._wait_for_next_frame(

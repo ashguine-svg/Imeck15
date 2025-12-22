@@ -144,7 +144,8 @@ class ConfigManager:
                 "window_context_marker": "",  # ウィンドウタイトル名 (安全装置用)
                 "resource_link_id": "",       # 外部リソースID (例: 123456)
                 "retry_tolerance": 10,        # 応答タイムアウト判定閾値
-                "state_check_interval": 5.0   # 状態確認間隔(秒)
+                "state_check_interval": 5.0,  # 状態確認間隔(秒)
+                "inactivity_timeout_mins": 10  # ★追加: n分クリックがない場合の再起動設定 (0は無効)
             },
             # --- ▲▲▲ 追加完了 ▲▲▲ ---
             "language": "en_US" 
