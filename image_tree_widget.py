@@ -61,55 +61,104 @@ class DraggableTreeWidget(QTreeWidget):
 
         event.acceptProposedAction()
 
-        # 前回のハイライトやインジケータをクリア
-        if self.last_highlighted_item:
-            self.last_highlighted_item.setBackground(0, QBrush(Qt.transparent))
-            self.last_highlighted_item = None
+        error_occurred = False
+        try:
+            # --- ここからインデントを修正し、tryブロック内に収めます ---
+            # 前回のハイライトやインジケータをクリア
+            if self.last_highlighted_item:
+                self.last_highlighted_item.setBackground(0, QBrush(Qt.transparent))
+                self.last_highlighted_item = None
 
-        self._remove_dummy_indicator()
+            self._remove_dummy_indicator()
 
-        target_item = self.itemAt(event.position().toPoint())
-        pos = self.dropIndicatorPosition()
-        
-        # ターゲットがフォルダかどうかをチェック
-        target_is_folder = False
-        if target_item:
-            path_str = target_item.data(0, Qt.UserRole)
-            if path_str and Path(path_str).is_dir():
-                target_is_folder = True
+            target_item = self.itemAt(event.position().toPoint())
+            original_pos = self.dropIndicatorPosition()
+            mouse_pos = event.position().toPoint()
+            
+            # ターゲットがフォルダかどうかをチェック
+            target_is_folder = False
+            if target_item:
+                path_str = target_item.data(0, Qt.UserRole)
+                if path_str and Path(path_str).is_dir():
+                    target_is_folder = True
 
-        # --- ケース1: フォルダの中にドロップ (OnItem) ---
-        if pos == self.DropIndicatorPosition.OnItem and target_is_folder:
-            # フォルダをハイライト
-            target_item.setBackground(0, self.highlight_color)
-            self.last_highlighted_item = target_item
+                # フォルダの場合、マウス位置が上端/下端に近いかチェック（位置移動として扱う）
+                pos = original_pos
+                is_near_edge = False
+                if target_item and target_is_folder and original_pos == self.DropIndicatorPosition.OnItem:
+                    item_rect = self.visualItemRect(target_item)
+                    if item_rect.isValid():
+                        # 上端/下端から10ピクセル以内の場合は位置移動として扱う
+                        EDGE_THRESHOLD = 10
+                        mouse_y = mouse_pos.y()
+                        item_top = item_rect.top()
+                        item_bottom = item_rect.bottom()
+                        
+                        if abs(mouse_y - item_top) <= EDGE_THRESHOLD:
+                            # 上端に近い → AboveItemとして扱う
+                            pos = self.DropIndicatorPosition.AboveItem
+                            is_near_edge = True
+                        elif abs(mouse_y - item_bottom) <= EDGE_THRESHOLD:
+                            # 下端に近い → BelowItemとして扱う
+                            pos = self.DropIndicatorPosition.BelowItem
+                            is_near_edge = True
 
-        # --- ケース2: アイテムの間に挿入 ---
-        # (OnItemだがターゲットが画像の場合、または Above/Below の場合)
-        if not (pos == self.DropIndicatorPosition.OnItem and target_is_folder):
-            if pos == self.DropIndicatorPosition.OnItem and target_item:
-                # 画像の上にホバー -> その画像の「下」に挿入線を表示
-                parent = target_item.parent()
-                if parent:
-                    index = parent.indexOfChild(target_item)
-                    parent.insertChild(index + 1, self.dummy_indicator_item)
-                else:
-                    index = self.indexOfTopLevelItem(target_item)
-                    self.insertTopLevelItem(index + 1, self.dummy_indicator_item)
+                # --- ケース1: AboveItem/BelowItem → 位置移動（スプリットラインを表示） ---
+                if pos in [self.DropIndicatorPosition.AboveItem, self.DropIndicatorPosition.BelowItem]:
+                    if target_item:
+                        # ターゲットアイテムの上/下にスプリットラインを表示
+                        parent = target_item.parent()
+                        index_offset = 1 if pos == self.DropIndicatorPosition.BelowItem else 0
+                        if parent:
+                            index = parent.indexOfChild(target_item)
+                            parent.insertChild(index + index_offset, self.dummy_indicator_item)
+                        else:
+                            index = self.indexOfTopLevelItem(target_item)
+                            self.insertTopLevelItem(index + index_offset, self.dummy_indicator_item)
+                    else:
+                        # target_itemがNoneの場合、リストの先頭または末尾にスプリットラインを表示
+                        if pos == self.DropIndicatorPosition.AboveItem:
+                            self.insertTopLevelItem(0, self.dummy_indicator_item)
+                        else:
+                            self.insertTopLevelItem(self.topLevelItemCount(), self.dummy_indicator_item)
 
-            elif pos in [self.DropIndicatorPosition.AboveItem, self.DropIndicatorPosition.BelowItem] and target_item:
-                parent = target_item.parent()
-                index_offset = 1 if pos == self.DropIndicatorPosition.BelowItem else 0
-                if parent:
-                    index = parent.indexOfChild(target_item)
-                    parent.insertChild(index + index_offset, self.dummy_indicator_item)
-                else:
-                    index = self.indexOfTopLevelItem(target_item)
-                    self.insertTopLevelItem(index + index_offset, self.dummy_indicator_item)
+                # --- ケース2: OnItem + フォルダ → フォルダに入れる（ハイライトのみ） ---
+                elif original_pos == self.DropIndicatorPosition.OnItem and target_item and target_is_folder:
+                    # is_near_edgeがFalseの場合のみハイライト（中央部分にホバーした場合）
+                    if not is_near_edge:
+                        target_item.setBackground(0, self.highlight_color)
+                        self.last_highlighted_item = target_item
+                        # スプリットラインは表示しない
 
-            elif pos == self.DropIndicatorPosition.OnViewport:
-                # 何もない空間 -> リストの末尾に追加
-                self.insertTopLevelItem(self.topLevelItemCount(), self.dummy_indicator_item)
+                # --- ケース3: OnItem + 画像 → 位置移動（スプリットラインを表示） ---
+                elif pos == self.DropIndicatorPosition.OnItem and target_item and not target_is_folder:
+                    parent = target_item.parent()
+                    if parent:
+                        index = parent.indexOfChild(target_item)
+                        parent.insertChild(index + 1, self.dummy_indicator_item)
+                    else:
+                        index = self.indexOfTopLevelItem(target_item)
+                        self.insertTopLevelItem(index + 1, self.dummy_indicator_item)
+
+                # --- ケース4: OnViewport → 位置移動（リストの末尾にスプリットラインを表示） ---
+                elif pos == self.DropIndicatorPosition.OnViewport:
+                    self.insertTopLevelItem(self.topLevelItemCount(), self.dummy_indicator_item)
+
+        except Exception as e:
+            # 例外が発生した場合、クリーンアップを実行
+            error_occurred = True
+            print(f"[ERROR] dragMoveEvent failed: {e}")
+            # 例外が発生した場合のみ、クリーンアップを実行
+            if self.last_highlighted_item:
+                try:
+                    self.last_highlighted_item.setBackground(0, QBrush(Qt.transparent))
+                except:
+                    pass
+                self.last_highlighted_item = None
+            try:
+                self._remove_dummy_indicator()
+            except:
+                pass
 
     def dragLeaveEvent(self, event):
         if self.last_highlighted_item:
@@ -139,6 +188,7 @@ class DraggableTreeWidget(QTreeWidget):
 
         target_item = self.itemAt(event.position().toPoint())
         pos = self.dropIndicatorPosition()
+        mouse_pos = event.position().toPoint()
         
         # 3. ドロップ先（親アイテム）と挿入位置（インデックス）の決定
         dest_parent = None # NoneならRoot
@@ -150,31 +200,84 @@ class DraggableTreeWidget(QTreeWidget):
             if path_str and Path(path_str).is_dir():
                 target_is_folder = True
 
-        # --- A. フォルダアイコンの上にドロップ ---
-        if pos == self.DropIndicatorPosition.OnItem and target_item and target_is_folder:
+        # フォルダの場合、マウス位置が上端/下端に近いかチェック（位置移動として扱う）
+        is_near_edge = False
+        if target_item and target_is_folder and pos == self.DropIndicatorPosition.OnItem:
+            item_rect = self.visualItemRect(target_item)
+            if item_rect.isValid():
+                # 上端/下端から10ピクセル以内の場合は位置移動として扱う
+                EDGE_THRESHOLD = 10
+                mouse_y = mouse_pos.y()
+                item_top = item_rect.top()
+                item_bottom = item_rect.bottom()
+                
+                if abs(mouse_y - item_top) <= EDGE_THRESHOLD:
+                    # 上端に近い → AboveItemとして扱う
+                    pos = self.DropIndicatorPosition.AboveItem
+                    is_near_edge = True
+                elif abs(mouse_y - item_bottom) <= EDGE_THRESHOLD:
+                    # 下端に近い → BelowItemとして扱う
+                    pos = self.DropIndicatorPosition.BelowItem
+                    is_near_edge = True
+
+        # --- ケース1: OnItem + フォルダ → フォルダに入れる ---
+        if pos == self.DropIndicatorPosition.OnItem and target_item and target_is_folder and not is_near_edge:
             dest_parent = target_item
-            insert_index = 0 # フォルダの先頭へ
+            insert_index = 0
         
-        # --- B. アイテムの上/下、または画像の上にドロップ ---
-        elif target_item:
+        # --- ケース2: AboveItem/BelowItem → 位置移動 ---
+        elif pos in [self.DropIndicatorPosition.AboveItem, self.DropIndicatorPosition.BelowItem]:
+            if target_item:
+                dest_parent = target_item.parent()
+                if dest_parent:
+                    target_idx = dest_parent.indexOfChild(target_item)
+                else:
+                    target_idx = self.indexOfTopLevelItem(target_item)
+                
+                if pos == self.DropIndicatorPosition.AboveItem:
+                    insert_index = target_idx
+                else:
+                    insert_index = target_idx + 1
+            else:
+                # target_itemがNoneの場合
+                dest_parent = None
+                if pos == self.DropIndicatorPosition.AboveItem:
+                    insert_index = 0
+                else:
+                    insert_index = self.topLevelItemCount()
+        
+        # --- ケース3: OnItem + 画像 → 位置移動 ---
+        elif pos == self.DropIndicatorPosition.OnItem and target_item and not target_is_folder:
             dest_parent = target_item.parent()
-            
-            # ターゲットの現在のインデックスを取得
             if dest_parent:
                 target_idx = dest_parent.indexOfChild(target_item)
             else:
                 target_idx = self.indexOfTopLevelItem(target_item)
-            
-            # OnItem(画像)なら下へ、Belowなら下へ、Aboveならその位置へ
-            if pos == self.DropIndicatorPosition.AboveItem:
-                insert_index = target_idx
-            else:
-                insert_index = target_idx + 1
+            insert_index = target_idx + 1
 
-        # --- C. 何もない空間（ビューポート）にドロップ ---
+        # --- ケース4: OnViewport → 位置移動（リストの末尾） ---
         else:
             dest_parent = None
-            insert_index = self.topLevelItemCount() # 末尾へ
+            insert_index = self.topLevelItemCount()
+
+        # --- ★★★ 追加: 自分自身を子要素に入れる操作を防止（ハングアップ防止） ★★★ ---
+        for item in dragged_items:
+            # ドロップ先がフォルダの場合、自分自身を子要素に入れようとしていないかチェック
+            if dest_parent and dest_parent == item:
+                # 自分自身を自分の子要素に入れようとしている
+                event.ignore()
+                return
+            
+            # ドロップ先のフォルダが、ドラッグ元のアイテムの子孫でないかチェック
+            if dest_parent:
+                current = dest_parent
+                while current:
+                    if current == item:
+                        # 自分自身の子要素に入れようとしている
+                        event.ignore()
+                        return
+                    current = current.parent()
+        # -----------------------------------------------------------
 
         # --- ★★★ 追加: 同名ファイルチェック（移動エラー防止） ★★★ ---
         # 移動先のディレクトリパスを特定
@@ -249,9 +352,9 @@ class DraggableTreeWidget(QTreeWidget):
                 item.setSelected(True)
             
             # 通知用のパスリスト作成
-            dest_path = str(self.config_manager.base_dir)
+            dest_path_str = str(self.config_manager.base_dir)
             if dest_parent:
-                dest_path = dest_parent.data(0, Qt.UserRole)
+                dest_path_str = dest_parent.data(0, Qt.UserRole)
             
             source_paths = [item.data(0, Qt.UserRole) for item in items_moved_list]
 
@@ -262,8 +365,11 @@ class DraggableTreeWidget(QTreeWidget):
 
         # 5. 変更通知
         if source_parent != dest_parent:
-            self.itemsMoved.emit(source_paths, dest_path)
-
-        self.orderUpdated.emit()
+            # フォルダ間の移動の場合、ファイル移動が完了するのを待ってから順序保存を実行するため、
+            # ここではorderUpdatedシグナルを発行しない（ファイル移動完了後に発行される）
+            self.itemsMoved.emit(source_paths, dest_path_str)
+        else:
+            # 同じ親内での移動（並べ替え）の場合、ファイル移動は不要なので即座に順序保存を実行
+            self.orderUpdated.emit()
         
         event.accept()

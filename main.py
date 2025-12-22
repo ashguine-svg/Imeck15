@@ -66,9 +66,12 @@ class Logger(QObject):
         self.locale_manager = locale_manager
     def log(self, message: str, *args, force=False):
         try:
-            if self.locale_manager: translated_message = self.locale_manager.tr(message, *args)
-            else: translated_message = message % args if args else message
-        except Exception: translated_message = f"{message} (args: {args})"
+            if self.locale_manager:
+                translated_message = self.locale_manager.tr(message, *args)
+            else:
+                translated_message = message % args if args else message
+        except Exception:
+            translated_message = f"{message} (args: {args})"
         print(f"[LOG] {translated_message}")
         self.logReady.emit(translated_message)
 
@@ -96,7 +99,8 @@ def initialize_tesseract(logger_instance, config_manager):
     logger_instance.log(f"[INIT] TESSDATA_PREFIX を設定: {tessdata_dir}")
 
     # 3. ダウンロード対象の言語リストを作成
-    required_langs = {'eng'} # 英語は基本機能として必須
+    # 英語は基本機能として必須
+    required_langs = {'eng'}
     
     # アプリ設定から現在の言語を取得
     try:
@@ -119,7 +123,7 @@ def initialize_tesseract(logger_instance, config_manager):
     all_success = True
     
     MAX_RETRIES = 3
-    RETRY_DELAY = 2 # 秒
+    RETRY_DELAY = 2  # 秒
 
     for lang in required_langs:
         file_path = tessdata_dir / f"{lang}.traineddata"
@@ -153,8 +157,10 @@ def initialize_tesseract(logger_instance, config_manager):
                         time.sleep(RETRY_DELAY)
                         # 失敗した不完全なファイルがあれば削除してリトライ
                         if file_path.exists():
-                            try: file_path.unlink()
-                            except: pass
+                            try:
+                                file_path.unlink()
+                            except Exception:
+                                pass
             
             if not download_success:
                 logger_instance.log(f"[ERROR] {lang} のダウンロードに失敗しました (Final): {last_error}")
@@ -167,10 +173,14 @@ def initialize_tesseract(logger_instance, config_manager):
 
 def restart_application():
     global app, _lock_socket
-    if not app: return
+    if not app:
+        return
     if _lock_socket:
-        try: _lock_socket.close(); _lock_socket = None
-        except Exception: pass
+        try:
+            _lock_socket.close()
+            _lock_socket = None
+        except Exception:
+            pass
     executable = sys.executable
     script_path = os.path.abspath(sys.argv[0])
     if executable.lower().endswith("python.exe") or executable.lower().endswith("python"):
@@ -185,8 +195,10 @@ def restart_application():
 def main():
     global app
     if sys.platform == 'win32':
-        try: ctypes.windll.shcore.SetProcessDpiAwareness(1)
-        except Exception: pass
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        except Exception:
+            pass
 
     app = QApplication.instance() or QApplication(sys.argv)
     
@@ -298,7 +310,8 @@ def main():
         primary_screen = app.primaryScreen()
         if primary_screen:
             primary_screen.geometryChanged.connect(core_engine.on_screen_geometry_changed)
-    except Exception: pass
+    except Exception:
+        pass
 
     ui_manager.set_tree_enabled(False)
     capture_manager.prime_mss()
@@ -312,7 +325,8 @@ def main():
             try:
                 dialog = InitializationDialog(core_engine, logger, locale_manager, ui_manager)
                 dialog.exec()
-            except Exception: pass
+            except Exception:
+                pass
         QTimer.singleShot(200, run_initialization_dialog)
     
     sys.exit(app.exec())

@@ -280,7 +280,6 @@ class SelectionHandler:
             title, current_dims, rect = info['title'], info['dims'], info['rect']
             
             self.core.environment_tracker.on_rec_area_set("window", title)
-            self.core.appContextChanged.emit(title) 
             
             # --- ▼▼▼ 拡張: ライフサイクル管理コンテキストのアタッチ ▼▼▼ ---
             if self.core.target_hwnd:
@@ -294,6 +293,9 @@ class SelectionHandler:
                 if 0.995 <= calc_scale <= 1.005: self.core.current_window_scale = 1.0; self.logger.log("log_window_scale_calc", title, f"{calc_scale:.3f}"); self.core.windowScaleCalculated.emit(1.0); self.core._areaSelectedForProcessing.emit(rect)
                 else: self.core._pending_scale_prompt_info = {**info, 'calculated_scale': calc_scale}; self.core.askToApplyWindowScaleSignal.emit(calc_scale); return
             else: self.core.current_window_scale = None; self.core.windowScaleCalculated.emit(0.0); self.core._areaSelectedForProcessing.emit(rect)
+            
+            # 認識範囲設定後にappContextChangedを発行（ツリー更新が正しいタイミングで行われるようにするため）
+            self.core.appContextChanged.emit(title)
         except Exception as e:
             self.logger.log("log_error_base_size_process", str(e))
             if not self.core._pending_scale_prompt_info: self.core._pending_window_info = None; self.core._showUiSignal.emit(); self.core.selectionProcessFinished.emit()
@@ -304,10 +306,14 @@ class SelectionHandler:
         try:
             if not (info := self.core._pending_scale_prompt_info): self.logger.log("Warning: process_apply_scale_prompt_response called with no pending info."); self.core._pending_window_info = None; self.core._showUiSignal.emit(); self.core.selectionProcessFinished.emit(); return
             scale, rect = info['calculated_scale'], info['rect']
+            title = info.get('title')
             if apply_scale:
                 self.ui_manager.app_config['auto_scale']['use_window_scale'] = True; self.ui_manager.auto_scale_widgets['use_window_scale'].setChecked(True); self.ui_manager.on_app_settings_changed(); self.core.current_window_scale = scale; self.logger.log("log_window_scale_applied", f"{scale:.3f}")
             else: self.core.current_window_scale = None; self.logger.log("log_window_scale_not_applied", f"{scale:.3f}")
             self.core.windowScaleCalculated.emit(self.core.current_window_scale if self.core.current_window_scale is not None else 0.0); self.core._areaSelectedForProcessing.emit(rect)
+            # 認識範囲設定後にappContextChangedを発行（ツリー更新が正しいタイミングで行われるようにするため）
+            if title:
+                self.core.appContextChanged.emit(title)
         except Exception as e: self.logger.log("log_error_apply_scale_process", str(e))
         finally: self.core._pending_scale_prompt_info = None; self.core._pending_window_info = None; self.core.selectionProcessFinished.emit()
 
@@ -317,6 +323,8 @@ class SelectionHandler:
             self.core.recognition_area = coords; 
             self.logger.log("log_rec_area_set", str(coords)); 
             self._update_rec_area_preview(); 
+            # 認識範囲設定完了後にツリーを更新（OCR設定アイテムが消えないようにするため）
+            self.ui_manager.update_image_tree()
             self.core.selectionProcessFinished.emit(); 
             self.core._show_ui_safe()
             self.ui_manager._update_capture_button_state()
@@ -431,6 +439,8 @@ class SelectionHandler:
             
             if success:
                 self.core._log(message)
+                # 画像ツリーを更新（新しく保存した画像を表示するため）
+                self.ui_manager.update_image_tree()
                 if self.core.thread_pool: 
                     self.core.thread_pool.submit(self.core._build_template_cache).add_done_callback(self.core._on_cache_build_done)
             

@@ -202,6 +202,12 @@ class ConfigManager:
     def _filter_item_by_app(self, item_settings: dict, current_app_name: str) -> bool:
         if not current_app_name:
             return True
+        
+        # OCR設定が有効な画像は常に表示する（environment_infoに関係なく）
+        ocr_settings = item_settings.get("ocr_settings", {})
+        if ocr_settings and ocr_settings.get("enabled", False):
+            return True
+        
         env_list = item_settings.get("environment_info", [])
         if not env_list:
             return True
@@ -303,6 +309,18 @@ class ConfigManager:
 
     def save_image_order(self, order_list: list, folder_path=None):
         order_path = Path(folder_path) / self.sub_order_filename if folder_path else self.base_dir / self.image_order_filename
+        # フォルダが存在しない場合は作成（親ディレクトリのみ）
+        # 注意: folder_pathが存在しない場合でも、親ディレクトリは作成する
+        # ただし、folder_path自体が存在しない場合は、そのフォルダは作成しない（ファイル移動が完了していない可能性があるため）
+        if folder_path:
+            folder_path_obj = Path(folder_path)
+            # folder_pathが存在する場合のみ、そのフォルダ内に保存
+            if not folder_path_obj.exists():
+                # フォルダが存在しない場合は、エラーログを出力してスキップ
+                self.logger.log("[WARN] Folder does not exist, skipping order save: %s", folder_path)
+                return
+        # 親ディレクトリが存在しない場合は作成
+        order_path.parent.mkdir(parents=True, exist_ok=True)
         with open(order_path, 'w', encoding='utf-8') as f:
             json.dump(order_list, f, indent=2, ensure_ascii=False)
             
@@ -313,6 +331,11 @@ class ConfigManager:
             
             folder_data_map = data_to_save.get('folders', {})
             for folder_path_str, child_order_filenames in folder_data_map.items():
+                # フォルダが存在しない場合はスキップ（D&Dで移動したフォルダがまだ移動されていない可能性があるため）
+                folder_path_obj = Path(folder_path_str)
+                if not folder_path_obj.exists():
+                    self.logger.log("[WARN] Folder does not exist, skipping order save: %s", folder_path_str)
+                    continue
                 self.save_image_order(child_order_filenames, folder_path_str)
         
         except Exception as e:
@@ -445,19 +468,25 @@ class ConfigManager:
         final_order_names = []
         is_order_changed = False
         
+        # 順序ファイルから読み込んだ名前を処理
         for raw_name in ordered_raw_names:
+            # raw_nameはフルパス（ルートの場合）またはファイル名（サブフォルダの場合）の可能性がある
+            # どちらの場合でも、ファイル名を取得して比較
             name = Path(raw_name).name
             if name in all_names_on_disk:
                 final_order_names.append(name)
                 all_names_on_disk.remove(name)
             else:
+                # 順序ファイルに記録されているが、ディスク上に存在しない
                 is_order_changed = True
         
+        # 順序ファイルにない新しいファイルを検出して追加（一番下に追加）
         if all_names_on_disk:
             new_names_sorted = sorted(list(all_names_on_disk))
             final_order_names.extend(new_names_sorted)
             is_order_changed = True
             
+        # 順序ファイルを更新（ディスク上の状態と同期）
         if is_order_changed:
             list_to_save = []
             for name in final_order_names:
@@ -465,8 +494,12 @@ class ConfigManager:
                      list_to_save.append(str(current_dir / name))
                 else: # Subfolder
                      list_to_save.append(name)
-            self.save_image_order(list_to_save, order_file_owner)
-            self.logger.log("[INFO] Sync: Order file updated for %s", current_dir.name)
+            try:
+                # 修正: try ブロックのインデントを適用
+                self.save_image_order(list_to_save, order_file_owner)
+                self.logger.log("[INFO] Sync: Order file updated for %s", current_dir.name)
+            except Exception as e:
+                self.logger.log("[ERROR] Failed to save order file for %s: %s", current_dir.name, str(e))
 
         for name in final_order_names:
             item_path = current_dir / name

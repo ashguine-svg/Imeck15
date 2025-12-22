@@ -144,6 +144,13 @@ class CoreEngine(QObject):
         self.priority_timers = {}
         self.folder_children_map = {}
         
+        # OCR非同期処理用
+        self.ocr_futures = {}
+        # OCR結果保存用（インターバル待機中に完了したOCR結果を保存）
+        self.ocr_results = {}
+        # OCR処理開始時刻記録用（処理時間計測用）
+        self.ocr_start_times = {}
+        
         self.click_timer = None
         self.last_right_click_time = 0
         self.right_click_count = 0
@@ -583,6 +590,9 @@ class CoreEngine(QObject):
             self.match_detected_at.clear()
             self.priority_timers.clear()
             self.folder_cooldowns.clear() 
+            self.ocr_futures.clear()
+            self.ocr_results.clear()
+            self.ocr_start_times.clear()
             self.updateStatus.emit("idle", "green")
 
     def delete_selected_items(self, paths_to_delete: list):
@@ -658,12 +668,34 @@ class CoreEngine(QObject):
             
             if failed_count > 0: 
                 self.logger.log("[ERROR] _move_items_and_rebuild_async failed count: %s, LastError: %s", failed_count, final_message)
+                # ファイル移動が失敗した場合、ツリーを再構築してファイルシステムの状態と一致させる
+                self.ui_manager.update_image_tree()
+                # エラーダイアログを表示
+                from PySide6.QtWidgets import QMessageBox
+                QMessageBox.warning(
+                    self.ui_manager,
+                    self.locale_manager.tr("error_title_move_item_failed"),
+                    self.locale_manager.tr("log_move_item_failed", final_message)
+                )
 
         except Exception as e:
             self.logger.log("[ERROR] _move_items_and_rebuild_async: %s", str(e))
+            # 例外が発生した場合も、ツリーを再構築
+            self.ui_manager.update_image_tree()
             raise 
         
         self._build_template_cache()
+        
+        # ファイル移動が完了した後、順序保存を実行
+        # これにより、移動先のフォルダが存在する状態で順序保存が実行される
+        if moved_count > 0:
+            try:
+                if hasattr(self.ui_manager, 'save_tree_order'):
+                    data_to_save = self.ui_manager.save_tree_order()
+                    if data_to_save:
+                        self.config_manager.save_tree_order_data(data_to_save)
+            except Exception as e:
+                self.logger.log("[ERROR] Failed to save order after move: %s", str(e))
 
     def move_item_out_of_folder(self):
         source_path_str, name = self.ui_manager.get_selected_item_path(); lm = self.locale_manager.tr

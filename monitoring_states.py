@@ -36,123 +36,121 @@ class IdleState(State):
         context = self.context
         
         # --- 1. タイマーアプローチ (ロック) 判定 ---
-        # タイマースケジュールが存在する場合、優先的にチェック
         if context.timer_schedule_cache:
             for path, schedule in context.timer_schedule_cache.items():
                 actions = schedule['actions']
-                # 未実行のアクションがあるか？
                 pending_actions = [a for a in actions if not a['executed']]
-                
-                if not pending_actions:
-                    continue
+                if not pending_actions: continue
                 
                 next_action = pending_actions[0]
                 time_until_trigger = next_action['target_time'] - current_time
                 
-                # 期限切れ判定 (要件: 1秒でも過ぎたら諦める)
                 if time_until_trigger < -1.0:
-                    context.logger.log(f"[WARN] Timer action expired for {Path(path).name} (ID:{next_action['id']}). Skipping.")
-                    next_action['executed'] = True # スキップ扱い
+                    context.logger.log(f"[WARN] Timer action expired for {Path(path).name}. Skipping.")
+                    next_action['executed'] = True
                     continue
                 
-                # アプローチ範囲内か？ (ロック開始時刻を過ぎているか)
                 if time_until_trigger <= schedule['approach_time']:
-                    # 対象画像を優先検索
                     target_match = None
-                    
-                    # A. 既に pre_matches (通常検索結果) に含まれているか確認
                     if pre_matches:
                         for m in pre_matches:
                             if m['path'] == path:
                                 target_match = m
                                 break
-                    
-                    # B. なければ明示的に検索 (キャッシュからテンプレート取得)
                     if not target_match:
                         cache_item = context.normal_template_cache.get(path) or context.backup_template_cache.get(path)
                         if cache_item:
-                            # 単体検索実行
                             matches = context._find_best_match(*screen_data, {path: cache_item})
-                            if matches:
-                                target_match = matches[0]
+                            if matches: target_match = matches[0]
                     
                     if target_match:
-                        # ★ 画像発見 -> TimerStandbyState へ遷移 (ロック開始)
                         new_state = TimerStandbyState(context, path, schedule)
                         context.transition_to(new_state)
                         return
-                    
-                    # 見つからなければ次のループへ (まだロックできない)
         
         # --- 2. 通常監視ロジック ---
         all_matches = pre_matches if pre_matches is not None else []
         
-        # ★★★ 修正: タイマーロック中の画像を通常クリック候補から除外する ★★★
-        # これにより、ロック時間に入った画像が通常監視ロジックで「横取り」されるのを防ぎます。
+        # タイマーロック中の画像を除外
         candidates = []
         for m in all_matches:
             is_locked_by_timer = False
-            
             if m['path'] in context.timer_schedule_cache:
                 schedule = context.timer_schedule_cache[m['path']]
                 pending = [a for a in schedule['actions'] if not a['executed']]
-                
                 if pending:
                     next_action = pending[0]
-                    # 現在時刻が「ロック開始時刻 (ターゲット時刻 - アプローチ時間)」を過ぎているか？
-                    # 過ぎていれば、この画像はタイマー機能の管轄となるため、ここでは無視する。
                     lock_start_time = next_action['target_time'] - schedule['approach_time']
-                    if current_time >= lock_start_time:
-                        is_locked_by_timer = True
-            
+                    if current_time >= lock_start_time: is_locked_by_timer = True
             if not is_locked_by_timer:
                 candidates.append(m)
-        
-        # フィルタリング済みのリストを使用
         all_matches = candidates
-        # ★★★ 修正終了 ★★★
 
         normal_matches = [m for m in all_matches if m['path'] in context.normal_template_cache]
         backup_trigger_matches = [m for m in all_matches if m['path'] in context.backup_template_cache]
 
-        if normal_matches:
-            for match in normal_matches:
-                path = match['path']
-                cache_item = context.normal_template_cache.get(path)
-                
-                if cache_item:
-                    folder_mode = cache_item.get('folder_mode')
-                    
-                    # --- 画像優先モードへの遷移 ---
-                    if folder_mode == 'priority_image':
-                        trigger_path = cache_item.get('priority_trigger_path')
-                        target_path = trigger_path if trigger_path else cache_item['folder_path']
-                        
-                        timeout_time = time.time() + 300 # デフォルト値
-                        required_children = context.folder_children_map.get(target_path, set())
-                        new_state = PriorityState(context, 'image', target_path, timeout_time, required_children)
-                        context.transition_to(new_state)
-                        return
-                    
-                    # --- 順序優先モードへの遷移 ---
-                    if folder_mode == 'priority_sequence':
-                        seq_info = cache_item.get('sequence_info')
-                        if seq_info:
-                            ordered_paths = seq_info.get('ordered_paths', [])
-                            # リストの先頭画像がマッチした場合のみトリガー
-                            if ordered_paths and ordered_paths[0] == path:
-                                # まず最初の画像のクリック処理を行う
-                                context._process_matches_as_sequence([match], current_time, last_match_time_map)
-                                
-                                step_interval = seq_info.get('interval', 3)
-                                new_state = SequencePriorityState(context, ordered_paths, step_interval, start_index=1, parent_state=None)
-                                context.transition_to(new_state)
-                                return
+        # 混合リストの作成（通常画像 + 各シーケンスの1番目）
+        filtered_matches = []
+        sequence_trigger_map = {} # path -> seq_info
+        priority_image_map = {}   # path -> cache_item
 
-        was_clicked = context._process_matches_as_sequence(normal_matches, current_time, last_match_time_map)
-        if was_clicked:
+        for match in normal_matches:
+            path = match['path']
+            cache_item = context.normal_template_cache.get(path)
+            if not cache_item: continue
+            
+            folder_mode = cache_item.get('folder_mode')
+            
+            # 順序優先(シーケンス)モード
+            if folder_mode == 'priority_sequence':
+                seq_info = cache_item.get('sequence_info')
+                if seq_info:
+                    ordered_paths = seq_info.get('ordered_paths', [])
+                    if ordered_paths and ordered_paths[0] == path:
+                        filtered_matches.append(match)
+                        sequence_trigger_map[path] = seq_info
+                    continue
+            
+            # 画像優先モード
+            if folder_mode == 'priority_image':
+                filtered_matches.append(match)
+                priority_image_map[path] = cache_item
+                continue
+
+            # 通常画像
+            filtered_matches.append(match)
+
+        # インターバル比較を実行し、実際にクリックされた画像を取得
+        clicked_match = context._process_matches_as_sequence(filtered_matches, current_time, last_match_time_map)
+        
+        if clicked_match:
+            clicked_path = clicked_match['path']
+            
+            # --- クリック後の状態遷移処理 ---
+            
+            # A. シーケンスモードへの遷移
+            if clicked_path in sequence_trigger_map:
+                seq_info = sequence_trigger_map[clicked_path]
+                ordered_paths = seq_info.get('ordered_paths', [])
+                step_interval = seq_info.get('interval', 3)
+                new_state = SequencePriorityState(context, ordered_paths, step_interval, start_index=0)
+                context.transition_to(new_state)
+                return
+
+            # B. 画像優先モードへの遷移
+            if clicked_path in priority_image_map:
+                cache_item = priority_image_map[clicked_path]
+                trigger_path = cache_item.get('priority_trigger_path')
+                target_path = trigger_path if trigger_path else cache_item['folder_path']
+                timeout_time = time.time() + 300
+                required_children = context.folder_children_map.get(target_path, set())
+                new_state = PriorityState(context, 'image', target_path, timeout_time, required_children)
+                context.transition_to(new_state)
+                return
+            
             return
 
+        # 3. バックアップトリガー
         if backup_trigger_matches:
             best_backup_trigger = max(backup_trigger_matches, key=lambda m: m['confidence'])
             new_state = CountdownState(context, best_backup_trigger)
@@ -377,6 +375,8 @@ class SequencePriorityState(State):
         self.interval_sec = interval_sec
         
         self.current_index = start_index
+        # 全ての画像（1番目も2番目以降も）でインターバル後にクリックするため、
+        # step_end_timeを現在時刻 + インターバル時間に設定
         self.step_end_time = time.time() + self.interval_sec
         self.has_clicked_current_step = False
         
@@ -468,11 +468,23 @@ class SequencePriorityState(State):
             return
 
         if not self.has_clicked_current_step:
+            # インターバル時間が経過しているかチェック
+            if current_time < self.step_end_time:
+                # インターバル時間が経過していない場合は待機
+                return
+            
             matches = self.context._find_best_match(*screen_data, target_cache)
             if matches:
                 best_match = max(matches, key=lambda m: m['confidence'])
                 self.context._execute_click(best_match)
                 self.has_clicked_current_step = True
+                # クリック後、インターバル時間を守るため、step_end_timeを更新
+                # これにより、次のステップに進む前にインターバル時間が経過するまで待機する
+                self.step_end_time = current_time + self.interval_sec
+            else:
+                # 画像が検出されない場合でも、インターバル時間を設定して待機
+                # これにより、画像が検出されなくても次のステップに進むことができる
+                self.step_end_time = current_time + self.interval_sec
 
 class CountdownState(State):
     def __init__(self, context, trigger_match, parent_state=None):

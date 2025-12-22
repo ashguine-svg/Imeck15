@@ -279,12 +279,54 @@ class MonitoringProcessor:
         matched_results.sort(key=lambda x: x[0]['confidence'], reverse=True)
         return [item[0] for item in matched_results]
 
+    def _start_ocr_task_if_needed(self, path, match, current_time):
+        settings = match.get('settings', {})
+        ocr_settings = settings.get('ocr_settings')
+        
+        if not OCR_AVAILABLE or not ocr_settings or not ocr_settings.get('enabled', False):
+            return
+        
+        # 既にOCRタスクが実行中ならスキップ
+        if path in self.core.ocr_futures:
+            return
+        
+        screen_img = getattr(self.core, 'latest_high_res_frame', None)
+        if screen_img is None:
+            return
+        
+        match_rect = match['rect'] 
+        detected_scale = match.get('scale', 1.0)
+        capture_scale = self.core.effective_capture_scale
+        parent_x = int(match_rect[0] / capture_scale)
+        parent_y = int(match_rect[1] / capture_scale)
+        parent_pos = (parent_x, parent_y)
+        real_scale = detected_scale / capture_scale
+        
+        # OCRタスク開始時刻を記録（処理時間計測用）
+        self.core.ocr_start_times[path] = current_time
+        
+        # OCRタスクを非同期実行
+        future = self.thread_pool.submit(
+            OCRRuntimeEvaluator.evaluate,
+            screen_image=screen_img,
+            parent_pos=parent_pos,
+            ocr_settings=ocr_settings,
+            item_settings=settings,
+            current_scale=real_scale,
+            hwnd=self.core.target_hwnd
+        )
+        self.core.ocr_futures[path] = future
+
     def process_matches_as_sequence(self, all_matches, current_time, last_match_time_map):
+        """
+        全候補をインターバル時間に基づいて評価し、実行可能なものがあればクリックします。
+        戻り値: クリックした画像の情報(dict) または なければ None
+        """
         if not all_matches:
             current_match_paths = set()
             keys_to_remove = [path for path in self.core.match_detected_at if path not in current_match_paths]
             for path in keys_to_remove: del self.core.match_detected_at[path]
-            return False
+            return None
 
         clickable_after_interval = []
         current_match_paths = {m['path'] for m in all_matches}
@@ -312,79 +354,111 @@ class MonitoringProcessor:
             if path not in self.core.match_detected_at:
                 self.core.match_detected_at[path] = current_time
                 self.logger.log(f"[DEBUG] Detected '{Path(path).name}'. Interval timer started ({interval:.1f}s).")
+                self._start_ocr_task_if_needed(path, m, current_time)
                 continue
             else:
                 detected_at = self.core.match_detected_at[path]
-                if current_time - detected_at >= interval:
+                elapsed = current_time - detected_at
+                
+                # インターバル待機中にOCR結果をチェック
+                ocr_settings = settings.get('ocr_settings')
+                if OCR_AVAILABLE and ocr_settings and ocr_settings.get('enabled', False):
+                    if path in self.core.ocr_futures:
+                        future = self.core.ocr_futures[path]
+                        if future.done():
+                            try:
+                                elapsed_time = current_time - self.core.ocr_start_times.get(path, current_time)
+                                time_str = f"[{elapsed_time:.2f}s]"
+                                success, log_msg, raw_text, confidence = future.result()
+                                full_log_msg = f"{log_msg} {time_str}"
+                                self.core.ocr_results[path] = {
+                                    'success': success,
+                                    'log_msg': full_log_msg,
+                                    'raw_text': raw_text,
+                                    'confidence': confidence
+                                }
+                                if success:
+                                    self.logger.log(f"[OCR] {full_log_msg} (Completed during interval wait)")
+                                else:
+                                    self.logger.log(f"[OCR SKIP] {full_log_msg} (Completed during interval wait)")
+                                del self.core.ocr_futures[path]
+                                if path in self.core.ocr_start_times: del self.core.ocr_start_times[path]
+                            except Exception as e:
+                                self.logger.log(f"[OCR ERROR] {e}")
+                                del self.core.ocr_futures[path]
+                                if path in self.core.ocr_start_times: del self.core.ocr_start_times[path]
+                
+                if elapsed >= interval:
                     clickable_after_interval.append(m)
 
         keys_to_remove = [p for p in self.core.match_detected_at if p not in current_match_paths]
         for p in keys_to_remove:
             if p in self.core.match_detected_at: del self.core.match_detected_at[p]
+            if p in self.core.ocr_futures: del self.core.ocr_futures[p]
+            if p in self.core.ocr_results: del self.core.ocr_results[p]
+            if p in self.core.ocr_start_times: del self.core.ocr_start_times[p]
 
         if not clickable_after_interval:
-            return False
+            return None
 
+        # ここでインターバル時間が短い方を優先的にソートします
         sorted_candidates = sorted(
             clickable_after_interval, 
             key=lambda m: (m['settings'].get('interval_time', 1.5), -m['confidence'])
         )
 
-        # ★★★ 修正: 全候補のOCR結果を集計し、ベストなものを選ぶロジックへ変更 ★★★
         valid_ocr_candidates = []
-        
-        # 1. すべての候補に対してOCRチェックを実施
         for target_match in sorted_candidates:
+            path = target_match['path']
             settings = target_match.get('settings', {})
             ocr_settings = settings.get('ocr_settings')
             
-            # OCR設定がない場合は、即時実行（優先度高）
             if not OCR_AVAILABLE or not ocr_settings or not ocr_settings.get('enabled', False):
                 self._execute_final_action(target_match, current_time, last_match_time_map)
-                return True
+                return target_match
 
-            # OCR設定がある場合は、評価してリストに追加
-            screen_img = getattr(self.core, 'latest_high_res_frame', None)
-            if screen_img is not None:
-                match_rect = target_match['rect'] 
-                detected_scale = target_match.get('scale', 1.0)
-                capture_scale = self.core.effective_capture_scale
-                parent_x = int(match_rect[0] / capture_scale)
-                parent_y = int(match_rect[1] / capture_scale)
-                parent_pos = (parent_x, parent_y)
-                real_scale = detected_scale / capture_scale
-                
-                success, log_msg, raw_text, confidence = OCRRuntimeEvaluator.evaluate(
-                    screen_image=screen_img,
-                    parent_pos=parent_pos,
-                    ocr_settings=ocr_settings,
-                    item_settings=settings,
-                    current_scale=real_scale,
-                    hwnd=self.core.target_hwnd
-                )
-                
-                if success:
-                    # 成功した候補をリストに追加
+            if path in self.core.ocr_results:
+                ocr_result = self.core.ocr_results[path]
+                if ocr_result['success']:
                     valid_ocr_candidates.append({
                         'match': target_match,
-                        'confidence': confidence,
-                        'log': log_msg,
-                        'text': raw_text
+                        'confidence': ocr_result['confidence'],
+                        'log': ocr_result['log_msg'],
+                        'text': ocr_result['raw_text']
                     })
-                else:
-                    self.logger.log(f"[OCR SKIP] {log_msg}")
+                del self.core.ocr_results[path]
+            elif path in self.core.ocr_futures:
+                future = self.core.ocr_futures[path]
+                if future.done():
+                    try:
+                        elapsed_time = current_time - self.core.ocr_start_times.get(path, current_time)
+                        time_str = f"[{elapsed_time:.2f}s]"
+                        success, log_msg, raw_text, confidence = future.result()
+                        if success:
+                            valid_ocr_candidates.append({
+                                'match': target_match,
+                                'confidence': confidence,
+                                'log': log_msg,
+                                'text': raw_text
+                            })
+                        else:
+                            self.logger.log(f"[OCR SKIP] {log_msg} {time_str}")
+                    except Exception as e:
+                        self.logger.log(f"[OCR ERROR] {e}")
+                    finally:
+                        del self.core.ocr_futures[path]
+                        if path in self.core.ocr_start_times: del self.core.ocr_start_times[path]
 
-        # 2. 有効なOCR候補の中から、最も信頼度が高いものを選択
         if valid_ocr_candidates:
-            # 信頼度(降順)でソート
             valid_ocr_candidates.sort(key=lambda x: x['confidence'], reverse=True)
-            
             best_candidate = valid_ocr_candidates[0]
-            self.logger.log(f"[OCR] {best_candidate['log']} (Selected from {len(valid_ocr_candidates)} candidates)")
+            if "[0." not in best_candidate['log']:
+                self.logger.log(f"[OCR] {best_candidate['log']}")
             
-            # 実行
             self._execute_final_action(best_candidate['match'], current_time, last_match_time_map)
-            return True
+            return best_candidate['match']
+
+        return None
 
         return False
 
@@ -408,6 +482,9 @@ class MonitoringProcessor:
         click_time = time.time()
         last_match_time_map[target_path] = click_time
         if target_path in self.core.match_detected_at: del self.core.match_detected_at[target_path]
+        if target_path in self.core.ocr_futures: del self.core.ocr_futures[target_path]
+        if target_path in self.core.ocr_results: del self.core.ocr_results[target_path]
+        if target_path in self.core.ocr_start_times: del self.core.ocr_start_times[target_path]
 
     def execute_click(self, match_info):
         try:
