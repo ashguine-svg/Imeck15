@@ -1,11 +1,12 @@
 # image_tree_widget.py
 # ★★★ 修正: D&D時の同名ファイルチェックとエラーダイアログ表示を追加 ★★★
+# ★★★ 修正: D&D時の自動スクロール機能を追加 ★★★
 
 import sys
 # 修正: QMessageBox をインポートに追加
 from PySide6.QtWidgets import QTreeWidget, QTreeWidgetItem, QApplication, QMessageBox
 from PySide6.QtGui import QBrush, QColor
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
 from pathlib import Path
 
 class DraggableTreeWidget(QTreeWidget):
@@ -32,6 +33,12 @@ class DraggableTreeWidget(QTreeWidget):
 
         # 標準のインジケータは無効化（カスタムを使うため）
         self.setDropIndicatorShown(False)
+        
+        # --- 自動スクロール用のタイマーを初期化 ---
+        self.scroll_timer = QTimer(self)
+        self.scroll_timer.timeout.connect(self._perform_auto_scroll)
+        self.scroll_direction = 0  # 0: 停止, 1: 下方向, -1: 上方向
+        self.scroll_speed = 0  # スクロール速度（ピクセル単位）
 
     def _remove_dummy_indicator(self):
         """ツリーからダミーインジケータを安全に削除します。"""
@@ -47,6 +54,53 @@ class DraggableTreeWidget(QTreeWidget):
                     self.takeTopLevelItem(index)
         except RuntimeError:
             pass # 既に削除されている場合は無視
+    
+    def _perform_auto_scroll(self):
+        """自動スクロールを実行します。"""
+        if self.scroll_direction == 0:
+            return
+        
+        scroll_bar = self.verticalScrollBar()
+        if scroll_bar:
+            current_value = scroll_bar.value()
+            new_value = current_value + (self.scroll_direction * self.scroll_speed)
+            scroll_bar.setValue(new_value)
+    
+    def _check_and_start_auto_scroll(self, mouse_pos):
+        """マウス位置に基づいて自動スクロールを開始/停止します。"""
+        viewport_rect = self.viewport().rect()
+        mouse_y = mouse_pos.y()
+        viewport_top = viewport_rect.top()
+        viewport_bottom = viewport_rect.bottom()
+        
+        # スクロール領域の閾値（ピクセル）
+        SCROLL_THRESHOLD = 30
+        
+        # 上端に近い場合
+        distance_from_top = mouse_y - viewport_top
+        if distance_from_top < SCROLL_THRESHOLD and distance_from_top >= 0:
+            # 距離に応じてスクロール速度を設定（近いほど速く、1/4の速度に調整）
+            self.scroll_speed = max(1, int((SCROLL_THRESHOLD - distance_from_top) / 12))
+            self.scroll_direction = -1  # 上方向
+            if not self.scroll_timer.isActive():
+                self.scroll_timer.start(16)  # 約60FPS
+            return
+        
+        # 下端に近い場合
+        distance_from_bottom = viewport_bottom - mouse_y
+        if distance_from_bottom < SCROLL_THRESHOLD and distance_from_bottom >= 0:
+            # 距離に応じてスクロール速度を設定（近いほど速く、1/4の速度に調整）
+            self.scroll_speed = max(1, int((SCROLL_THRESHOLD - distance_from_bottom) / 12))
+            self.scroll_direction = 1  # 下方向
+            if not self.scroll_timer.isActive():
+                self.scroll_timer.start(16)  # 約60FPS
+            return
+        
+        # スクロール領域外の場合は停止
+        if self.scroll_timer.isActive():
+            self.scroll_timer.stop()
+            self.scroll_direction = 0
+            self.scroll_speed = 0
 
     def dragEnterEvent(self, event):
         if event.source() == self:
@@ -74,6 +128,9 @@ class DraggableTreeWidget(QTreeWidget):
             target_item = self.itemAt(event.position().toPoint())
             original_pos = self.dropIndicatorPosition()
             mouse_pos = event.position().toPoint()
+            
+            # --- 自動スクロールチェック ---
+            self._check_and_start_auto_scroll(mouse_pos)
             
             # ターゲットがフォルダかどうかをチェック
             target_is_folder = False
@@ -166,6 +223,13 @@ class DraggableTreeWidget(QTreeWidget):
             self.last_highlighted_item = None
 
         self._remove_dummy_indicator()
+        
+        # 自動スクロールを停止
+        if self.scroll_timer.isActive():
+            self.scroll_timer.stop()
+            self.scroll_direction = 0
+            self.scroll_speed = 0
+        
         super().dragLeaveEvent(event)
 
     def dropEvent(self, event):
@@ -177,6 +241,12 @@ class DraggableTreeWidget(QTreeWidget):
             self.last_highlighted_item.setBackground(0, QBrush(Qt.transparent))
             self.last_highlighted_item = None
         self._remove_dummy_indicator()
+        
+        # 自動スクロールを停止
+        if self.scroll_timer.isActive():
+            self.scroll_timer.stop()
+            self.scroll_direction = 0
+            self.scroll_speed = 0
 
         if event.source() != self:
             super().dropEvent(event)
