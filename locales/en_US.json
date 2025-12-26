@@ -1,6 +1,6 @@
 {
     "language_name": "English",
-    "window_title": "Imeck15 v1.8.1.0 Multilingual Edition",
+    "window_title": "Imeck15 v1.8.2.0 Multilingual Edition",
     "monitor_button_start": "Start Monitor",
     "monitor_button_stop": "Stop Monitor",
     "monitor_button_tooltip": "Start monitoring.<br>Double right-click to stop<br>Triple right-click to start",
@@ -540,5 +540,6 @@
     "log_ocr_pre_check_pass": "[OCR PRE-CHECK] %s -> Ready for action",
     "log_ocr_action_cached": "[OCR ACTION] Executing action based on cached PASS: %s",
     "log_ocr_skip": "[OCR SKIP] %s",
-    "log_ocr_selected": "[OCR] %s (Selected from %s candidates)"
+    "log_ocr_selected": "[OCR] %s (Selected from %s candidates)",
+    "preview_zoom_hint": "Wheel to zoom"
 }

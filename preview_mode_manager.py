@@ -43,7 +43,7 @@ class PreviewModeManager(QObject):
 
     # --- Public Methods ---
 
-    def update_preview(self, cv_image_or_pixmap: np.ndarray | QPixmap, settings_data: dict = None):
+    def update_preview(self, cv_image_or_pixmap: np.ndarray | QPixmap, settings_data: dict = None, reset_zoom: bool = True):
         """画像(np.ndarray)またはPixMapと設定データを受け取り、プレビュー表示と内部状態を更新"""
 
         # 1. 内部設定を更新
@@ -54,7 +54,7 @@ class PreviewModeManager(QObject):
 
         # 2. プレビュー画像を設定
         pixmap = self._convert_cv_to_pixmap(cv_image_or_pixmap)
-        self.preview_label.set_pixmap(pixmap if pixmap else None)
+        self.preview_label.set_pixmap(pixmap if pixmap else None, reset_zoom)
 
         # 3. プレビュー描画データを設定
         self.preview_label.set_drawing_data(self.settings if settings_data else None)

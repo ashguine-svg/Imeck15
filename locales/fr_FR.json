@@ -1,6 +1,6 @@
 {
     "language_name": "Français",
-    "window_title": "Imeck15 v1.8.1.0 Édition multilingue",
+    "window_title": "Imeck15 v1.8.2.0 Édition multilingue",
     "monitor_button_start": "Démarrer la surveillance",
     "monitor_button_stop": "Arrêter la surveillance",
     "monitor_button_tooltip": "Démarre la surveillance.<br>Double-clic droit pour arrêter<br>Triple-clic droit pour démarrer",
@@ -540,5 +540,6 @@
     "log_ocr_pre_check_pass": "[OCR PRÉ-VÉRIF] %s -> Prêt pour l'action",
     "log_ocr_action_cached": "[ACTION OCR] Exécution de l'action basée sur le PASS mis en cache : %s",
     "log_ocr_skip": "[OCR IGNORÉ] %s",
-    "log_ocr_selected": "[OCR] %s (Sélectionné parmi %s candidats)"
+    "log_ocr_selected": "[OCR] %s (Sélectionné parmi %s candidats)",
+    "preview_zoom_hint": "Roulette pour zoomer"
 }

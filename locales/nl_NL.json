@@ -1,6 +1,6 @@
 {
     "language_name": "Nederlands",
-    "window_title": "Imeck15 v1.8.1.0 Meertalige editie",
+    "window_title": "Imeck15 v1.8.2.0 Meertalige editie",
     "monitor_button_start": "Start bewaking",
     "monitor_button_stop": "Stop bewaking",
     "monitor_button_tooltip": "Start bewaking.<br>Rechts dubbelklikken om te stoppen<br>Rechts driemaal klikken om te starten",
@@ -540,5 +540,6 @@
     "log_ocr_pre_check_pass": "[OCR PRE-CHECK] %s -> Klaar voor actie",
     "log_ocr_action_cached": "[OCR ACTIE] Actie uitvoeren op basis van gecachte PASS: %s",
     "log_ocr_skip": "[OCR OVERSLAAN] %s",
-    "log_ocr_selected": "[OCR] %s (Geselecteerd uit %s kandidaten)"
+    "log_ocr_selected": "[OCR] %s (Geselecteerd uit %s kandidaten)",
+    "preview_zoom_hint": "Wiel om te zoomen"
 }

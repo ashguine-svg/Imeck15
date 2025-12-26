@@ -1,6 +1,6 @@
 {
     "language_name": "Svenska",
-    "window_title": "Imeck15 v1.8.1.0 Flerspråkig utgåva",
+    "window_title": "Imeck15 v1.8.2.0 Flerspråkig utgåva",
     "monitor_button_start": "Starta övervakning",
     "monitor_button_stop": "Stoppa övervakning",
     "monitor_button_tooltip": "Startar övervakning.<br>Höger dubbelklick för att stoppa<br>Höger trippelklick för att starta",
@@ -540,5 +540,6 @@
     "log_ocr_pre_check_pass": "[OCR FÖRKONTROLL] %s -> Redo för åtgärd",
     "log_ocr_action_cached": "[OCR ÅTGÄRD] Utför åtgärd baserat på cachad PASS: %s",
     "log_ocr_skip": "[OCR HOPPADE ÖVER] %s",
-    "log_ocr_selected": "[OCR] %s (Vald från %s kandidater)"
+    "log_ocr_selected": "[OCR] %s (Vald från %s kandidater)",
+    "preview_zoom_hint": "Scrollhjul för zoom"
 }

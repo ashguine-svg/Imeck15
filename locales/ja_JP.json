@@ -1,5 +1,5 @@
 {
-    "window_title": "Imeck15 v1.8.1.0 多言語版",
+    "window_title": "Imeck15 v1.8.2.0 多言語版",
     "monitor_button_start": "監視開始",
     "monitor_button_stop": "監視停止",
     "monitor_button_tooltip": "監視を開始します。<br>右ダブルクリックで停止<br>右トリプルクリックで開始",
@@ -538,5 +538,6 @@
     "log_ocr_pre_check_pass": "[OCR先行確認] %s -> アクション準備完了",
     "log_ocr_action_cached": "[OCR実行] キャッシュされた合格判定を使用し実行します: %s",
     "log_ocr_skip": "[OCR除外] %s",
-    "log_ocr_selected": "[OCR] %s (%s 件の候補から選択)"
+    "log_ocr_selected": "[OCR] %s (%s 件の候補から選択)",
+    "preview_zoom_hint": "ホイールで拡大/縮小"
 }

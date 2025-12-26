@@ -53,7 +53,7 @@ except Exception as e:
 class CoreEngine(QObject):
     appContextChanged = Signal(str) 
     updateStatus = Signal(str, str)
-    updatePreview = Signal(np.ndarray, object)
+    updatePreview = Signal(np.ndarray, object, bool)  # (image, settings, reset_zoom)
     updateLog = Signal(str)
     updateRecAreaPreview = Signal(np.ndarray)
     _showUiSignal = Signal()
@@ -78,6 +78,7 @@ class CoreEngine(QObject):
     captureFailedSignal = Signal()
     saveImageCompleted = Signal(bool, str)
     quickCaptureRequested = Signal()
+    _saveImageDoneProcessRequested = Signal(bool, str)  # スレッドプールからメインスレッドへの移譲用
 
     def __init__(self, ui_manager, capture_manager, config_manager, logger, locale_manager):
         super().__init__()
@@ -167,9 +168,13 @@ class CoreEngine(QObject):
         self.stopMonitoringRequested.connect(self.stop_monitoring)
 
         self.quickCaptureRequested.connect(self._perform_quick_capture)
+        
+        # スレッドプールからメインスレッドへの移譲シグナル接続
+        self._saveImageDoneProcessRequested.connect(self._process_save_image_done)
 
         self.app_config = self.ui_manager.app_config
         self.current_window_scale = None
+        self.actual_window_scale = None  # ★★★ 追加: 補正前の実際のウィンドウスケールを保存 ★★★
         self._pending_window_info = None
         self._pending_scale_prompt_info = None
         self._cooldown_until = 0
@@ -417,6 +422,7 @@ class CoreEngine(QObject):
             self.stop_monitoring()
             self.logger.log("log_capture_proceed_after_stop")
 
+        # UIを非表示にしてマウスカーソルが写り込まないようにする
         if self.ui_manager:
             if self.ui_manager.is_minimal_mode:
                 if self.ui_manager.floating_window:
@@ -424,8 +430,9 @@ class CoreEngine(QObject):
             else:
                 self.ui_manager.hide()
             QApplication.processEvents()
-            time.sleep(0.2) 
+            time.sleep(0.1)  # UI非表示の処理を待つ
 
+        # キャプチャ領域を決定
         capture_region = None
         
         if self.target_hwnd and sys.platform == 'win32':
@@ -458,7 +465,41 @@ class CoreEngine(QObject):
                 capture_region = self.recognition_area
 
         try:
-            captured_image = self.capture_manager.capture_frame(region=capture_region)
+            # ★★★ プレキャプチャを実行（マウスカーソルが写り込まないように） ★★★
+            self.logger.log("[DEBUG] Performing pre-capture for quick capture...")
+            pre_captured_image = self.capture_manager.capture_frame()
+            if pre_captured_image is None:
+                raise Exception("Failed to capture full screen for pre-capture.")
+            self.logger.log("[DEBUG] Pre-capture successful.")
+            
+            # マウスカーソルが移動する時間を確保
+            time.sleep(0.1)
+            
+            # プレキャプチャ画像から指定領域を切り出す
+            captured_image = None
+            if capture_region and pre_captured_image is not None:
+                try:
+                    (x1, y1, x2, y2) = capture_region
+                    x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+                    # プレキャプチャ画像の範囲内かチェック
+                    h, w = pre_captured_image.shape[:2]
+                    x1 = max(0, min(x1, w))
+                    y1 = max(0, min(y1, h))
+                    x2 = max(x1, min(x2, w))
+                    y2 = max(y1, min(y2, h))
+                    captured_image = pre_captured_image[y1:y2, x1:x2]
+                    self.logger.log("[DEBUG] Cropped region from pre-capture image.")
+                except Exception as crop_e:
+                    self.logger.log(f"[WARN] Failed to crop from pre-capture: {crop_e}")
+                    # フォールバック: 直接キャプチャ
+                    captured_image = self.capture_manager.capture_frame(region=capture_region)
+                # クロップに失敗してcaptured_imageがNoneのままの場合のフォールバック
+                if captured_image is None:
+                    captured_image = self.capture_manager.capture_frame(region=capture_region)
+            else:
+                # 領域が指定されていない場合は全画面を使用
+                captured_image = pre_captured_image
+            
             if captured_image is not None and captured_image.size > 0:
                 self.capturedImageReadyForPreview.emit(captured_image)
             else:
@@ -469,6 +510,27 @@ class CoreEngine(QObject):
             self.logger.log("error_message_capture_save_failed", str(e))
             self.captureFailedSignal.emit()
             self.selectionProcessFinished.emit()
+    
+    @Slot(bool, str)
+    def _process_save_image_done(self, success: bool, message: str):
+        """メインスレッドで実行される。保存完了後の処理を行う。"""
+        try:
+            if success:
+                self._log(message)
+                # 画像ツリーを更新（新しく保存した画像を表示するため）
+                self.ui_manager.update_image_tree()
+                if self.thread_pool: 
+                    self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
+            
+            self.saveImageCompleted.emit(success, message)
+        
+        except Exception as e: 
+            self.saveImageCompleted.emit(False, f"Error processing save result: {e}")
+        
+        finally:
+            self.ui_manager.set_tree_enabled(True)
+            self.selection_handler._is_saving_image = False
+            self.selection_handler._reset_cursor_and_resume_listener()
 
     def cleanup(self):
         self.stop_monitoring()
@@ -745,7 +807,7 @@ class CoreEngine(QObject):
             self.current_image_path = None
             self.current_image_settings = None
             self.current_image_mat = None
-            self.updatePreview.emit(None, None)
+            self.updatePreview.emit(None, None, True)  # 画像ツリーのアイテムクリック時はリセット
             return
 
         try:
@@ -760,14 +822,14 @@ class CoreEngine(QObject):
                 h, w = self.current_image_mat.shape[:2]
                 self.current_image_settings['roi_rect'] = self.calculate_roi_rect((w, h), self.current_image_settings)
 
-            self.updatePreview.emit(self.current_image_mat, self.current_image_settings)
+            self.updatePreview.emit(self.current_image_mat, self.current_image_settings, True)  # 画像ツリーのアイテムクリック時はリセット
         
         except Exception as e:
             self.logger.log("log_image_load_failed", Path(file_path).name, str(e))
             self.current_image_path = None
             self.current_image_settings = None
             self.current_image_mat = None
-            self.updatePreview.emit(None, None)
+            self.updatePreview.emit(None, None, True)  # 画像ツリーのアイテムクリック時はリセット
     
     def on_image_settings_changed(self, settings: dict):
         image_path_from_ui = settings.get('image_path')
@@ -793,7 +855,7 @@ class CoreEngine(QObject):
             h, w = self.current_image_mat.shape[:2]
             self.current_image_settings['roi_rect'] = self.calculate_roi_rect((w, h), self.current_image_settings)
 
-        self.updatePreview.emit(self.current_image_mat, self.current_image_settings)
+        self.updatePreview.emit(self.current_image_mat, self.current_image_settings, False)  # 設定変更時はリセットしない
 
     def calculate_roi_rect(self, image_size, settings):
         if not settings.get('roi_enabled', False): return None

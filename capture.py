@@ -5,10 +5,12 @@
 # ★★★ MSSの内部スレッドローカルキャッシュ (_MSS_DISPLAY) を明示的に削除する ★★★
 
 import sys
+import os
 import mss
 import cv2
 import numpy as np
 import threading
+from pathlib import Path
 from PySide6.QtCore import QObject
 
 try:
@@ -22,10 +24,13 @@ if sys.platform == 'win32':
         import dxcam
         import win32api
         import win32con
+        import win32gui
         DXCAM_AVAILABLE = True
     except ImportError:
+        win32gui = None
         DXCAM_AVAILABLE = False
 else:
+    win32gui = None
     # --- ▼▼▼ 修正: MSSの内部キャッシュを削除するためにインポート ▼▼▼ ---
     try:
         from mss.linux import _MSS_DISPLAY
@@ -220,7 +225,68 @@ class CaptureManager(QObject):
                         if not self.is_dxcam_ready:
                             return None
                     
-                    frame = self.dxcam_sct.grab(region=region)
+                    # ★★★ 修正: DXCamのtarget_hwndが設定されている場合、regionをウィンドウ座標に変換 ★★★
+                    target_hwnd_info = None
+                    if hasattr(self.dxcam_sct, 'target_hwnd'):
+                        target_hwnd_info = self.dxcam_sct.target_hwnd
+                    
+                    # ★★★ 一時的に座標変換を無効化: DXCamのgrab(region=...)がtarget_hwnd設定時でも画面座標を期待している可能性 ★★★
+                    # DXCamのtarget_hwndが設定されている場合、regionをウィンドウ座標に変換
+                    dxcam_region = region
+                    # 座標変換を一旦無効化してテスト（画像認識ができなくなったため）
+                    # if region and target_hwnd_info and sys.platform == 'win32' and win32gui:
+                    #     # ★★★ デバッグ: 座標変換の条件を確認 ★★★
+                    #     self.logger.log(f"[DXCam Region Convert Check] region={region} target_hwnd={target_hwnd_info} win32gui={win32gui is not None}")
+                    #     try:
+                    #         # 画面座標からウィンドウ座標に変換
+                    #         left_screen, top_screen = region[0], region[1]
+                    #         right_screen, bottom_screen = region[2], region[3]
+                    #         
+                    #         # 左上をウィンドウ座標に変換
+                    #         left_client, top_client = win32gui.ScreenToClient(target_hwnd_info, (left_screen, top_screen))
+                    #         # 右下をウィンドウ座標に変換
+                    #         right_client, bottom_client = win32gui.ScreenToClient(target_hwnd_info, (right_screen, bottom_screen))
+                    #         
+                    #         self.logger.log(f"[DXCam Region Convert Step1] ScreenToClient: screen=({left_screen},{top_screen},{right_screen},{bottom_screen}) -> client=({left_client},{top_client},{right_client},{bottom_client})")
+                    #         
+                    #         # ウィンドウのクライアント領域を取得して検証
+                    #         client_rect = win32gui.GetClientRect(target_hwnd_info)
+                    #         client_width = client_rect[2]
+                    #         client_height = client_rect[3]
+                    #         
+                    #         self.logger.log(f"[DXCam Region Convert Step2] ClientRect: width={client_width} height={client_height}")
+                    #         
+                    #         # 変換後の座標をウィンドウの範囲内にクランプ
+                    #         left_client_before = left_client
+                    #         top_client_before = top_client
+                    #         right_client_before = right_client
+                    #         bottom_client_before = bottom_client
+                    #         
+                    #         left_client = max(0, min(left_client, client_width))
+                    #         top_client = max(0, min(top_client, client_height))
+                    #         right_client = max(left_client, min(right_client, client_width))
+                    #         bottom_client = max(top_client, min(bottom_client, client_height))
+                    #         
+                    #         self.logger.log(f"[DXCam Region Convert Step3] Clamp: before=({left_client_before},{top_client_before},{right_client_before},{bottom_client_before}) -> after=({left_client},{top_client},{right_client},{bottom_client})")
+                    #         
+                    #         # 有効な範囲かチェック
+                    #         if right_client > left_client and bottom_client > top_client:
+                    #             dxcam_region = (left_client, top_client, right_client, bottom_client)
+                    #             
+                    #             # ★★★ デバッグ: 座標変換の結果を常にログ出力 ★★★
+                    #             self.logger.log(f"[DXCam Region Convert] screen={region} -> window={dxcam_region} target_hwnd={target_hwnd_info} client_size={client_width}x{client_height}")
+                    #         else:
+                    #             # 変換後の座標が無効な場合は元のregionを使用
+                    #             self.logger.log(f"[WARN] Converted region is invalid: ({left_client}, {top_client}, {right_client}, {bottom_client}), using original region")
+                    #             dxcam_region = region
+                    #     except Exception as e:
+                    #         # 変換に失敗した場合は元のregionを使用
+                    #         self.logger.log(f"[WARN] Failed to convert region to window coordinates: {e}")
+                    #         import traceback
+                    #         self.logger.log(f"[WARN] Traceback: {traceback.format_exc()}")
+                    #         dxcam_region = region
+                    
+                    frame = self.dxcam_sct.grab(region=dxcam_region)
 
                     if frame is None:
                         self.logger.log("log_dxcam_grab_failed")
@@ -234,7 +300,30 @@ class CaptureManager(QObject):
                     
                     else:
                         self.dxcam_error_count = 0
-                        return cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                        # ★★★ DXCamとMSSで返される画像サイズを比較するため、デバッグ情報を追加 ★★★
+                        if region:
+                            expected_width = region[2] - region[0]
+                            expected_height = region[3] - region[1]
+                            actual_height, actual_width = frame.shape[:2]
+                            if expected_width != actual_width or expected_height != actual_height:
+                                self.logger.log(f"[DXCam Size Mismatch] region={region} expected={expected_width}x{expected_height} actual={actual_width}x{actual_height}")
+                            # ★★★ 原因特定: DXCamのregion解釈を確認するため、target_hwndとregionをログ出力 ★★★
+                            if os.environ.get("DEBUG_OCR_COORDS", "0") == "1":
+                                self.logger.log(f"[DXCam Region Debug] region={region} target_hwnd={target_hwnd_info} expected_size={expected_width}x{expected_height} actual_size={actual_width}x{actual_height}")
+                        result = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                        # ★★★ デバッグ: DXCamとMSSでキャプチャされた画像の内容を比較するため、画像を保存 ★★★
+                        if os.environ.get("DEBUG_SAVE_CAPTURE_FRAME", "0") == "1":
+                            try:
+                                from datetime import datetime
+                                base_dir = Path(__file__).resolve().parent
+                                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                                debug_path = base_dir / f"capture_debug_dxcam_{timestamp}.png"
+                                cv2.imwrite(str(debug_path), result)
+                                if region:
+                                    self.logger.log(f"[DEBUG] Saved DXCam capture: region={region} size={result.shape[1]}x{result.shape[0]}")
+                            except Exception:
+                                pass
+                        return result
 
                 if self.current_method == 'mss':
                     
@@ -282,7 +371,26 @@ class CaptureManager(QObject):
                     sct_img = sct.grab(monitor_dict)
                     
                     img_bgra = np.array(sct_img)
-                    return cv2.cvtColor(img_bgra, cv2.COLOR_BGRA2BGR)
+                    # ★★★ MSSとDXCamで返される画像サイズを比較するため、デバッグ情報を追加 ★★★
+                    if region:
+                        expected_width = region[2] - region[0]
+                        expected_height = region[3] - region[1]
+                        actual_height, actual_width = img_bgra.shape[:2]
+                        if expected_width != actual_width or expected_height != actual_height:
+                            self.logger.log(f"[MSS Size Mismatch] region={region} expected={expected_width}x{expected_height} actual={actual_width}x{actual_height}")
+                    result = cv2.cvtColor(img_bgra, cv2.COLOR_BGRA2BGR)
+                    # ★★★ デバッグ: DXCamとMSSでキャプチャされた画像の内容を比較するため、画像を保存 ★★★
+                    if os.environ.get("DEBUG_SAVE_CAPTURE_FRAME", "0") == "1":
+                        try:
+                            from datetime import datetime
+                            from pathlib import Path
+                            base_dir = Path(__file__).resolve().parent
+                            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                            debug_path = base_dir / f"capture_debug_mss_{timestamp}.png"
+                            cv2.imwrite(str(debug_path), result)
+                        except Exception:
+                            pass
+                    return result
 
             except Exception as e:
                 self.logger.log("log_capture_error", self.current_method, region, str(e))

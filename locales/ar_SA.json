@@ -1,6 +1,6 @@
 {
     "language_name": "العربية",
-    "window_title": "Imeck15 v1.8.1.0 إصدار متعدد اللغات",
+    "window_title": "Imeck15 v1.8.2.0 إصدار متعدد اللغات",
     "monitor_button_start": "بدء المراقبة",
     "monitor_button_stop": "إيقاف المراقبة",
     "monitor_button_tooltip": "يبدأ المراقبة.<br>نقر مزدوج بزر الماوس الأيمن للإيقاف<br>نقر ثلاثي بزر الماوس الأيمن للبدء",
@@ -540,5 +540,6 @@
     "log_ocr_pre_check_pass": "[OCR فحص مسبق] %s -> جاهز للعمل",
     "log_ocr_action_cached": "[OCR إجراء] تنفيذ الإجراء بناءً على PASS المخزن مؤقتًا: %s",
     "log_ocr_skip": "[OCR تخطي] %s",
-    "log_ocr_selected": "[OCR] %s (تم اختياره من %s مرشحين)"
+    "log_ocr_selected": "[OCR] %s (تم اختياره من %s مرشحين)",
+    "preview_zoom_hint": "عجلة التمرير للتكبير/التصغير"
 }

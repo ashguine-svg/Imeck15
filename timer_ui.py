@@ -11,8 +11,8 @@ from PySide6.QtWidgets import (
     QAbstractItemView, QLineEdit, QSizePolicy, QStyledItemDelegate,
     QTimeEdit, QStyle, QTabWidget, QTextEdit, QFrame, QGridLayout
 )
-from PySide6.QtCore import Qt, Signal, QPoint, QTimer, QTime, QEvent
-from PySide6.QtGui import QPixmap, QPainter, QPen, QColor, QMouseEvent, QFont, QBrush
+from PySide6.QtCore import Qt, Signal, QPoint, QTimer, QTime, QEvent, QRectF
+from PySide6.QtGui import QPixmap, QPainter, QPen, QColor, QMouseEvent, QFont, QBrush, QWheelEvent, QFontMetrics
 
 from custom_widgets import ScaledPixmapLabel
 from custom_input_dialog import ask_string_custom
@@ -65,41 +65,234 @@ class ClickPreviewLabel(ScaledPixmapLabel):
         self.setCursor(Qt.CrossCursor)
         self.markers = [] 
         self.selected_id = None
+        
+        # ズーム機能用の変数
+        self.base_scale = 1.0  # 基本スケール（自動フィット）
+        self.user_zoom_factor = 1.0  # ユーザーズーム倍率（初期値1.0）
+        self.effective_scale = 1.0  # 実効スケール（base_scale * user_zoom）
+        self.zoomed_display_rect = QRectF()  # ズーム後の表示領域
+        self.display_rect = QRectF()  # 基本表示領域
+        # ズームヒント表示用（文言は外部からセット。未設定時は非表示）
+        self.zoom_hint_text = ""
+        self.zoom_hint_enabled = True
+
+    def set_pixmap(self, pixmap, reset_zoom: bool = True):
+        """親クラスのset_pixmapをオーバーライドしてズーム対応"""
+        super().set_pixmap(pixmap)
+        # 画像が変更されたらデフォルトの拡大率（アスペクト比を保持してプレビューエリアからはみ出ないように最大拡大）にリセット
+        if reset_zoom:
+            self.user_zoom_factor = 1.0
+            self.zoomed_display_rect = QRectF()
+        self._update_geometry_cache()
+    
+    def set_zoom_hint(self, text: str):
+        """ズームヒントの文言を設定"""
+        self.zoom_hint_text = text if text else ""
+        self.update()
+    
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._update_geometry_cache()
+    
+    def _update_geometry_cache(self):
+        """基本スケールと表示領域を計算（ズーム前の基準）"""
+        if self._pixmap.isNull() or self.width() == 0 or self.height() == 0:
+            self.display_rect = QRectF()
+            self.base_scale = 1.0
+            self.effective_scale = 1.0
+            self.zoomed_display_rect = QRectF()
+            return
+        
+        label_size = self.size()
+        scaled_pixmap = self._pixmap.scaled(label_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        if scaled_pixmap.isNull():
+            self.display_rect = QRectF()
+            self.base_scale = 1.0
+            self.effective_scale = 1.0
+            self.zoomed_display_rect = QRectF()
+            return
+        
+        # 基本スケールを計算
+        if self._pixmap.width() > 0 and self._pixmap.height() > 0:
+            self.base_scale = scaled_pixmap.width() / self._pixmap.width()
+        else:
+            self.base_scale = 1.0
+        
+        # 実効スケール（ズーム適用）
+        self.effective_scale = self.base_scale * self.user_zoom_factor
+        
+        # 基本表示領域
+        offset_x = (label_size.width() - scaled_pixmap.width()) // 2
+        offset_y = (label_size.height() - scaled_pixmap.height()) // 2
+        self.display_rect = QRectF(offset_x, offset_y, scaled_pixmap.width(), scaled_pixmap.height())
+        
+        # ズーム後の表示領域
+        if self.user_zoom_factor == 1.0:
+            self.zoomed_display_rect = self.display_rect
+        else:
+            # ズームが適用されている場合は、現在のzoomed_display_rectを維持
+            if not self.zoomed_display_rect.isEmpty():
+                # リサイズ時は中心を維持
+                center_x = self.zoomed_display_rect.x() + self.zoomed_display_rect.width() / 2
+                center_y = self.zoomed_display_rect.y() + self.zoomed_display_rect.height() / 2
+                new_disp_w = self._pixmap.width() * self.effective_scale
+                new_disp_h = self._pixmap.height() * self.effective_scale
+                self.zoomed_display_rect = QRectF(
+                    center_x - new_disp_w / 2,
+                    center_y - new_disp_h / 2,
+                    new_disp_w,
+                    new_disp_h
+                )
+            else:
+                self.zoomed_display_rect = self.display_rect
+    
+    def _map_widget_to_image(self, widget_pos):
+        """ウィジェット座標を画像座標に変換（ズーム対応）"""
+        if self._pixmap.isNull():
+            return None
+        
+        # ズーム後の表示領域を使用
+        if self.zoomed_display_rect.isEmpty():
+            display_rect = self.display_rect
+            scale = self.base_scale
+        else:
+            display_rect = self.zoomed_display_rect
+            scale = self.effective_scale
+        
+        if display_rect.isEmpty():
+            return None
+        
+        # カーソル位置が表示領域外でも、拡大時には表示領域内になる可能性があるため、
+        # 表示領域を基準に相対位置を計算（負の値や1以上の値も許容）
+        click_x = widget_pos.x() - display_rect.x()
+        click_y = widget_pos.y() - display_rect.y()
+        
+        # 画像座標に変換
+        scale_x = self._pixmap.width() / display_rect.width()
+        scale_y = self._pixmap.height() / display_rect.height()
+        final_x = click_x * scale_x
+        final_y = click_y * scale_y
+        
+        # 画像範囲外の場合はクランプ
+        final_x = max(0, min(int(final_x), self._pixmap.width() - 1))
+        final_y = max(0, min(int(final_y), self._pixmap.height() - 1))
+        return (final_x, final_y)
 
     def set_markers(self, markers, selected_id=None):
         self.markers = markers
         self.selected_id = selected_id
         self.update()
 
+    def wheelEvent(self, event: QWheelEvent):
+        """マウスホイールでズーム（カーソル位置を中心に）"""
+        delta = event.angleDelta().y()
+        zoom_delta = delta / 120.0 * 0.1  # ホイール1クリック = 0.1倍ズーム
+        self._apply_zoom(zoom_delta, event.position().toPoint())
+        event.accept()
+
     def mousePressEvent(self, event: QMouseEvent):
-        if self._pixmap.isNull(): return
-        label_size = self.size()
-        if self._pixmap.width() == 0 or self._pixmap.height() == 0: return
-        scaled_pixmap = self._pixmap.scaled(label_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        offset_x = (label_size.width() - scaled_pixmap.width()) // 2
-        offset_y = (label_size.height() - scaled_pixmap.height()) // 2
-        click_x = event.pos().x() - offset_x
-        click_y = event.pos().y() - offset_y
+        if self._pixmap.isNull():
+            return
         
-        if click_x < 0 or click_x >= scaled_pixmap.width() or click_y < 0 or click_y >= scaled_pixmap.height(): return
+        img_pos = self._map_widget_to_image(event.pos())
+        if img_pos:
+            self.positionClicked.emit(img_pos[0], img_pos[1])
+    
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        super().mouseReleaseEvent(event)
+    
+    def _apply_zoom(self, zoom_delta, cursor_widget_pos):
+        """
+        マウスカーソル位置を中心にズームを適用
         
-        scale_x = self._pixmap.width() / scaled_pixmap.width()
-        scale_y = self._pixmap.height() / scaled_pixmap.height()
-        final_x = int(click_x * scale_x)
-        final_y = int(click_y * scale_y)
-        self.positionClicked.emit(final_x, final_y)
+        Args:
+            zoom_delta: ズーム変化量（正:拡大、負:縮小）
+            cursor_widget_pos: カーソルのウィジェット座標各
+        """
+        if self._pixmap.isNull():
+            return
+        
+        # 1. 現在のカーソル位置を画像座標に変換
+        current_image_pos = self._map_widget_to_image(cursor_widget_pos)
+        if current_image_pos is None:
+            return  # 画像外の場合はズームしない
+        
+        # 2. ズーム倍率を更新
+        old_zoom = self.user_zoom_factor
+        self.user_zoom_factor = max(0.1, min(15.0, self.user_zoom_factor + zoom_delta))
+        
+        if old_zoom == self.user_zoom_factor:
+            return  # ズーム限界に達した
+        
+        # 3. 実効スケールを計算
+        self.effective_scale = self.base_scale * self.user_zoom_factor
+        
+        # 4. ズーム後の表示サイズを計算
+        new_display_width = self._pixmap.width() * self.effective_scale
+        new_display_height = self._pixmap.height() * self.effective_scale
+        
+        # 5. カーソル位置を中心に表示領域を再計算
+        if old_zoom > 0:
+            zoom_ratio = self.user_zoom_factor / old_zoom
+        else:
+            zoom_ratio = self.user_zoom_factor
+        
+        # 現在のカーソル位置での表示領域のオフセットを計算
+        if self.zoomed_display_rect.isEmpty():
+            display_rect = self.display_rect
+        else:
+            display_rect = self.zoomed_display_rect
+        
+        current_offset_x = cursor_widget_pos.x() - display_rect.x()
+        current_offset_y = cursor_widget_pos.y() - display_rect.y()
+        
+        # ズーム後の新しいオフセット（カーソル位置は変わらない）
+        new_offset_x = current_offset_x * zoom_ratio
+        new_offset_y = current_offset_y * zoom_ratio
+        
+        # 新しい表示領域の位置を計算
+        # プレビューエリアの端を無視して、マウスカーソルを中心に拡大し続ける
+        new_display_x = cursor_widget_pos.x() - new_offset_x
+        new_display_y = cursor_widget_pos.y() - new_offset_y
+        
+        # 6. ズーム後の表示領域を更新
+        self.zoomed_display_rect = QRectF(
+            new_display_x, new_display_y,
+            new_display_width, new_display_height
+        )
+        
+        # 7. 再描画
+        self.update()
 
     def paintEvent(self, event):
-        super().paintEvent(event)
+        # ズーム後の表示領域を使用して画像を描画
+        if not self._pixmap.isNull():
+            painter = QPainter(self)
+            painter.fillRect(self.rect(), Qt.black)
+            
+            display_rect = self.zoomed_display_rect if not self.zoomed_display_rect.isEmpty() else self.display_rect
+            if not display_rect.isEmpty():
+                scaled_pixmap = self._pixmap.scaled(
+                    int(display_rect.width()), int(display_rect.height()),
+                    Qt.KeepAspectRatio, Qt.SmoothTransformation
+                )
+                if not scaled_pixmap.isNull():
+                    painter.drawPixmap(display_rect.toRect(), scaled_pixmap)
+            painter.end()
+        
+        # マーカーの描画
         if not self.markers or self._pixmap.isNull(): return
         painter = QPainter(self)
-        label_size = self.size()
-        scaled_pixmap = self._pixmap.scaled(label_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        if scaled_pixmap.width() == 0 or scaled_pixmap.height() == 0: return
-        offset_x = (label_size.width() - scaled_pixmap.width()) // 2
-        offset_y = (label_size.height() - scaled_pixmap.height()) // 2
-        scale_x = scaled_pixmap.width() / self._pixmap.width()
-        scale_y = scaled_pixmap.height() / self._pixmap.height()
+        
+        # ズーム後の表示領域を使用
+        display_rect = self.zoomed_display_rect if not self.zoomed_display_rect.isEmpty() else self.display_rect
+        if display_rect.isEmpty():
+            return
+        
+        scale_x = display_rect.width() / self._pixmap.width()
+        scale_y = display_rect.height() / self._pixmap.height()
+        offset_x = display_rect.x()
+        offset_y = display_rect.y()
         
         font = painter.font(); font.setBold(True); font.setPointSize(10); painter.setFont(font)
 
@@ -126,12 +319,70 @@ class ClickPreviewLabel(ScaledPixmapLabel):
             painter.setPen(QPen(QColor(0, 0, 0) if not m['enabled'] else QColor(255, 0, 0), 2))
             painter.drawText(wx + 10, wy + 5, str(m['id']))
 
+        # ズームヒント
+        self._draw_zoom_hint(painter, display_rect)
+
+    def _draw_zoom_hint(self, painter: QPainter, display_rect: QRectF):
+        """右上にズームヒントを描画"""
+        if not self.zoom_hint_enabled or not self.zoom_hint_text:
+            return
+
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        margin = 8
+        padding = 6
+        icon_size = 12
+
+        font = QFont(self.font())
+        if font.pointSizeF() > 0:
+            font.setPointSizeF(max(9.0, font.pointSizeF() * 0.9))
+        painter.setFont(font)
+        fm = QFontMetrics(font)
+
+        text_w = fm.horizontalAdvance(self.zoom_hint_text)
+        text_h = fm.height()
+        content_w = icon_size + 6 + text_w
+        content_h = max(icon_size, text_h)
+
+        bg_w = padding * 2 + content_w
+        bg_h = padding * 2 + content_h
+        bg_x = self.width() - margin - bg_w
+        bg_y = display_rect.y() + margin
+        bg_rect = QRectF(bg_x, bg_y, bg_w, bg_h)
+
+        painter.setBrush(QColor(0, 0, 0, 140))
+        painter.setPen(Qt.NoPen)
+        painter.drawRoundedRect(bg_rect, 6, 6)
+
+        icon_x = bg_rect.x() + padding
+        icon_y = bg_rect.y() + padding
+        painter.setPen(QPen(QColor(255, 255, 255, 210), 1.5))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawEllipse(QRectF(icon_x, icon_y, icon_size, icon_size))
+        cx = icon_x + icon_size / 2
+        cy = icon_y + icon_size / 2
+        line_len = icon_size * 0.35
+        painter.drawLine(cx - line_len, cy, cx + line_len, cy)
+        painter.drawLine(cx, cy - line_len, cx, cy + line_len)
+
+        text_x = icon_x + icon_size + 6
+        baseline = bg_rect.y() + padding + (content_h - text_h) / 2 + fm.ascent()
+        painter.setPen(QColor(255, 255, 255, 230))
+        painter.drawText(text_x, baseline, self.zoom_hint_text)
+
+        painter.restore()
+
 class TimerSettingsDialog(QDialog):
     def __init__(self, item_path, item_name, current_settings, locale_manager, parent=None, core_engine=None):
         super().__init__(parent)
         
         # ★★★ 修正: 最大化・最小化ボタンを有効にするフラグを設定 ★★★
-        self.setWindowFlags(self.windowFlags() | Qt.WindowMinMaxButtonsHint)
+        # タイトルバーの最小化・閉じるボタンを非表示にする
+        flags = self.windowFlags() | Qt.CustomizeWindowHint  # カスタムヒントを有効化（XFCE等で×が残る対策）
+        flags &= ~Qt.WindowMinMaxButtonsHint                 # 最小化ボタン除去
+        flags &= ~Qt.WindowCloseButtonHint                   # 閉じるボタン除去
+        self.setWindowFlags(flags)
         
         self.item_path = item_path
         self.item_name = item_name
@@ -223,6 +474,7 @@ class TimerSettingsDialog(QDialog):
         preview_layout.setContentsMargins(5, 5, 5, 5)
         
         self.preview_label = ClickPreviewLabel()
+        self.preview_label.set_zoom_hint(self.locale_manager.tr("preview_zoom_hint"))
         self.preview_label.setStyleSheet("border: 2px solid #546e7a; background-color: #263238;") 
         self.preview_label.setMinimumSize(500, 350)
         self.preview_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)

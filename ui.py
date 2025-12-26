@@ -395,6 +395,8 @@ class UIManager(QMainWindow):
         self.preview_label.setAlignment(Qt.AlignCenter)
         self.preview_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.preview_label.setStyleSheet("background-color: #263238;")
+        # ズームヒントを多言語対応テキストで設定（LocaleManager経由）
+        self.preview_label.set_zoom_hint(self.locale_manager.tr("preview_zoom_hint"))
         
         layout.addWidget(self.preview_label)
         tab_widget.addTab(self.main_preview_widget, "")
@@ -1024,6 +1026,9 @@ class UIManager(QMainWindow):
         if self.app_settings_panel: self.app_settings_panel.retranslate_ui()
 
         self.preview_tabs.setTabText(self.preview_tabs.indexOf(self.main_preview_widget), lm("tab_preview"))
+        # ズームヒント文言を現在の言語で更新
+        if self.preview_label:
+            self.preview_label.set_zoom_hint(lm("preview_zoom_hint"))
         
         rec_area_tab_index = self.preview_tabs.indexOf(self.rec_area_preview_label.parentWidget())
         if rec_area_tab_index != -1: self.preview_tabs.setTabText(rec_area_tab_index, lm("tab_rec_area"))
@@ -1310,7 +1315,7 @@ class UIManager(QMainWindow):
         lm = self.locale_manager.tr; reply = QMessageBox.question(self, lm("apply_scale_prompt_title"), lm("apply_scale_prompt_message", f"{scale:.3f}"), QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes); apply_scale = (reply == QMessageBox.StandardButton.Yes);
         if self.core_engine: self.core_engine.process_apply_scale_prompt_response(apply_scale)
 
-    def update_image_preview(self, cv_image: np.ndarray, settings_data: dict = None):
+    def update_image_preview(self, cv_image: np.ndarray, settings_data: dict = None, reset_zoom: bool = True):
         self.set_settings_from_data(settings_data)
 
         image_or_splash_to_pass = cv_image
@@ -1320,7 +1325,7 @@ class UIManager(QMainWindow):
             if self.splash_pixmap:
                 image_or_splash_to_pass = self.splash_pixmap
         
-        self.preview_mode_manager.update_preview(image_or_splash_to_pass, settings_data)
+        self.preview_mode_manager.update_preview(image_or_splash_to_pass, settings_data, reset_zoom)
 
         if is_folder_or_no_data:
             self.preview_mode_manager.sync_from_external(is_folder_or_no_data)

@@ -1,6 +1,6 @@
 {
     "language_name": "Русский",
-    "window_title": "Imeck15 v1.8.1.0 Многоязычная версия",
+    "window_title": "Imeck15 v1.8.2.0 Многоязычная версия",
     "monitor_button_start": "Начать мониторинг",
     "monitor_button_stop": "Остановить мониторинг",
     "monitor_button_tooltip": "Запускает мониторинг.<br>Двойной ПКМ для остановки<br>Тройной ПКМ для запуска",
@@ -538,5 +538,6 @@
     "log_ocr_pre_check_pass": "[OCR ПРЕДПРОВЕРКА] %s -> Готов к действию",
     "log_ocr_action_cached": "[OCR ДЕЙСТВИЕ] Выполнение действия на основе кешированного PASS: %s",
     "log_ocr_skip": "[OCR ПРОПУЩЕНО] %s",
-    "log_ocr_selected": "[OCR] %s (Выбрано из %s кандидатов)"
+    "log_ocr_selected": "[OCR] %s (Выбрано из %s кандидатов)",
+    "preview_zoom_hint": "Колесо мыши для масштабирования"
 }

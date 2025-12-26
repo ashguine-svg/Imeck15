@@ -4,7 +4,7 @@
 
 import sys
 # 修正: QMessageBox をインポートに追加
-from PySide6.QtWidgets import QTreeWidget, QTreeWidgetItem, QApplication, QMessageBox
+from PySide6.QtWidgets import QTreeWidget, QTreeWidgetItem, QApplication, QMessageBox, QAbstractItemView
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtCore import Qt, Signal, QTimer
 from pathlib import Path
@@ -442,4 +442,52 @@ class DraggableTreeWidget(QTreeWidget):
             # 同じ親内での移動（並べ替え）の場合、ファイル移動は不要なので即座に順序保存を実行
             self.orderUpdated.emit()
         
+        # 6. 移動したアイテムを適切な位置にスクロール
+        if items_moved_list:
+            moved_item = items_moved_list[0]  # 最初の移動アイテムを基準にする
+            
+            # アイテムの位置を取得（少し待ってから取得するため、QTimerで遅延実行）
+            QTimer.singleShot(50, lambda: self._scroll_to_moved_item(moved_item))
+        
         event.accept()
+    
+    def _scroll_to_moved_item(self, item):
+        """移動したアイテムを適切な位置にスクロールします。"""
+        if not item:
+            return
+        
+        # アイテムの位置を取得
+        item_rect = self.visualItemRect(item)
+        if not item_rect.isValid():
+            # アイテムが見えない場合は単純にスクロール
+            self.scrollToItem(item, QAbstractItemView.PositionAtCenter)
+            return
+        
+        # ビューポートの位置とサイズを取得
+        viewport_rect = self.viewport().rect()
+        viewport_top = viewport_rect.top()
+        viewport_bottom = viewport_rect.bottom()
+        viewport_height = viewport_rect.height()
+        viewport_center_y = viewport_top + viewport_height // 2
+        
+        # アイテムの中心位置
+        item_center_y = item_rect.center().y()
+        
+        # ビューポート内でのアイテムの相対位置を計算
+        item_top_relative = item_rect.top() - viewport_top
+        item_bottom_relative = item_rect.bottom() - viewport_top
+        
+        # 中心部分の範囲（ビューポートの30%〜70%の範囲）
+        center_top_threshold = viewport_height * 0.3
+        center_bottom_threshold = viewport_height * 0.7
+        
+        # アイテムが中心部分にあるかチェック
+        if item_top_relative >= center_top_threshold and item_bottom_relative <= center_bottom_threshold:
+            # 中心部分にある場合：中心にスクロール
+            self.scrollToItem(item, QAbstractItemView.PositionAtCenter)
+        elif item_top_relative < center_top_threshold:
+            # 上部分にある場合：スクロールバーが上に来るように（アイテムを上端に）
+            self.scrollToItem(item, QAbstractItemView.PositionAtTop)
+        else:
+            # 下部分にある場合：スクロールバーが下に来るように（アイテムを下端に）
+            self.scrollToItem(item, QAbstractItemView.PositionAtBottom)

@@ -11,6 +11,7 @@ import numpy as np
 import os
 from PySide6.QtCore import QTimer, QPoint, Qt
 from PySide6.QtWidgets import QMessageBox, QApplication
+from PySide6.QtGui import QCursor
 from pynput import keyboard
 
 if sys.platform == 'win32':
@@ -28,6 +29,7 @@ class SelectionHandler:
     def __init__(self, core):
         self.core = core
         self.logger = core.logger
+        self._is_saving_image = False  # 重複呼び出し防止フラグ
         self.ui_manager = core.ui_manager
         self.locale_manager = core.locale_manager
         self.capture_manager = core.capture_manager
@@ -61,8 +63,19 @@ class SelectionHandler:
             finally:
                 self.core._is_reinitializing_display = False
 
-        self.core.selectionProcessStarted.emit(); self.ui_manager.hide();
-        
+        # 監視中なら停止してからキャプチャフローへ
+        if self.core.is_monitoring:
+            self.logger.log("log_capture_while_monitoring")
+            self.core.stop_monitoring()
+            self.logger.log("log_capture_proceed_after_stop")
+
+        # UIを隠し、マウスリスナーを一時停止（映り込み防止）
+        self.core.selectionProcessStarted.emit()
+        if self.ui_manager:
+            if getattr(self.ui_manager, "is_minimal_mode", False) and getattr(self.ui_manager, "floating_window", None):
+                self.ui_manager.floating_window.hide()
+            else:
+                self.ui_manager.hide()
         self.core._stop_global_mouse_listener()
         
         self.core.pre_captured_image_for_registration = None
@@ -287,12 +300,14 @@ class SelectionHandler:
             # --- ▲▲▲ 追加完了 ▲▲▲ ---
 
             if save_as_base:
-                scales_data = self.core.config_manager.load_window_scales(); scales_data[title] = current_dims; self.core.config_manager.save_window_scales(scales_data); self.core.current_window_scale = 1.0; self.logger.log("log_window_base_size_saved", title); self.core.windowScaleCalculated.emit(1.0); self.core._areaSelectedForProcessing.emit(rect)
+                scales_data = self.core.config_manager.load_window_scales(); scales_data[title] = current_dims; self.core.config_manager.save_window_scales(scales_data); self.core.current_window_scale = 1.0; self.core.actual_window_scale = 1.0; self.logger.log("log_window_base_size_saved", title); self.core.windowScaleCalculated.emit(1.0); self.core._areaSelectedForProcessing.emit(rect)
             elif title and title in (scales_data := self.core.config_manager.load_window_scales()):
                 base_dims = scales_data[title]; calc_scale = current_dims['width'] / base_dims['width'] if base_dims['width'] > 0 else 1.0
+                # ★★★ 追加: 補正前の実際のウィンドウスケールを保存 ★★★
+                self.core.actual_window_scale = calc_scale
                 if 0.995 <= calc_scale <= 1.005: self.core.current_window_scale = 1.0; self.logger.log("log_window_scale_calc", title, f"{calc_scale:.3f}"); self.core.windowScaleCalculated.emit(1.0); self.core._areaSelectedForProcessing.emit(rect)
                 else: self.core._pending_scale_prompt_info = {**info, 'calculated_scale': calc_scale}; self.core.askToApplyWindowScaleSignal.emit(calc_scale); return
-            else: self.core.current_window_scale = None; self.core.windowScaleCalculated.emit(0.0); self.core._areaSelectedForProcessing.emit(rect)
+            else: self.core.current_window_scale = None; self.core.actual_window_scale = None; self.core.windowScaleCalculated.emit(0.0); self.core._areaSelectedForProcessing.emit(rect)
             
             # 認識範囲設定後にappContextChangedを発行（ツリー更新が正しいタイミングで行われるようにするため）
             self.core.appContextChanged.emit(title)
@@ -376,9 +391,18 @@ class SelectionHandler:
     
     def handle_save_captured_image(self, file_name: str, captured_image: np.ndarray):
         self.logger.log(f"[DEBUG] handle_save_captured_image called. File: {file_name}")
+        
+        # 重複呼び出し防止
+        if self._is_saving_image:
+            self.logger.log("[WARN] handle_save_captured_image called while already saving, ignoring duplicate call.")
+            return
+        
+        self._is_saving_image = True
+        
         try:
             if not file_name:
                 self.logger.log("log_rename_error_empty")
+                self._is_saving_image = False
                 self.core.selectionProcessFinished.emit()
                 return
 
@@ -393,7 +417,8 @@ class SelectionHandler:
                                              QMessageBox.StandardButton.No)
                 if reply == QMessageBox.StandardButton.No:
                     self.ui_manager.set_tree_enabled(True)
-                    self.core.selectionProcessFinished.emit()
+                    self._is_saving_image = False
+                    self._reset_cursor_and_resume_listener()
                     return
             
             env_data = self.core.environment_tracker._collect_current_environment()
@@ -404,12 +429,14 @@ class SelectionHandler:
             else: 
                 self._on_save_image_done(None, success=False, message=self.locale_manager.tr("Error: Thread pool unavailable for saving."))
                 self.ui_manager.set_tree_enabled(True)
-                self.core.selectionProcessFinished.emit() 
+                self._is_saving_image = False
+                self._reset_cursor_and_resume_listener() 
         
         except Exception as e:
             self.logger.log(f"[ERROR] Exception in handle_save_captured_image: {e}")
             QMessageBox.critical(self.ui_manager, self.locale_manager.tr("error_title_capture_save_failed"), self.locale_manager.tr("error_message_capture_save_failed", str(e)))
-            self.core.selectionProcessFinished.emit() 
+            self._is_saving_image = False
+            self._reset_cursor_and_resume_listener() 
 
     def _save_image_task(self, image, save_path, env_data: dict):
         try:
@@ -433,27 +460,38 @@ class SelectionHandler:
             return False, self.locale_manager.tr("log_image_save_failed", str(e))
     
     def _on_save_image_done(self, future, success=None, message=None):
+        """スレッドプールのコールバックから呼ばれる。メインスレッドで処理を実行する必要がある。"""
         try:
             if future: 
                 success, message = future.result()
             
-            if success:
-                self.core._log(message)
-                # 画像ツリーを更新（新しく保存した画像を表示するため）
-                self.ui_manager.update_image_tree()
-                if self.core.thread_pool: 
-                    self.core.thread_pool.submit(self.core._build_template_cache).add_done_callback(self.core._on_cache_build_done)
-            
-            self.core.saveImageCompleted.emit(bool(success), str(message))
+            # シグナルを使ってメインスレッドで処理を実行
+            self.core._saveImageDoneProcessRequested.emit(bool(success), str(message) if message else "")
         
         except Exception as e: 
-            self.core.saveImageCompleted.emit(False, f"Error processing save result: {e}")
+            # エラー時もメインスレッドで処理
+            self.core._saveImageDoneProcessRequested.emit(False, f"Error processing save result: {e}")
         
-        finally:
+    def _reset_cursor_and_resume_listener(self):
+        """カーソルをリセットし、マウスリスナーを再開します。"""
+        try:
+            # Windows固有: カーソルを明示的にリセット
+            if sys.platform == 'win32':
+                QApplication.restoreOverrideCursor()
+                QApplication.setOverrideCursor(QCursor(Qt.ArrowCursor))
+                QApplication.restoreOverrideCursor()
+            
+            # マウスリスナーを再開
+            QTimer.singleShot(100, self.core._start_global_mouse_listener)
+            
+            # selectionProcessFinishedシグナルを発行
+            self.core.selectionProcessFinished.emit()
+        except Exception as e:
+            self.logger.log(f"[WARN] Error in _reset_cursor_and_resume_listener: {e}")
             self.core.selectionProcessFinished.emit()
 
     def clear_recognition_area(self):
-        self.core.recognition_area = None; self.core.current_window_scale = None; self.core.target_hwnd = None; self.core.windowScaleCalculated.emit(0.0)
+        self.core.recognition_area = None; self.core.current_window_scale = None; self.core.actual_window_scale = None; self.core.target_hwnd = None; self.core.windowScaleCalculated.emit(0.0)
         
         self.core.environment_tracker.on_rec_area_clear()
         self.core.appContextChanged.emit(None) 

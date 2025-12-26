@@ -61,24 +61,23 @@ class FloatingWindow(QDialog):
         self.setWindowTitle(lm("float_window_title"))
         
         # --- サイズ変更ボタン（左端に配置） ---
-        self.scale_button = QPushButton("×2")
+        self.scale_button = QPushButton()
+        self.scale_button.setIcon(self._safe_icon('fa5s.search-plus', color='#64b5f6'))
+        self.scale_button.setIconSize(QSize(int(button_size * 0.6), int(button_size * 0.6)))
         self.scale_button.setFixedSize(button_size, button_size)
         self.scale_button.setToolTip("UIサイズを2倍/1倍に切り替え")
         self.scale_button.setCursor(Qt.PointingHandCursor)
         self.scale_button.setStyleSheet(f"""
             QPushButton {{
-                background-color: rgba(100, 100, 100, 150);
-                color: white;
-                font-weight: bold;
-                font-size: {int(button_size * 0.4)}px;
+                background-color: rgba(100, 181, 246, 120);
                 border-radius: {button_size // 2}px;
-                border: 1px solid rgba(255, 255, 255, 100);
+                border: 1px solid rgba(100, 181, 246, 180);
             }}
             QPushButton:hover {{
-                background-color: rgba(120, 120, 120, 200);
+                background-color: rgba(100, 181, 246, 180);
             }}
             QPushButton:pressed {{
-                background-color: rgba(80, 80, 80, 200);
+                background-color: rgba(100, 181, 246, 220);
             }}
         """)
         self.scale_button.clicked.connect(self.toggle_scale)
@@ -161,7 +160,7 @@ class FloatingWindow(QDialog):
         line_left = QLabel("|")
         line_left.setStyleSheet("color: #757575; font-weight: bold;")
         main_layout.addWidget(line_left)
-        
+
         main_layout.addWidget(self.start_button)
         main_layout.addWidget(self.stop_button)
         main_layout.addWidget(self.capture_button)
@@ -199,10 +198,8 @@ class FloatingWindow(QDialog):
         """UIサイズを2倍/1倍にトグルします。"""
         if self.current_scale == 1.0:
             self.current_scale = 2.0
-            self.scale_button.setText("×1")
         else:
             self.current_scale = 1.0
-            self.scale_button.setText("×2")
         
         self._apply_scale()
     
@@ -225,22 +222,25 @@ class FloatingWindow(QDialog):
         label_font.setPixelSize(base_font_size)
         label_font.setBold(True)
         
-        # サイズ変更ボタンのサイズを更新
+        # サイズ変更ボタンのサイズとアイコンを更新
         self.scale_button.setFixedSize(new_button_size, new_button_size)
+        self.scale_button.setIconSize(QSize(int(new_button_size * 0.6), int(new_button_size * 0.6)))
+        # スケールに応じてアイコンを切り替え（2倍時は縮小アイコン、1倍時は拡大アイコン）
+        if self.current_scale == 2.0:
+            self.scale_button.setIcon(self._safe_icon('fa5s.search-minus', color='#64b5f6'))
+        else:
+            self.scale_button.setIcon(self._safe_icon('fa5s.search-plus', color='#64b5f6'))
         self.scale_button.setStyleSheet(f"""
             QPushButton {{
-                background-color: rgba(100, 100, 100, 150);
-                color: white;
-                font-weight: bold;
-                font-size: {int(new_button_size * 0.4)}px;
+                background-color: rgba(100, 181, 246, 120);
                 border-radius: {new_button_size // 2}px;
-                border: 1px solid rgba(255, 255, 255, 100);
+                border: 1px solid rgba(100, 181, 246, 180);
             }}
             QPushButton:hover {{
-                background-color: rgba(120, 120, 120, 200);
+                background-color: rgba(100, 181, 246, 180);
             }}
             QPushButton:pressed {{
-                background-color: rgba(80, 80, 80, 200);
+                background-color: rgba(100, 181, 246, 220);
             }}
         """)
         
@@ -374,7 +374,11 @@ class FloatingWindow(QDialog):
 
     def update_status(self, text, color="green"):
         color_map = {"green": "#90EE90", "blue": "#64b5f6", "orange": "#ffb74d", "red": "#e57373"}
-        hex_color = color_map.get(color, "white")
+        # 16進カラー指定が渡された場合はそのまま使う
+        if isinstance(color, str) and color.startswith("#"):
+            hex_color = color
+        else:
+            hex_color = color_map.get(color, "white")
         self.status_label.setText(text)
         # 現在のスケールに応じてマージンを調整
         margin = "0 2px" if (self.current_scale == 2.0 and self.width() >= 1024) else "0 4px"

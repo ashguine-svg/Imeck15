@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QScrollArea, QFrame, QGridLayout, QSplitter
 )
 from PySide6.QtCore import Qt, Signal, Slot, QTimer, QRectF, QPoint, QPointF, QEvent
-from PySide6.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QBrush, QMouseEvent
+from PySide6.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QBrush, QMouseEvent, QWheelEvent, QFont, QFontMetrics
 
 from ocr_manager import OCRConfig, OCRManager, TESS_CODE_DISPLAY_MAP
 from ocr_runtime import OCRRuntimeEvaluator
@@ -36,10 +36,28 @@ class OCRPreviewLabel(QLabel):
         self.display_rect = QRectF()
         self.scale_x = 1.0
         self.scale_y = 1.0
+        # ズームヒント表示用（文言は外部からセット。未設定時は非表示）
+        self.zoom_hint_text = ""
+        self.zoom_hint_enabled = True
+        
+        # ズーム機能用の変数
+        self.base_scale = 1.0  # 基本スケール（自動フィット）
+        self.user_zoom_factor = 1.0  # ユーザーズーム倍率（初期値1.0）
+        self.effective_scale = 1.0  # 実効スケール（base_scale * user_zoom）
+        self.zoomed_display_rect = QRectF()  # ズーム後の表示領域
 
-    def set_image(self, pixmap: QPixmap):
+    def set_image(self, pixmap: QPixmap, reset_zoom: bool = True):
         self._pixmap = pixmap if pixmap and not pixmap.isNull() else QPixmap()
+        # 画像が変更されたらデフォルトの拡大率（アスペクト比を保持してプレビューエリアからはみ出ないように最大拡大）にリセット
+        if reset_zoom:
+            self.user_zoom_factor = 1.0
+            self.zoomed_display_rect = QRectF()
         self._update_geometry()
+        self.update()
+
+    def set_zoom_hint(self, text: str):
+        """ズームヒントの文言を設定"""
+        self.zoom_hint_text = text if text else ""
         self.update()
 
     def set_roi(self, rect):
@@ -55,25 +73,86 @@ class OCRPreviewLabel(QLabel):
         self._update_geometry()
 
     def _update_geometry(self):
+        """基本スケールと表示領域を計算（ズーム前の基準）"""
         if self._pixmap.isNull() or self.width() == 0 or self.height() == 0:
             self.display_rect = QRectF()
+            self.base_scale = 1.0
+            self.effective_scale = 1.0
+            self.scale_x = 1.0
+            self.scale_y = 1.0
+            self.zoomed_display_rect = QRectF()
             return
+        
         w_r = self.width() / self._pixmap.width()
         h_r = self.height() / self._pixmap.height()
-        scale = min(w_r, h_r)
-        disp_w = self._pixmap.width() * scale
-        disp_h = self._pixmap.height() * scale
-        disp_x = (self.width() - disp_w) / 2
-        disp_y = (self.height() - disp_h) / 2
-        self.display_rect = QRectF(disp_x, disp_y, disp_w, disp_h)
-        self.scale_x = scale
-        self.scale_y = scale
+        self.base_scale = min(w_r, h_r)
+        
+        # 実効スケール（ズーム適用）
+        self.effective_scale = self.base_scale * self.user_zoom_factor
+        
+        # 基本表示領域
+        base_disp_w = self._pixmap.width() * self.base_scale
+        base_disp_h = self._pixmap.height() * self.base_scale
+        base_disp_x = (self.width() - base_disp_w) / 2
+        base_disp_y = (self.height() - base_disp_h) / 2
+        self.display_rect = QRectF(base_disp_x, base_disp_y, base_disp_w, base_disp_h)
+        
+        # ズーム後の表示領域
+        if self.user_zoom_factor == 1.0:
+            self.zoomed_display_rect = self.display_rect
+        else:
+            # ズームが適用されている場合は、現在のzoomed_display_rectを維持
+            if not self.zoomed_display_rect.isEmpty():
+                # リサイズ時は中心を維持
+                center_x = self.zoomed_display_rect.x() + self.zoomed_display_rect.width() / 2
+                center_y = self.zoomed_display_rect.y() + self.zoomed_display_rect.height() / 2
+                new_disp_w = self._pixmap.width() * self.effective_scale
+                new_disp_h = self._pixmap.height() * self.effective_scale
+                self.zoomed_display_rect = QRectF(
+                    center_x - new_disp_w / 2,
+                    center_y - new_disp_h / 2,
+                    new_disp_w,
+                    new_disp_h
+                )
+            else:
+                self.zoomed_display_rect = self.display_rect
+        
+        # 後方互換性のため、scale_x/yも更新
+        self.scale_x = self.effective_scale
+        self.scale_y = self.effective_scale
 
     def _map_widget_to_image(self, pos):
-        if self._pixmap.isNull() or not self.display_rect.contains(pos): return None
-        rel_x = (pos.x() - self.display_rect.x()) / self.scale_x
-        rel_y = (pos.y() - self.display_rect.y()) / self.scale_y
-        return QPoint(int(rel_x), int(rel_y))
+        """ウィジェット座標を画像座標に変換（ズーム対応）"""
+        if self._pixmap.isNull():
+            return None
+        
+        # 表示領域を決定（ズーム後の表示領域が空の場合は基本表示領域を使用）
+        if self.zoomed_display_rect.isEmpty():
+            display_rect = self.display_rect
+            scale = self.base_scale
+        else:
+            display_rect = self.zoomed_display_rect
+            scale = self.effective_scale
+        
+        if display_rect.isEmpty():
+            return None
+        
+        # カーソル位置が表示領域外でも、拡大時には表示領域内になる可能性があるため、
+        # 表示領域を基準に相対位置を計算（負の値や1以上の値も許容）
+        rel_x = (pos.x() - display_rect.x()) / scale
+        rel_y = (pos.y() - display_rect.y()) / scale
+        
+        # 画像座標に変換（画像範囲外の場合はクランプ）
+        img_x = max(0, min(int(rel_x), self._pixmap.width() - 1))
+        img_y = max(0, min(int(rel_y), self._pixmap.height() - 1))
+        return QPoint(img_x, img_y)
+
+    def wheelEvent(self, event: QWheelEvent):
+        """マウスホイールでズーム（カーソル位置を中心に）"""
+        delta = event.angleDelta().y()
+        zoom_delta = delta / 120.0 * 0.1  # ホイール1クリック = 0.1倍ズーム
+        self._apply_zoom(zoom_delta, event.position().toPoint())
+        event.accept()
 
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.LeftButton:
@@ -106,15 +185,86 @@ class OCRPreviewLabel(QLabel):
                 self.rect_changed.emit(self.ocr_roi_rect)
             self.update()
 
+    def _apply_zoom(self, zoom_delta, cursor_widget_pos):
+        """
+        マウスカーソル位置を中心にズームを適用
+        
+        Args:
+            zoom_delta: ズーム変化量（正:拡大、負:縮小）
+            cursor_widget_pos: カーソルのウィジェット座標
+        """
+        if self._pixmap.isNull():
+            return
+        
+        # 1. 現在のカーソル位置を画像座標に変換
+        current_image_pos = self._map_widget_to_image(cursor_widget_pos)
+        if current_image_pos is None:
+            return  # 画像外の場合はズームしない
+        
+        # 2. ズーム倍率を更新
+        old_zoom = self.user_zoom_factor
+        self.user_zoom_factor = max(0.1, min(15.0, self.user_zoom_factor + zoom_delta))
+        
+        if old_zoom == self.user_zoom_factor:
+            return  # ズーム限界に達した
+        
+        # 3. 実効スケールを計算
+        self.effective_scale = self.base_scale * self.user_zoom_factor
+        
+        # 4. ズーム後の表示サイズを計算
+        new_display_width = self._pixmap.width() * self.effective_scale
+        new_display_height = self._pixmap.height() * self.effective_scale
+        
+        # 5. カーソル位置を中心に表示領域を再計算
+        if old_zoom > 0:
+            zoom_ratio = self.user_zoom_factor / old_zoom
+        else:
+            zoom_ratio = self.user_zoom_factor
+        
+        # 現在のカーソル位置での表示領域のオフセットを計算
+        if self.zoomed_display_rect.isEmpty():
+            display_rect = self.display_rect
+        else:
+            display_rect = self.zoomed_display_rect
+        
+        current_offset_x = cursor_widget_pos.x() - display_rect.x()
+        current_offset_y = cursor_widget_pos.y() - display_rect.y()
+        
+        # ズーム後の新しいオフセット（カーソル位置は変わらない）
+        new_offset_x = current_offset_x * zoom_ratio
+        new_offset_y = current_offset_y * zoom_ratio
+        
+        # 新しい表示領域の位置を計算
+        # プレビューエリアの端を無視して、マウスカーソルを中心に拡大し続ける
+        new_display_x = cursor_widget_pos.x() - new_offset_x
+        new_display_y = cursor_widget_pos.y() - new_offset_y
+        
+        # 6. ズーム後の表示領域を更新
+        self.zoomed_display_rect = QRectF(
+            new_display_x, new_display_y,
+            new_display_width, new_display_height
+        )
+        
+        # 後方互換性のため、scale_x/yも更新
+        self.scale_x = self.effective_scale
+        self.scale_y = self.effective_scale
+        
+        # 7. 再描画
+        self.update()
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.fillRect(self.rect(), Qt.black)
         if self._pixmap.isNull(): return
-        painter.drawPixmap(self.display_rect.toRect(), self._pixmap)
+        
+        # ズーム後の表示領域を使用
+        display_rect = self.zoomed_display_rect if not self.zoomed_display_rect.isEmpty() else self.display_rect
+        painter.drawPixmap(display_rect.toRect(), self._pixmap)
         
         def to_screen(x, y):
-            sx = self.display_rect.x() + x * self.scale_x
-            sy = self.display_rect.y() + y * self.scale_y
+            """画像座標をウィジェット座標に変換（ズーム対応）"""
+            sx = display_rect.x() + x * self.effective_scale
+            sy = display_rect.y() + y * self.effective_scale
             return QPointF(sx, sy)
 
         if self.parent_settings.get('roi_enabled'):
@@ -162,6 +312,60 @@ class OCRPreviewLabel(QLabel):
             painter.setBrush(Qt.NoBrush)
             painter.drawRect(QRectF(tl.x(), tl.y(), sw, sh))
 
+        # ズームヒント
+        self._draw_zoom_hint(painter, display_rect)
+
+    def _draw_zoom_hint(self, painter: QPainter, display_rect: QRectF):
+        """右上にズームヒントを描画"""
+        if not self.zoom_hint_enabled or not self.zoom_hint_text:
+            return
+
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        margin = 8
+        padding = 6
+        icon_size = 12
+
+        font = QFont(self.font())
+        if font.pointSizeF() > 0:
+            font.setPointSizeF(max(9.0, font.pointSizeF() * 0.9))
+        painter.setFont(font)
+        fm = QFontMetrics(font)
+
+        text_w = fm.horizontalAdvance(self.zoom_hint_text)
+        text_h = fm.height()
+        content_w = icon_size + 6 + text_w
+        content_h = max(icon_size, text_h)
+
+        bg_w = padding * 2 + content_w
+        bg_h = padding * 2 + content_h
+        bg_x = self.width() - margin - bg_w
+        bg_y = display_rect.y() + margin
+        bg_rect = QRectF(bg_x, bg_y, bg_w, bg_h)
+
+        painter.setBrush(QColor(0, 0, 0, 140))
+        painter.setPen(Qt.NoPen)
+        painter.drawRoundedRect(bg_rect, 6, 6)
+
+        icon_x = bg_rect.x() + padding
+        icon_y = bg_rect.y() + padding
+        painter.setPen(QPen(QColor(255, 255, 255, 210), 1.5))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawEllipse(QRectF(icon_x, icon_y, icon_size, icon_size))
+        cx = icon_x + icon_size / 2
+        cy = icon_y + icon_size / 2
+        line_len = icon_size * 0.35
+        painter.drawLine(cx - line_len, cy, cx + line_len, cy)
+        painter.drawLine(cx, cy - line_len, cx, cy + line_len)
+
+        text_x = icon_x + icon_size + 6
+        baseline = bg_rect.y() + padding + (content_h - text_h) / 2 + fm.ascent()
+        painter.setPen(QColor(255, 255, 255, 230))
+        painter.drawText(text_x, baseline, self.zoom_hint_text)
+
+        painter.restore()
+
 class ProcessedImageLabel(QLabel):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -194,7 +398,11 @@ class OCRSettingsDialog(QDialog):
         super().__init__(parent)
         
         self._last_input_click_time = 0
-        self.setWindowFlags(self.windowFlags() | Qt.WindowMinMaxButtonsHint)
+        # タイトルバーの最小化・閉じるボタンを非表示にする
+        flags = self.windowFlags() | Qt.CustomizeWindowHint  # カスタムヒントを有効化（XFCE等で×が残る対策）
+        flags &= ~Qt.WindowMinMaxButtonsHint                 # 最小化ボタン除去
+        flags &= ~Qt.WindowCloseButtonHint                   # 閉じるボタン除去
+        self.setWindowFlags(flags)
         self.setAttribute(Qt.WA_InputMethodEnabled, True)
         
         self.locale_manager = None
@@ -257,6 +465,7 @@ class OCRSettingsDialog(QDialog):
         lbl_hint.setAlignment(Qt.AlignCenter)
         
         self.image_label = OCRPreviewLabel()
+        self.image_label.set_zoom_hint(self.tr("preview_zoom_hint"))
         self.image_label.rect_changed.connect(self.on_roi_changed)
         
         left_preview_layout.addWidget(lbl_hint)
@@ -542,7 +751,14 @@ class OCRSettingsDialog(QDialog):
         if current_op_key is None: current_op_key = self.combo_operator.currentData()
         self.combo_operator.clear()
         if self.chk_numeric.isChecked():
-            ops = [(">=", ">="), ("<=", "<="), ("==", "=="), ("!=", "!="), (">", ">"), ("<", "<")]
+            ops = [
+                (self.tr("op_gte"), ">="),
+                (self.tr("op_lte"), "<="),
+                (self.tr("op_eq"), "=="),
+                (self.tr("op_neq"), "!="),
+                (self.tr("op_gt"), ">"),
+                (self.tr("op_lt"), "<")
+            ]
         else:
             ops = [(self.tr("op_contains"), "Contains"), (self.tr("op_equals"), "Equals"), (self.tr("op_regex"), "Regex")]
         for display, key in ops: self.combo_operator.addItem(display, key)
@@ -571,7 +787,7 @@ class OCRSettingsDialog(QDialog):
             h, w, ch = disp_img.shape
             bytes_per_line = ch * w
             qt_image = QImage(disp_img.data, w, h, bytes_per_line, QImage.Format_RGB888)
-            self.image_label.set_image(QPixmap.fromImage(qt_image))
+            self.image_label.set_image(QPixmap.fromImage(qt_image), reset_zoom=False)  # 設定変更時はズームをリセットしない
         except Exception as e:
             self.text_log.setText(f"Preview Error: {str(e)}")
 
@@ -742,7 +958,38 @@ class OCRSettingsDialog(QDialog):
             except:
                 pass 
         
-        condition_data = {"operator": self.combo_operator.currentData(), "value": final_target_val}
+        # ★★★ 修正: currentData()がNoneの場合のフォールバック処理 ★★★
+        operator_value = self.combo_operator.currentData()
+        if operator_value is None:
+            # currentData()がNoneの場合、currentText()から演算子を抽出
+            current_text = self.combo_operator.currentText()
+            # 翻訳された文字列から実際の演算子値を抽出
+            if self.config.numeric_mode:
+                if ">=" in current_text or "gte" in current_text.lower() or "以上" in current_text:
+                    operator_value = ">="
+                elif "<=" in current_text or "lte" in current_text.lower() or "以下" in current_text:
+                    operator_value = "<="
+                elif "==" in current_text or "eq" in current_text.lower() or "一致" in current_text:
+                    operator_value = "=="
+                elif "!=" in current_text or "neq" in current_text.lower() or "一致しない" in current_text:
+                    operator_value = "!="
+                elif ">" in current_text and "=" not in current_text or "gt" in current_text.lower() or "より大きい" in current_text:
+                    operator_value = ">"
+                elif "<" in current_text and "=" not in current_text or "lt" in current_text.lower() or "より小さい" in current_text:
+                    operator_value = "<"
+                else:
+                    operator_value = ">="  # デフォルト値
+            else:
+                if "Contains" in current_text or "含む" in current_text or "contains" in current_text.lower():
+                    operator_value = "Contains"
+                elif "Equals" in current_text or "等しい" in current_text or "equals" in current_text.lower():
+                    operator_value = "Equals"
+                elif "Regex" in current_text or "正規表現" in current_text or "regex" in current_text.lower():
+                    operator_value = "Regex"
+                else:
+                    operator_value = "Contains"  # デフォルト値
+        
+        condition_data = {"operator": operator_value, "value": final_target_val}
         return self.config, self.roi, condition_data, self.chk_enable.isChecked()
 
     @Slot()

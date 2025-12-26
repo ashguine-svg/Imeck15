@@ -1,6 +1,6 @@
 {
     "language_name": "Türkçe",
-    "window_title": "Imeck15 v1.8.1.0 Çok Dilli Sürüm",
+    "window_title": "Imeck15 v1.8.2.0 Çok Dilli Sürüm",
     "monitor_button_start": "İzlemeyi Başlat",
     "monitor_button_stop": "İzlemeyi Durdur",
     "monitor_button_tooltip": "İzlemeyi başlatır.<br>Durdurmak için sağ çift tıklama<br>Başlatmak için sağ üçlü tıklama",
@@ -540,5 +540,6 @@
     "log_ocr_pre_check_pass": "[OCR ÖN KONTROL] %s -> İşlem için hazır",
     "log_ocr_action_cached": "[OCR EYLEMİ] Önbelleğe alınmış PASS'a dayalı işlem yürütülüyor: %s",
     "log_ocr_skip": "[OCR ATLANDI] %s",
-    "log_ocr_selected": "[OCR] %s (%s aday arasından seçildi)"
+    "log_ocr_selected": "[OCR] %s (%s aday arasından seçildi)",
+    "preview_zoom_hint": "Yakınlaştırmak için tekerlek"
 }

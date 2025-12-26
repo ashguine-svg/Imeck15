@@ -3,19 +3,27 @@
 # ★★★ 修正: OCR候補を全スキャンし、最も信頼度が高いものを選択するロジックに変更 ★★★
 
 import time
+import traceback
 import cv2
 import numpy as np
 import psutil 
 from pathlib import Path
+import os
 
 from matcher import _match_template_task, calculate_phash
 from monitoring_states import IdleState, CountdownState
 
 try:
     from ocr_runtime import OCRRuntimeEvaluator
+    DEBUG_OCR_COORDS = os.environ.get("DEBUG_OCR_COORDS", "1") == "1"
     OCR_AVAILABLE = True
 except ImportError:
     OCR_AVAILABLE = False
+    DEBUG_OCR_COORDS = False
+
+# ログ出力量制御トグル（配布ビルドで無効化可）
+ENABLE_OCR_TRACE_LOG = os.environ.get("OCR_TRACE_LOG", "1") == "1"
+ENABLE_OCR_SKIP_LOG = os.environ.get("OCR_SKIP_LOG", "1") == "1"
 
 OPENCL_AVAILABLE = False
 try:
@@ -29,6 +37,13 @@ class MonitoringProcessor:
         self.core = core
         self.logger = core.logger
         self.thread_pool = core.thread_pool
+        # OCR失敗後のクールダウン管理
+        cooldown_env = os.environ.get("OCR_FAIL_COOLDOWN_SEC", "0.5")
+        try:
+            self.ocr_fail_cooldown_sec = max(0.0, float(cooldown_env))
+        except Exception:
+            self.ocr_fail_cooldown_sec = 0.5
+        self.ocr_fail_cooldowns = {}
 
     def monitoring_loop(self):
         last_match_time_map = {}
@@ -102,7 +117,8 @@ class MonitoringProcessor:
                 if isinstance(e, AttributeError) and "'NoneType' object has no attribute 'handle'" in str(e):
                     self.logger.log("[CRITICAL] Race condition detected. Restarting loop.")
                 else:
-                    self.logger.log(f"監視ループでエラーが発生しました: {e}")
+                    tb = traceback.format_exc()
+                    self.logger.log(f"監視ループでエラーが発生しました: {e}\n{tb}")
                 time.sleep(1.0)
             
             finally:
@@ -314,15 +330,87 @@ class MonitoringProcessor:
         match_rect = match['rect'] 
         detected_scale = match.get('scale', 1.0)
         capture_scale = self.core.effective_capture_scale
+        
+        # ★★★ 旧仕様に戻す: ウィンドウスケール補正を親座標計算に入れず、検出スケールでのみ扱う ★★★
+        # detected_scale = base_window_scale * multiplier * effective_capture_scale
+        # capture_scale = effective_capture_scale
+        # real_scale = detected_scale / capture_scale = base_window_scale * multiplier
+        real_scale = detected_scale / capture_scale if capture_scale else 1.0
+        
+        # parent_pos は軽量化のみを元に戻す（ウィンドウスケールはここでは戻さない）
         parent_x = int(match_rect[0] / capture_scale)
-        parent_y = int(match_rect[1] / capture_scale)
+        parent_y = int(round(match_rect[1] / capture_scale))
+        
+        # ★★★ 原因特定のため、詳細なデバッグ情報を追加 ★★★
+        capture_method = getattr(self.core.capture_manager, 'current_method', 'mss')
+        rec_area = self.core.recognition_area
+        screen_img_h, screen_img_w = screen_img.shape[:2] if screen_img is not None else (0, 0)
+        
+        if DEBUG_OCR_COORDS:
+            try:
+                # recognition_areaの期待サイズと実際の画像サイズを比較
+                if rec_area:
+                    expected_w = rec_area[2] - rec_area[0]
+                    expected_h = rec_area[3] - rec_area[1]
+                    size_match = (expected_w == screen_img_w and expected_h == screen_img_h)
+                else:
+                    expected_w = expected_h = 0
+                    size_match = False
+                
+                # ★★★ 原因特定: 座標計算の詳細を出力（端数切り捨てによる誤差を確認） ★★★
+                # ★★★ 修正: 実際のウィンドウスケールを考慮してparent_posを計算 ★★★
+                parent_x_raw_old = match_rect[0] / capture_scale
+                parent_y_raw_old = match_rect[1] / capture_scale
+                parent_x_raw = match_rect[0] / capture_scale
+                parent_y_raw = match_rect[1] / capture_scale
+                parent_x_int = int(parent_x_raw)
+                parent_y_int = int(parent_y_raw)
+                parent_x_round = int(round(parent_x_raw))
+                parent_y_round = int(round(parent_y_raw))
+                
+                # ★★★ 追加: ウィンドウスケールの情報を取得 ★★★
+                window_scale = getattr(self.core, 'current_window_scale', None)
+                actual_window_scale = getattr(self.core, 'actual_window_scale', None)
+
+                # ★★★ 追加: match_rectの座標系を確認 ★★★
+                # match_rectはリサイズ後の画像（effective_capture_scaleでリサイズ）内での座標
+                # screen_imgはリサイズ前の画像（latest_high_res_frame）
+                # ★★★ 修正: parent_pos = match_rect / detected_scale でリサイズ前の画像内での座標に変換（ウィンドウスケールの補正を考慮） ★★★
+                
+                print(
+                    f"[OCR DEBUG CAPTURE] method={capture_method} "
+                    f"recognition_area={rec_area} "
+                    f"expected_size={expected_w}x{expected_h} "
+                    f"captured_img={screen_img_w}x{screen_img_h} "
+                    f"size_match={size_match} "
+                    f"match_rect={match_rect} "
+                    f"match_rect_coords=({match_rect[0]},{match_rect[1]},{match_rect[2]},{match_rect[3]}) "
+                    f"detected_scale={detected_scale:.3f} "
+                    f"capture_scale={capture_scale:.3f} "
+                    f"real_scale={real_scale:.3f} "
+                    f"window_scale={window_scale} "
+                    f"actual_window_scale={actual_window_scale} "
+                    f"parent_pos=({parent_x},{parent_y}) "
+                    f"parent_calc_raw_old=({parent_x_raw_old:.3f},{parent_y_raw_old:.3f}) "
+                    f"parent_calc_raw=({parent_x_raw:.3f},{parent_y_raw:.3f}) "
+                    f"parent_calc_int=({parent_x_int},{parent_y_int}) "
+                    f"parent_calc_round=({parent_x_round},{parent_y_round}) "
+                    f"parent_calc_formula_old=match_rect[0]/{capture_scale:.3f}={parent_x_raw_old:.3f} "
+                    f"parent_calc_formula=match_rect[0]/{capture_scale:.3f}={parent_x_raw:.3f}"
+                )
+            except Exception:
+                pass
+        
         parent_pos = (parent_x, parent_y)
-        real_scale = detected_scale / capture_scale
+        # real_scaleは既に計算済み（上記で計算）
         
         # OCRタスク開始時刻を記録（処理時間計測用）
         self.core.ocr_start_times[path] = current_time
         
         # OCRタスクを非同期実行
+        # DXCamとMSSで座標系が異なる可能性があるため、キャプチャ方法を渡す
+        capture_method = getattr(self.core.capture_manager, 'current_method', 'mss')
+        # ★★★ 追加: capture_scaleを渡してroi_offsetの座標系変換に使用 ★★★
         future = self.thread_pool.submit(
             OCRRuntimeEvaluator.evaluate,
             screen_image=screen_img,
@@ -330,7 +418,9 @@ class MonitoringProcessor:
             ocr_settings=ocr_settings,
             item_settings=settings,
             current_scale=real_scale,
-            hwnd=self.core.target_hwnd
+            capture_scale=capture_scale,  # ★★★ 追加: roi_offsetの座標系変換に使用 ★★★
+            hwnd=self.core.target_hwnd,
+            capture_method=capture_method
         )
         self.core.ocr_futures[path] = future
 
@@ -350,6 +440,12 @@ class MonitoringProcessor:
 
         for m in all_matches:
             path = m['path']
+
+            # OCR失敗クールダウンチェック
+            cooldown_until = self.ocr_fail_cooldowns.get(path)
+            if cooldown_until and current_time < cooldown_until:
+                continue
+
             cache_item = self.core.normal_template_cache.get(path) or self.core.backup_template_cache.get(path)
             if cache_item:
                 folder_path = cache_item.get('folder_path')
@@ -410,10 +506,10 @@ class MonitoringProcessor:
 
         keys_to_remove = [p for p in self.core.match_detected_at if p not in current_match_paths]
         for p in keys_to_remove:
-            if p in self.core.match_detected_at: del self.core.match_detected_at[p]
-            if p in self.core.ocr_futures: del self.core.ocr_futures[p]
-            if p in self.core.ocr_results: del self.core.ocr_results[p]
-            if p in self.core.ocr_start_times: del self.core.ocr_start_times[p]
+            self.core.match_detected_at.pop(p, None)
+            self.core.ocr_futures.pop(p, None)
+            self.core.ocr_results.pop(p, None)
+            self.core.ocr_start_times.pop(p, None)
 
         if not clickable_after_interval:
             return None
@@ -424,27 +520,59 @@ class MonitoringProcessor:
             key=lambda m: (m['settings'].get('interval_time', 1.5), -m['confidence'])
         )
 
-        valid_ocr_candidates = []
+        # 優先順位（インターバルの短いもの）を順に評価。
+        # 最優先がOCR待ちならここで止め、後続はクリックしない。
+        ready_candidates = []
         for target_match in sorted_candidates:
             path = target_match['path']
             settings = target_match.get('settings', {})
             ocr_settings = settings.get('ocr_settings')
-            
-            if not OCR_AVAILABLE or not ocr_settings or not ocr_settings.get('enabled', False):
-                self._execute_final_action(target_match, current_time, last_match_time_map)
-                return target_match
+            ocr_required = OCR_AVAILABLE and ocr_settings and ocr_settings.get('enabled', False)
 
-            if path in self.core.ocr_results:
-                ocr_result = self.core.ocr_results[path]
-                if ocr_result['success']:
-                    valid_ocr_candidates.append({
-                        'match': target_match,
-                        'confidence': ocr_result['confidence'],
-                        'log': ocr_result['log_msg'],
-                        'text': ocr_result['raw_text']
-                    })
-                del self.core.ocr_results[path]
-            elif path in self.core.ocr_futures:
+            # デバッグ: 評価対象の状態を出力（トグルで制御）
+            if ENABLE_OCR_TRACE_LOG:
+                try:
+                    has_result = path in self.core.ocr_results
+                    has_future = path in self.core.ocr_futures
+                    future_done = has_future and self.core.ocr_futures[path].done()
+                    self.logger.log(
+                        f"[OCR TRACE] eval path={Path(path).name} "
+                        f"interval={settings.get('interval_time', 1.5):.2f} "
+                        f"conf={target_match.get('confidence', 0):.2f} "
+                        f"ocr_required={ocr_required} "
+                        f"has_result={has_result} has_future={has_future} future_done={future_done}"
+                    )
+                except Exception:
+                    pass
+
+            # OCR不要（無効）の場合は、インターバル優先の順序に従って候補として積む
+            if not ocr_required:
+                target_match['ocr_success'] = True  # OCR不要扱いで通過
+                ready_candidates.append(target_match)
+                continue
+
+            # OCR結果がキャッシュにある場合
+            ocr_result = self.core.ocr_results.pop(path, None)
+            if ocr_result is not None:
+                success = ocr_result.get('success', False)
+                if success:
+                    # 通常ログを出力（読取結果・一致/不一致・信頼度・処理時間）
+                    if "[0." not in ocr_result.get('log_msg', ''):
+                        self.logger.log(f"[OCR] {ocr_result.get('log_msg', '')}")
+                    target_match['ocr_success'] = True  # 成功フラグを付与
+                    ready_candidates.append(target_match)
+                    continue
+                else:
+                    # 失敗なら検出状態をリセットし、次の候補を検討
+                    if ENABLE_OCR_SKIP_LOG:
+                        self.logger.log(f"[OCR SKIP] {ocr_result.get('log_msg', '(cached result)')}")
+                    self.core.match_detected_at.pop(path, None)
+                    if self.ocr_fail_cooldown_sec > 0:
+                        self.ocr_fail_cooldowns[path] = current_time + self.ocr_fail_cooldown_sec
+                    continue
+
+            # OCR実行中のFutureがある場合
+            if path in self.core.ocr_futures:
                 future = self.core.ocr_futures[path]
                 if future.done():
                     try:
@@ -452,28 +580,40 @@ class MonitoringProcessor:
                         time_str = f"[{elapsed_time:.2f}s]"
                         success, log_msg, raw_text, confidence = future.result()
                         if success:
-                            valid_ocr_candidates.append({
-                                'match': target_match,
-                                'confidence': confidence,
-                                'log': log_msg,
-                                'text': raw_text
-                            })
+                            # 通常ログを出力（読取結果・一致/不一致・信頼度・処理時間）
+                            if "[0." not in log_msg:
+                                self.logger.log(f"[OCR] {log_msg} {time_str}")
+                            target_match['ocr_success'] = True  # 成功フラグを付与
+                            self.core.ocr_futures.pop(path, None)
+                            self.core.ocr_start_times.pop(path, None)
+                            ready_candidates.append(target_match)
+                            continue
                         else:
-                            self.logger.log(f"[OCR SKIP] {log_msg} {time_str}")
+                            # 失敗なら検出状態をリセットし、次の候補へ
+                            if ENABLE_OCR_SKIP_LOG:
+                                self.logger.log(f"[OCR SKIP] {log_msg} {time_str} path={Path(path).name}")
+                            self.core.match_detected_at.pop(path, None)
+                            if self.ocr_fail_cooldown_sec > 0:
+                                self.ocr_fail_cooldowns[path] = current_time + self.ocr_fail_cooldown_sec
                     except Exception as e:
                         self.logger.log(f"[OCR ERROR] {e}")
                     finally:
-                        del self.core.ocr_futures[path]
-                        if path in self.core.ocr_start_times: del self.core.ocr_start_times[path]
+                        self.core.ocr_futures.pop(path, None)
+                        self.core.ocr_start_times.pop(path, None)
+                        self.core.ocr_results.pop(path, None)
+                else:
+                    # 最優先候補がOCR待ちなら、後続を処理せず終了（優先度維持）
+                    self.logger.log(f"[OCR WAIT] path={Path(path).name}")
+                    return None
 
-        if valid_ocr_candidates:
-            valid_ocr_candidates.sort(key=lambda x: x['confidence'], reverse=True)
-            best_candidate = valid_ocr_candidates[0]
-            if "[0." not in best_candidate['log']:
-                self.logger.log(f"[OCR] {best_candidate['log']}")
-            
-            self._execute_final_action(best_candidate['match'], current_time, last_match_time_map)
-            return best_candidate['match']
+            # ここまでで結果がない場合は、次の候補を検討
+            continue
+
+        # 準備完了した候補があれば、最優先（すでにソート済み）をクリック
+        if ready_candidates:
+            best = ready_candidates[0]
+            self._execute_final_action(best, current_time, last_match_time_map)
+            return best
 
         return None
 
@@ -493,6 +633,17 @@ class MonitoringProcessor:
             self.core.updateStatus.emit("monitoring", "blue")
 
         if not self.core.is_monitoring: return
+
+        # OCR必須の場合、成功フラグがない候補はクリックしない（安全ガード）
+        try:
+            settings = target_match.get('settings', {})
+            ocr_settings = settings.get('ocr_settings')
+            ocr_required = OCR_AVAILABLE and ocr_settings and ocr_settings.get('enabled', False)
+            if ocr_required and not target_match.get('ocr_success', False):
+                self.logger.log(f"[OCR GUARD SKIP] path={Path(target_match.get('path',''))} required={ocr_required} success_flag={target_match.get('ocr_success', False)}")
+                return
+        except Exception:
+            pass
 
         target_path = target_match['path']
         self.execute_click(target_match)

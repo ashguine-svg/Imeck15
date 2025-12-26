@@ -1,6 +1,6 @@
 {
     "language_name": "简体中文",
-    "window_title": "Imeck15 v1.8.1.0 多语言版",
+    "window_title": "Imeck15 v1.8.2.0 多语言版",
     "monitor_button_start": "开始监控",
     "monitor_button_stop": "停止监控",
     "monitor_button_tooltip": "开始监控。<br>右键双击停止<br>右键三击开始",
@@ -539,5 +539,6 @@
     "log_ocr_pre_check_pass": "[OCR 预检查] %s -> 准备执行动作",
     "log_ocr_action_cached": "[OCR 动作] 基于缓存的通过结果执行动作: %s",
     "log_ocr_skip": "[OCR 跳过] %s",
-    "log_ocr_selected": "[OCR] %s (从 %s 个候选中选择)"
+    "log_ocr_selected": "[OCR] %s (从 %s 个候选中选择)",
+    "preview_zoom_hint": "滚轮缩放"
 }

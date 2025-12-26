@@ -1,6 +1,6 @@
 {
     "language_name": "Dansk",
-    "window_title": "Imeck15 v1.8.1.0 Flersproget udgave",
+    "window_title": "Imeck15 v1.8.2.0 Flersproget udgave",
     "monitor_button_start": "Start overvågning",
     "monitor_button_stop": "Stop overvågning",
     "monitor_button_tooltip": "Starter overvågning.<br>Dobbelt højreklik for at stoppe<br>Tredobbelt højreklik for at starte",
@@ -540,5 +540,6 @@
     "log_ocr_pre_check_pass": "[OCR FORHÅNDSTJEK] %s -> Klar til handling",
     "log_ocr_action_cached": "[OCR HANDLING] Udfører handling baseret på cachelagret PASS: %s",
     "log_ocr_skip": "[OCR SPRUNGET OVER] %s",
-    "log_ocr_selected": "[OCR] %s (Valgt blandt %s kandidater)"
+    "log_ocr_selected": "[OCR] %s (Valgt blandt %s kandidater)",
+    "preview_zoom_hint": "Hjul til zoom"
 }
