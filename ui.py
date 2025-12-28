@@ -424,11 +424,11 @@ class UIManager(QMainWindow):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(8)
 
-        # 使い方（翻訳キーで表示）
-        hint = QLabel(self.locale_manager.tr("quick_timer_usage_hint"))
-        hint.setWordWrap(True)
-        hint.setStyleSheet("color:#37474f; background-color:#ffffff; border:1px solid #cfd8dc; border-radius:6px; padding:8px;")
-        layout.addWidget(hint)
+        # 使い方（翻訳キーで表示）: 言語切替ですぐ反映できるよう self に保持
+        self.quick_timer_usage_label = QLabel(self.locale_manager.tr("quick_timer_usage_hint"))
+        self.quick_timer_usage_label.setWordWrap(True)
+        self.quick_timer_usage_label.setStyleSheet("color:#37474f; background-color:#ffffff; border:1px solid #cfd8dc; border-radius:6px; padding:8px;")
+        layout.addWidget(self.quick_timer_usage_label)
 
         self.quick_timer_rows = []  # list of dict widgets
         for slot in range(1, 10):
@@ -492,6 +492,10 @@ class UIManager(QMainWindow):
 
     def update_quick_timer_tab(self):
         lm = self.locale_manager.tr
+        # 言語切替が retranslate_ui のタイミングに依存して取りこぼさないよう、
+        # ここでも毎回「使い方」を最新言語で更新する（1秒周期で必ず反映される）
+        if hasattr(self, "quick_timer_usage_label") and self.quick_timer_usage_label:
+            self.quick_timer_usage_label.setText(lm("quick_timer_usage_hint"))
         snap = self.core_engine.get_quick_timer_snapshot() if self.core_engine else {}
         now = time.time()
 
@@ -1291,6 +1295,9 @@ class UIManager(QMainWindow):
             idx_qt = self.preview_tabs.indexOf(self.quick_timer_scroll)
             if idx_qt != -1:
                 self.preview_tabs.setTabText(idx_qt, lm("quick_timer_tab"))
+            # 使い方ラベルも即更新（再起動なしで反映）
+            if hasattr(self, "quick_timer_usage_label") and self.quick_timer_usage_label:
+                self.quick_timer_usage_label.setText(lm("quick_timer_usage_hint"))
             self.update_quick_timer_tab()
 
         if self.app_settings_panel:

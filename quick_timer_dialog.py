@@ -305,9 +305,10 @@ class QuickTimerCreateDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
-        hint = QLabel(self.tr("quick_timer_dialog_hint"))
-        hint.setStyleSheet("color: #37474f; font-weight: bold;")
-        layout.addWidget(hint)
+        # 言語切替で即反映できるよう、ラベル参照を保持
+        self.hint_label = QLabel(self.tr("quick_timer_dialog_hint"))
+        self.hint_label.setStyleSheet("color: #37474f; font-weight: bold;")
+        layout.addWidget(self.hint_label)
 
         self.image_label = QuickTimerImageLabel()
         self.image_label.set_image(img_bgr)
@@ -317,8 +318,8 @@ class QuickTimerCreateDialog(QDialog):
         layout.addWidget(self.image_label, 1)
 
         controls = QHBoxLayout()
-        lbl_min = QLabel(self.tr("quick_timer_minutes_label"))
-        controls.addWidget(lbl_min)
+        self.minutes_label = QLabel(self.tr("quick_timer_minutes_label"))
+        controls.addWidget(self.minutes_label)
 
         self.spin_minutes = QSpinBox()
         self.spin_minutes.setRange(1, 999)
@@ -340,6 +341,33 @@ class QuickTimerCreateDialog(QDialog):
 
         # 初期ROI: 50x50以上をクリック点中心に
         self._set_default_roi()
+
+        # 言語切替時に、ダイアログを開いたままでも文言を即反映
+        if self.locale_manager is not None and hasattr(self.locale_manager, "languageChanged"):
+            try:
+                self.locale_manager.languageChanged.connect(self._retranslate_ui)
+            except Exception:
+                pass
+
+    def closeEvent(self, event):
+        # 接続解除（ダイアログ破棄後の呼び出しを防ぐ）
+        if self.locale_manager is not None and hasattr(self.locale_manager, "languageChanged"):
+            try:
+                self.locale_manager.languageChanged.disconnect(self._retranslate_ui)
+            except Exception:
+                pass
+        super().closeEvent(event)
+
+    def _retranslate_ui(self):
+        # LocaleManager 経由で再翻訳
+        self.setWindowTitle(self.tr("quick_timer_dialog_title"))
+        if hasattr(self, "hint_label") and self.hint_label:
+            self.hint_label.setText(self.tr("quick_timer_dialog_hint"))
+        if hasattr(self, "minutes_label") and self.minutes_label:
+            self.minutes_label.setText(self.tr("quick_timer_minutes_label"))
+        if hasattr(self, "chk_right_click") and self.chk_right_click:
+            self.chk_right_click.setText(self.tr("item_setting_right_click"))
+            self.chk_right_click.setToolTip(self.tr("item_setting_right_click_tooltip"))
 
     def tr(self, key: str, *args):
         if self.locale_manager:
