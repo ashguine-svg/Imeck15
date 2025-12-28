@@ -167,7 +167,6 @@ Refer to the **User Manual** (included in the app) for detailed usage instructio
 
 ## ⚙️ Architecture Diagram
 
-The module structure of this application was refined through pair programming with Google's AI, **Gemini**.
 
 ```mermaid
 graph TD
@@ -185,24 +184,31 @@ graph TD
         B -- "Uses" --> B3[floating_window.py]
         B -- "Uses" --> B4[dialogs.py]
         B -- "Uses" --> B5[monitor.py]
+
+        %% Quick Timer UI
+        B -- "Opens Dialog" --> B_QT_DLG[quick_timer_dialog.py]
     end
 
     subgraph CoreLogicLayer [Core Logic Layer]
-        C(core.py) -- "Delegates Loop" --> C_Mon(core_monitoring.py)
-        C -- "Delegates Selection" --> C_Sel(core_selection.py)
+        C[core.py] -- "Delegates Loop" --> C_Mon[core_monitoring.py]
+        C -- "Delegates Selection" --> C_Sel[core_selection.py]
         
-        C_Mon -.-> C1(monitoring_states.py)
-        C -- "Builds Cache" --> D(template_manager.py)
-        C_Mon -- "Matching Task" --> E(matcher.py)
+        C_Mon -.-> C1[monitoring_states.py]
+        C -- "Builds Cache" --> D[template_manager.py]
+        C_Mon -- "Matching Task" --> E[matcher.py]
         C_Mon -- "Text Recognition" --> E_OCR[ocr_runtime.py]
         C -- "Action Request" --> F(action.py)
+
+        %% Quick Timer Core (CoreEngine / Monitoring States)
+        C_Mon -.-> C_QT[Quick Timer: core.py + monitoring_states.py]
+        C -- "QuickTimerDialogRequested" --> B
         
         E_OCR -.-> E_OCR_M[ocr_manager.py]
     end
 
     subgraph HardwareSystemInteraction [System Interaction]
         G[capture.py]
-        F -- "Click/Type" --> H[Mouse/Keyboard]
+        F -- "Activate Window + Click/Type" --> H[Mouse/Keyboard]
         G -- "Grab Frame" --> I[Screen]
         E_OCR_M -- "OCR Engine" --> T[Tesseract Binary]
     end
@@ -226,20 +232,24 @@ graph TD
     C_Sel -- "Request Capture" --> G
 ```
 
-### Module Descriptions
+## Module Descriptions
 
 | Layer | File | Description |
 | :--- | :--- | :--- |
 | **UI Layer** | **`main.py`** | **Launcher.** Starts the application, ensures single-instance locking, and initializes the `UIManager`. |
-| | **`ui.py` (UIManager)** | **Main Controller.** Acts as the central coordinator for the UI. Manages the main window layout and delegates logic to sub-panels. |
-| | **`ui_tree_panel.py`** | **Tree Panel Logic.** Manages the image tree and opens settings dialogs (Folder/Timer/OCR). |
-| | **`ocr_settings_dialog.py`** | **OCR UI.** **(New)** Provides the interface to set recognition areas (ROI), threshold, and conditions for text detection. |
-| | **`ui_app_settings.py`** | **Settings Panel Logic.** Manages the "App Settings" and "Auto Scale" tabs. |
-| **Core Logic** | **`core.py`** | **Signal Hub.** The central communication hub. Manages thread pools and connects UI signals to logic. |
-| | **`core_monitoring.py`** | **Monitoring Loop.** Runs the infinite monitoring thread. Handles frame capture, matching, **OCR checks**, and actions. |
-| | **`ocr_runtime.py`** | **OCR Evaluator.** **(New)** Performs real-time text recognition and evaluates conditions (e.g., number comparison) during the loop. |
-| | **`ocr_manager.py`** | **OCR Utility.** **(New)** Manages Tesseract configuration and language data downloads. |
-| | **`matcher.py`** | **Vision Algorithm.** Performs Template Matching (Normal/Strict Color) and calculates confidence scores. |
-| | **`action.py`** | **Executor.** Handles window activation and sends physical mouse clicks. |
+|  | **`ui.py` (UIManager)** | **Main Controller.** Acts as the central coordinator for the UI. Manages the main window layout and delegates logic to sub-panels. |
+|  | **`ui_tree_panel.py`** | **Tree Panel Logic.** Manages the image tree and opens settings dialogs (Folder/Timer/OCR). |
+|  | **`quick_timer_dialog.py`** | **Quick Timer UI.** Creates Quick Timer reservations by selecting ROI + click point and setting “click after N minutes” (supports left/right click and language switching). |
+|  | **`ocr_settings_dialog.py`** | **OCR UI.** Provides the interface to set recognition areas (ROI), threshold, and conditions for text detection. |
+|  | **`ui_app_settings.py`** | **Settings Panel Logic.** Manages the "App Settings" and "Auto Scale" tabs. |
+| **Core Logic** | **`core.py`** | **Signal Hub.** The central communication hub. Manages thread pools and connects UI signals to logic. Also holds Quick Timer reservations/state. |
+|  | **`core_monitoring.py`** | **Monitoring Loop.** Runs the infinite monitoring thread. Handles frame capture, matching, **OCR checks**, Quick Timer checks, and actions. |
+|  | **`monitoring_states.py`** | **State Machine.** Controls monitoring behavior (idle/priority/timer/quick-timer standby, etc.). |
+|  | **`ocr_runtime.py`** | **OCR Evaluator.** Performs real-time text recognition and evaluates conditions (e.g., number comparison) during the loop. |
+|  | **`ocr_manager.py`** | **OCR Utility.** Manages Tesseract configuration and language data downloads. |
+|  | **`matcher.py`** | **Vision Algorithm.** Performs Template Matching (Normal/Strict Color) and calculates confidence scores. |
+|  | **`action.py`** | **Executor.** Handles window activation (Windows + Linux/X11 best-effort) and sends physical mouse clicks. |
 | **Hardware** | **`capture.py`** | **Screen Grabber.** Captures screen frames using `dxcam` (Windows/NVIDIA) or `mss` (Cross-platform). |
 | **Data** | **`config.py`** | **File I/O.** Manages reading/writing of `app_config.json` and per-image settings files. |
+|  | **`locale_manager.py`** | **Localization.** Loads `locales/*.json` and provides `tr()` translations with language change notifications. |
+|  | **`environment_tracker.py`** | **Environment Tracking.** Tracks app/window context and screen/DPI info for logs/settings. |
