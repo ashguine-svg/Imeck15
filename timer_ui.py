@@ -387,6 +387,7 @@ class TimerSettingsDialog(QDialog):
         self.item_path = item_path
         self.item_name = item_name
         self.settings = current_settings.get('timer_mode', {})
+        self._right_click = bool(current_settings.get('right_click', False))
         self.locale_manager = locale_manager
         self.core_engine = core_engine
         
@@ -530,6 +531,13 @@ class TimerSettingsDialog(QDialog):
         self.enable_cb.setStyleSheet("font-weight: bold; color: #37474f;")
         self.enable_cb.stateChanged.connect(self.trigger_save)
         form_layout.addWidget(self.enable_cb)
+
+        # 右クリックON（画像ごと・通常クリック/タイマー/クイックタイマーで共通）
+        self.right_click_cb = QCheckBox(lm("item_setting_right_click"))
+        self.right_click_cb.setToolTip(lm("item_setting_right_click_tooltip"))
+        self.right_click_cb.setChecked(self._right_click)
+        self.right_click_cb.stateChanged.connect(self.trigger_save)
+        form_layout.addWidget(self.right_click_cb)
         
         # アプローチ設定
         hbox_app = QHBoxLayout()
@@ -823,9 +831,11 @@ class TimerSettingsDialog(QDialog):
         pass
 
     def get_settings(self):
-        return {
+        timer_mode = {
             'enabled': self.enable_cb.isChecked(),
             'approach_time': self.approach_spin.value(),
             'sequence_interval': self.interval_spin.value(),
             'actions': self.fixed_actions
         }
+        right_click = bool(getattr(self, "right_click_cb", None).isChecked()) if hasattr(self, "right_click_cb") else False
+        return timer_mode, right_click

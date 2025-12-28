@@ -441,6 +441,16 @@ class MonitoringProcessor:
         for m in all_matches:
             path = m['path']
 
+            # OCRがOFFの時に「クリックしない」設定がONなら、誤クリック防止のため常にスキップ
+            settings = m.get('settings', {}) or {}
+            ocr_settings = settings.get('ocr_settings') or {}
+            if isinstance(ocr_settings, dict):
+                if (not ocr_settings.get('enabled', False)) and ocr_settings.get('no_click_when_disabled', False):
+                    # 監視が止まらないよう、検出タイマーも残さない（常に無視）
+                    if path in self.core.match_detected_at:
+                        del self.core.match_detected_at[path]
+                    continue
+
             # OCR失敗クールダウンチェック
             cooldown_until = self.ocr_fail_cooldowns.get(path)
             if cooldown_until and current_time < cooldown_until:
@@ -642,6 +652,10 @@ class MonitoringProcessor:
             if ocr_required and not target_match.get('ocr_success', False):
                 self.logger.log(f"[OCR GUARD SKIP] path={Path(target_match.get('path',''))} required={ocr_required} success_flag={target_match.get('ocr_success', False)}")
                 return
+            # OCRがOFFで「クリックしない」設定がONなら、絶対にクリックしない（安全ガード）
+            if isinstance(ocr_settings, dict):
+                if (not ocr_settings.get('enabled', False)) and ocr_settings.get('no_click_when_disabled', False):
+                    return
         except Exception:
             pass
 

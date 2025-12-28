@@ -287,6 +287,8 @@ def main():
     core_engine.askToApplyWindowScaleSignal.connect(ui_manager.show_prompt_to_apply_scale)
     core_engine.appContextChanged.connect(ui_manager.on_app_context_changed)
     core_engine.restartApplicationRequested.connect(restart_application)
+    core_engine.quickTimerDialogRequested.connect(ui_manager.open_quick_timer_dialog)
+    core_engine.quickTimersChanged.connect(ui_manager.update_quick_timer_tab)
     
     ui_manager.startMonitoringRequested.connect(core_engine.start_monitoring)
     ui_manager.stopMonitoringRequested.connect(core_engine.stop_monitoring)

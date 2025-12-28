@@ -239,20 +239,24 @@ class OCRRuntimeEvaluator:
 
         else:
             res_lower = raw_text.lower()
-            tgt_lower = str(target_value_raw).lower()
+            # 文章モード: 条件値が空の場合は「常に一致」になって事故りやすい（Contains/Regexが常にTrue）ため設定エラー扱いで不一致にする
+            tgt_str = "" if target_value_raw is None else str(target_value_raw)
+            if tgt_str.strip() == "":
+                return False, "Config Error: Text condition value is empty", raw_text, avg_conf
+            tgt_lower = tgt_str.lower()
             
             # ★★★ 修正: 演算子がNoneや空文字列の場合もエラーとして扱う ★★★
             if not operator or operator not in ["Equals", "Contains", "Regex"]:
                 return False, f"Config Error: Invalid operator '{operator_raw}' (normalized: '{operator}')", raw_text, avg_conf
             
-            result = False
+            re画sult = False
             if operator == "Equals":
                 result = (res_lower == tgt_lower)
             elif operator == "Contains":
                 result = (tgt_lower in res_lower)
             elif operator == "Regex":
                 try:
-                    result = bool(re.search(str(target_value_raw), raw_text, re.IGNORECASE))
+                    result = bool(re.search(tgt_str, raw_text, re.IGNORECASE))
                 except:
                     return False, "Regex Error", raw_text, avg_conf
             else:

@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QToolButton, QSizePolicy, QWidget, QMenu
 )
 from PySide6.QtGui import QPixmap, QImage, QPainter, QBrush, QColor, QIcon, QAction
-from PySide6.QtCore import Qt, QObject, QSize, QRect
+from PySide6.QtCore import Qt, QObject, QSize, QRect, QTimer
 
 import qtawesome as qta
 
@@ -332,6 +332,12 @@ class LeftPanel(QObject):
                 is_ocr_enabled = False
                 if ocr_conf and isinstance(ocr_conf, dict):
                     is_ocr_enabled = ocr_conf.get('enabled', False)
+                is_no_click_when_ocr_off = False
+                try:
+                    if ocr_conf and isinstance(ocr_conf, dict):
+                        is_no_click_when_ocr_off = (not ocr_conf.get('enabled', False)) and bool(ocr_conf.get('no_click_when_disabled', False))
+                except Exception:
+                    is_no_click_when_ocr_off = False
                 
                 icon_color = Qt.transparent
                 if is_timer_enabled:
@@ -339,9 +345,17 @@ class LeftPanel(QObject):
                 elif is_ocr_enabled:
                     icon_color = QColor("#9c27b0")
                 
-                image_item.setIcon(0, self.create_colored_icon(icon_color))
+                # 追加: OCR OFF時クリックしない設定がONなら「見ない」アイコンを優先表示
+                if is_no_click_when_ocr_off:
+                    image_item.setIcon(0, self._safe_icon('fa5s.eye-slash', color='#9c27b0'))
+                else:
+                    image_item.setIcon(0, self.create_colored_icon(icon_color))
                 
-                brush = QBrush(QColor("#37474f"))
+                # 追加: OCR OFF時クリックしない設定がONなら紫で表示
+                if is_no_click_when_ocr_off:
+                    brush = QBrush(QColor("#9c27b0"))
+                else:
+                    brush = QBrush(QColor("#37474f"))
                 image_item.setForeground(0, brush)
                 
                 if item_data['path'] == selected_path: item_to_reselect = image_item
@@ -382,6 +396,42 @@ class LeftPanel(QObject):
         if item_to_reselect: 
             self.image_tree.setCurrentItem(item_to_reselect)
             self.image_tree.scrollToItem(item_to_reselect)
+
+        # D&Dなどで「移動先フォルダ」を中心表示したい場合（選択が復元できず先頭が見えてしまう対策）
+        pending_center_path = getattr(self.ui_manager, "pending_tree_center_path", None)
+        if pending_center_path:
+            try:
+                # パス一致するアイテムを探索
+                target_item = None
+                iterator = QTreeWidgetItemIterator(self.image_tree)
+                while iterator.value():
+                    it = iterator.value()
+                    if it and it.data(0, Qt.UserRole) == pending_center_path:
+                        target_item = it
+                        break
+                    iterator += 1
+
+                if target_item:
+                    # 親を展開して見えるようにする
+                    p = target_item.parent()
+                    while p:
+                        p.setExpanded(True)
+                        p = p.parent()
+                    # フォルダなら中身も見やすいので展開
+                    try:
+                        if Path(pending_center_path).is_dir():
+                            target_item.setExpanded(True)
+                    except Exception:
+                        pass
+
+                    # 選択は変えず、表示位置だけ中央へ
+                    QTimer.singleShot(0, lambda ti=target_item: self.image_tree.scrollToItem(ti, QAbstractItemView.PositionAtCenter))
+            finally:
+                # 1回だけ適用
+                try:
+                    self.ui_manager.pending_tree_center_path = None
+                except Exception:
+                    pass
             
         self.image_tree.blockSignals(False)
         if item_to_reselect: self.on_image_tree_selection_changed()
@@ -451,9 +501,10 @@ class LeftPanel(QObject):
                                      parent=self.ui_manager, 
                                      core_engine=self.core_engine)
         if dialog.exec():
-            timer_data = dialog.get_settings()
+            timer_data, right_click = dialog.get_settings()
             
             current_settings['timer_mode'] = timer_data
+            current_settings['right_click'] = bool(right_click)
             self.config_manager.save_item_setting(path, current_settings)
             
             self.logger.log(f"[INFO] Timer settings updated for {path.name}")
@@ -497,14 +548,26 @@ class LeftPanel(QObject):
         # ★★★ 修正: 保存された有効状態を取得 (デフォルトはTrue) ★★★
         is_enabled = saved_ocr_settings.get('enabled', True)
 
-        # ★★★ 修正: enabled引数を渡す ★★★
-        dialog = OCRSettingsDialog(template_image, config, current_roi, current_condition, enabled=is_enabled, parent=self.ui_manager)
+        # 追加: OCR OFF時にクリックしない（誤クリック防止）
+        no_click_when_disabled = bool(saved_ocr_settings.get("no_click_when_disabled", False))
+        right_click = bool(current_settings.get("right_click", False))
+        dialog = OCRSettingsDialog(
+            template_image,
+            config,
+            current_roi,
+            current_condition,
+            enabled=is_enabled,
+            no_click_when_disabled=no_click_when_disabled,
+            right_click=right_click,
+            parent=self.ui_manager
+        )
         
         if dialog.exec():
-            new_config, new_roi, new_condition, new_enabled = dialog.get_result()
+            new_config, new_roi, new_condition, new_enabled, new_no_click_when_disabled, new_right_click = dialog.get_result()
             
             ocr_data = {
                 "enabled": new_enabled,
+                "no_click_when_disabled": bool(new_no_click_when_disabled),
                 "roi": new_roi,
                 "config": {
                     "scale": new_config.scale,
@@ -517,6 +580,7 @@ class LeftPanel(QObject):
             }
             
             current_settings['ocr_settings'] = ocr_data
+            current_settings['right_click'] = bool(new_right_click)
             self.config_manager.save_item_setting(path, current_settings)
             
             self.logger.log(f"[INFO] OCR settings saved for {path.name}")

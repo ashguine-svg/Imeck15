@@ -394,7 +394,7 @@ class ProcessedImageLabel(QLabel):
         painter.drawPixmap(x, y, scaled)
 
 class OCRSettingsDialog(QDialog):
-    def __init__(self, parent_image, current_config: OCRConfig, current_roi=None, current_condition=None, enabled=True, parent=None):
+    def __init__(self, parent_image, current_config: OCRConfig, current_roi=None, current_condition=None, enabled=True, no_click_when_disabled: bool = False, right_click: bool = False, parent=None):
         super().__init__(parent)
         
         self._last_input_click_time = 0
@@ -415,6 +415,8 @@ class OCRSettingsDialog(QDialog):
         self.roi = current_roi
         self.condition = current_condition if current_condition else {"operator": ">=", "value": 0}
         self.enabled = enabled
+        self.no_click_when_disabled = bool(no_click_when_disabled)
+        self.right_click = bool(right_click)
         
         self.ocr_manager = OCRManager()
         self.parent_item_settings = {}
@@ -652,6 +654,16 @@ class OCRSettingsDialog(QDialog):
         self.chk_enable.setChecked(self.enabled)
         bottom_bar_layout.addWidget(self.chk_enable)
 
+        # OCR OFF時の誤クリック防止スイッチ
+        self.chk_no_click_when_disabled = QCheckBox(self.tr("ocr_chk_no_click_when_disabled"))
+        self.chk_no_click_when_disabled.setChecked(self.no_click_when_disabled)
+        bottom_bar_layout.addWidget(self.chk_no_click_when_disabled)
+
+        # 右クリックON（画像ごと）
+        self.chk_right_click = QCheckBox(self.tr("item_setting_right_click"))
+        self.chk_right_click.setChecked(self.right_click)
+        bottom_bar_layout.addWidget(self.chk_right_click)
+
         self.btn_help = QPushButton("?")
         self.btn_help.setFixedWidth(30)
         self.btn_help.setToolTip(self.tr("ocr_help_tooltip"))
@@ -678,12 +690,6 @@ class OCRSettingsDialog(QDialog):
         self.btn_test.clicked.connect(self.run_ocr_test)
         self.btn_test.setStyleSheet("background-color: #e0f7fa; border: 1px solid #00acc1; padding: 4px 10px; border-radius: 4px;")
         bottom_bar_layout.addWidget(self.btn_test)
-
-        self.text_log = QTextEdit()
-        self.text_log.setReadOnly(True)
-        self.text_log.setFixedHeight(45) 
-        self.text_log.setStyleSheet("background-color: #fafafa; border: 1px solid #cfd8dc; font-size: 11px;")
-        bottom_bar_layout.addWidget(self.text_log, 1)
 
         btn_box = QHBoxLayout()
         self.btn_ok = QPushButton("OK") 
@@ -789,7 +795,8 @@ class OCRSettingsDialog(QDialog):
             qt_image = QImage(disp_img.data, w, h, bytes_per_line, QImage.Format_RGB888)
             self.image_label.set_image(QPixmap.fromImage(qt_image), reset_zoom=False)  # 設定変更時はズームをリセットしない
         except Exception as e:
-            self.text_log.setText(f"Preview Error: {str(e)}")
+            # テスト結果表示はRAW欄に集約
+            self.result_text_edit.setText(f"Preview Error: {str(e)}")
 
     @Slot(tuple)
     def on_roi_changed(self, rect): self.roi = rect
@@ -808,7 +815,7 @@ class OCRSettingsDialog(QDialog):
         self.btn_test.setEnabled(False)
         self.btn_ok.setEnabled(False)
         msg = self.tr("ocr_msg_downloading", lang_code)
-        self.text_log.setText(msg)
+        self.result_text_edit.setText(msg)
         self.ocr_manager.download_progress.connect(self.on_download_progress)
         self.ocr_manager.download_finished.connect(self.on_download_finished)
         self.ocr_manager.download_languages(targets)
@@ -826,11 +833,11 @@ class OCRSettingsDialog(QDialog):
         self.btn_ok.setEnabled(True)
         if success:
             comp_msg = self.tr("ocr_msg_download_complete")
-            self.text_log.setHtml(f"<font color='green'>{comp_msg}</font>")
+            self.result_text_edit.setText(comp_msg)
             self.update_preview_image()
         else:
             fail_msg = self.tr("ocr_msg_download_failed", msg)
-            self.text_log.setHtml(f"<font color='red'>{fail_msg}</font>")
+            self.result_text_edit.setText(fail_msg)
             err_title = self.tr("error_title_download_failed")
             if err_title == "error_title_download_failed": err_title = "Download Failed"
             QMessageBox.warning(self, err_title, fail_msg)
@@ -842,11 +849,11 @@ class OCRSettingsDialog(QDialog):
             return
 
         self.update_preview_image()
-        self.text_log.clear()
-        self.text_log.setText(self.tr("ocr_log_processing"))
+        self.result_text_edit.clear()
+        self.result_text_edit.setText(self.tr("ocr_log_processing"))
         # 右パネルの表示もクリア
         self.result_image_label.set_image(None)
-        self.result_text_edit.clear()
+        # result_text_edit は上で処理中メッセージを表示するため、ここでは消さない
         
         self.btn_test.setEnabled(False)
 
@@ -907,34 +914,29 @@ class OCRSettingsDialog(QDialog):
             status_text = "PASS"
             color = "green"
 
-        # --- 3. 下部ログ(一行)の更新 ---
-        # ユーザー要望: RAWデータに.0を表示しない (整数として表示)
+        # RAW欄に結果を集約（判定結果もここに出す）
+        # ユーザー要望: .0 を表示しない
         display_numeric = ""
         if numeric_value is not None:
-            if numeric_value.is_integer():
-                display_numeric = str(int(numeric_value))
-            else:
+            try:
+                if numeric_value.is_integer():
+                    display_numeric = str(int(numeric_value))
+                else:
+                    display_numeric = str(numeric_value)
+            except Exception:
                 display_numeric = str(numeric_value)
 
-        log_html = f"<b>RAW:</b> '{raw_text}'"
-        if self.config.numeric_mode:
-            log_html += f" | <b>Num:</b> {display_numeric}"
-        log_html += f" | <font color='{color}'><b>JUDGE:</b> {status_text}</font>"
-        self.text_log.setHtml(log_html)
-
-        # --- 4. 右下パネル(詳細: RAWデータのみ)の更新 ---
-        # ユーザー要望: RAWデータのみ表示 (.0なし)
         display_text = raw_text
         if self.config.numeric_mode and numeric_value is not None:
-             display_text = display_numeric
-             
-        self.result_text_edit.setText(display_text)
+            display_text = display_numeric
+
+        judge_line = f"JUDGE: {status_text}"
+        self.result_text_edit.setText(f"{display_text}\n\n{judge_line}")
 
     @Slot(str)
     def on_ocr_error(self, error_msg):
         self.btn_test.setEnabled(True)
-        self.text_log.setHtml(f"<font color='red'>Error: {error_msg}</font>")
-        self.result_text_edit.setText(error_msg)
+        self.result_text_edit.setText(f"Error: {error_msg}")
 
     # ★★★ 修正: 保存時に整数判定を行い、.0を除去して保存 ★★★
     def get_result(self):
@@ -990,7 +992,7 @@ class OCRSettingsDialog(QDialog):
                     operator_value = "Contains"  # デフォルト値
         
         condition_data = {"operator": operator_value, "value": final_target_val}
-        return self.config, self.roi, condition_data, self.chk_enable.isChecked()
+        return self.config, self.roi, condition_data, self.chk_enable.isChecked(), self.chk_no_click_when_disabled.isChecked(), self.chk_right_click.isChecked()
 
     @Slot()
     def show_tesseract_guide(self):

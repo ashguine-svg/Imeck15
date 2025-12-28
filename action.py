@@ -255,7 +255,9 @@ class ActionManager:
                 return {'success': False, 'path': str(path)}
             
             try:
-                pyautogui.click(final_click_x, final_click_y)
+                # 右クリックONなら右クリックで実行（デフォルトは左クリック）
+                btn = 'right' if bool(settings.get('right_click', False)) else 'left'
+                pyautogui.click(final_click_x, final_click_y, button=btn)
                 
                 scale_suffix = self.logger.locale_manager.tr(
                     "log_click_success_scale", 

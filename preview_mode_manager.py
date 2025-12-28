@@ -13,7 +13,7 @@ class PreviewModeManager(QObject):
     def __init__(self, preview_label,
                  roi_button, point_cb, range_cb, random_cb,
                  roi_enabled_cb, roi_mode_fixed, roi_mode_variable,
-                 locale_manager, parent=None):
+                 locale_manager, right_click_cb=None, parent=None):
         super().__init__(parent)
 
         # --- UI要素への参照 ---
@@ -25,6 +25,7 @@ class PreviewModeManager(QObject):
         self.roi_enabled_cb = roi_enabled_cb
         self.roi_mode_fixed = roi_mode_fixed
         self.roi_mode_variable = roi_mode_variable
+        self.right_click_cb = right_click_cb
         self.locale_manager = locale_manager
         self.current_mode = None
 
@@ -34,6 +35,7 @@ class PreviewModeManager(QObject):
             'click_position': None, 'click_rect': None,
             'roi_enabled': False, 'roi_mode': 'fixed',
             'roi_rect': None, 'roi_rect_variable': None,
+            'right_click': False,
             'ocr_settings': None # ★ OCR設定を追加
         }
 
@@ -84,6 +86,8 @@ class PreviewModeManager(QObject):
             setting_key = 'range_click'; needs_排他 = True
         elif source_widget == self.random_cb:
             setting_key = 'random_click'
+        elif self.right_click_cb is not None and source_widget == self.right_click_cb:
+            setting_key = 'right_click'
         elif source_widget == self.roi_enabled_cb:
             setting_key = 'roi_enabled'
         elif source_widget == self.roi_mode_fixed and checked:
@@ -145,6 +149,8 @@ class PreviewModeManager(QObject):
                 self.roi_button, self.point_cb, self.range_cb, self.random_cb,
                 self.roi_enabled_cb, self.roi_mode_fixed, self.roi_mode_variable
             ]
+            if self.right_click_cb is not None:
+                widgets_to_disable.append(self.right_click_cb)
             self._block_all_signals(True)
             try:
                 for w in widgets_to_disable: w.setEnabled(False)
@@ -166,6 +172,7 @@ class PreviewModeManager(QObject):
             self.settings['roi_mode'] = loaded_settings.get('roi_mode', 'fixed')
             self.settings['roi_rect'] = loaded_settings.get('roi_rect')
             self.settings['roi_rect_variable'] = loaded_settings.get('roi_rect_variable')
+            self.settings['right_click'] = bool(loaded_settings.get('right_click', False))
             # ★ OCR設定をロード
             self.settings['ocr_settings'] = loaded_settings.get('ocr_settings')
         else:
@@ -174,6 +181,7 @@ class PreviewModeManager(QObject):
                 'click_position': None, 'click_rect': None,
                 'roi_enabled': False, 'roi_mode': 'fixed',
                 'roi_rect': None, 'roi_rect_variable': None,
+                'right_click': False,
                 'ocr_settings': None
             }
 
@@ -255,6 +263,8 @@ class PreviewModeManager(QObject):
         self.roi_mode_variable.blockSignals(block)
         self.point_cb.blockSignals(block)
         self.range_cb.blockSignals(block)
+        if self.right_click_cb is not None:
+            self.right_click_cb.blockSignals(block)
 
     def _convert_cv_to_pixmap(self, cv_image_or_pixmap: np.ndarray | QPixmap) -> QPixmap | None:
         """OpenCV画像(BGR)またはQPixmapをQPixmap(RGB)に変換"""

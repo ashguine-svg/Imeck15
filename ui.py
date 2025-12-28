@@ -6,6 +6,7 @@ import os
 import subprocess
 import cv2
 import numpy as np
+import time
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -17,7 +18,7 @@ from PySide6.QtWidgets import (
     QStyle, QToolTip, QInputDialog
 )
 from PySide6.QtGui import (
-    QIcon, QPixmap, QImage, QPainter, QColor, QBrush, QFont, QPalette,
+    QIcon, QPixmap, QImage, QPainter, QColor, QBrush, QFont, QPalette, QPen,
     QCursor 
 )
 from PySide6.QtCore import (
@@ -35,6 +36,7 @@ from dialogs import RecAreaSelectionDialog
 from custom_widgets import ScaledPixmapLabel, InteractivePreviewLabel
 from preview_mode_manager import PreviewModeManager
 from timer_ui import TimerSettingsDialog
+from quick_timer_dialog import QuickTimerCreateDialog
 
 from custom_input_dialog import ask_string_custom
 
@@ -142,6 +144,10 @@ class UIManager(QMainWindow):
         self.auto_scale_widgets = {}   
         self.available_langs = {}      
         self.image_tree = None         
+
+        # D&D などで移動が発生した直後、ツリー再構築後に「移動先フォルダ」を中央に表示するための一時状態
+        # - 例: 画像をフォルダへネストした直後にツリーが先頭へ飛ぶのを防止
+        self.pending_tree_center_path = None
         
         # ボタンとラベルの参照用
         self.ocr_settings_btn_main = None
@@ -195,6 +201,7 @@ class UIManager(QMainWindow):
             roi_enabled_cb=self.item_settings_widgets['roi_enabled'],
             roi_mode_fixed=self.item_settings_widgets['roi_mode_fixed'],
             roi_mode_variable=self.item_settings_widgets['roi_mode_variable'],
+            right_click_cb=self.item_settings_widgets.get('right_click'),
             locale_manager=self.locale_manager
         )
 
@@ -264,6 +271,7 @@ class UIManager(QMainWindow):
         self.main_layout.addWidget(content_frame)
         
         self._setup_tab_preview(self.preview_tabs) 
+        self._setup_tab_quick_timer(self.preview_tabs)
         self._setup_tab_rec_area()
         
         self.app_settings_panel = AppSettingsPanel(self, self.config_manager, self.app_config, self.locale_manager)
@@ -354,7 +362,8 @@ class UIManager(QMainWindow):
         right_frame = QFrame()
         right_layout = QVBoxLayout(right_frame)
         right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(10)
+        # プレビュー領域を広く取るため、縦方向の余白を少し詰める
+        right_layout.setSpacing(6)
         
         self.preview_tabs = QTabWidget()
         self.preview_tabs.setStyleSheet("""
@@ -381,7 +390,8 @@ class UIManager(QMainWindow):
             }
         """)
         
-        right_layout.addWidget(self.preview_tabs, 3) 
+        # プレビュー領域を優先して大きくする
+        right_layout.addWidget(self.preview_tabs, 5) 
         
         self._setup_item_settings_group(right_layout)
         parent_layout.addWidget(right_frame, 3) 
@@ -400,6 +410,207 @@ class UIManager(QMainWindow):
         
         layout.addWidget(self.preview_label)
         tab_widget.addTab(self.main_preview_widget, "")
+
+    def _setup_tab_quick_timer(self, tab_widget):
+        # スクロール可能なコンテナ（9枠を表示すると縦に長くなるため）
+        self.quick_timer_scroll = QScrollArea()
+        self.quick_timer_scroll.setWidgetResizable(True)
+        self.quick_timer_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.quick_timer_scroll.setStyleSheet("QScrollArea { border: none; }")
+
+        self.quick_timer_widget = QWidget()  # scroll内の実体
+        layout = QVBoxLayout(self.quick_timer_widget)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
+
+        # 使い方（翻訳キーで表示）
+        hint = QLabel(self.locale_manager.tr("quick_timer_usage_hint"))
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color:#37474f; background-color:#ffffff; border:1px solid #cfd8dc; border-radius:6px; padding:8px;")
+        layout.addWidget(hint)
+
+        self.quick_timer_rows = []  # list of dict widgets
+        for slot in range(1, 10):
+            row = QFrame()
+            row.setStyleSheet("background-color:#fafafa; border:1px solid #cfd8dc; border-radius:6px;")
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(8, 8, 8, 8)
+            row_layout.setSpacing(10)
+
+            lbl_slot = QLabel(f"{slot}")
+            lbl_slot.setFixedWidth(22)
+            lbl_slot.setStyleSheet("font-weight:bold; color:#37474f;")
+            row_layout.addWidget(lbl_slot)
+
+            thumb = QLabel()
+            thumb.setFixedSize(100, 100)
+            thumb.setStyleSheet("background-color:#263238; border:1px solid #546e7a;")
+            thumb.setAlignment(Qt.AlignCenter)
+            row_layout.addWidget(thumb)
+
+            info = QVBoxLayout()
+            lbl_minutes = QLabel("")
+            lbl_target = QLabel("")
+            lbl_countdown = QLabel("")
+            for l in (lbl_minutes, lbl_target, lbl_countdown):
+                l.setStyleSheet("color:#37474f;")
+            info.addWidget(lbl_minutes)
+            info.addWidget(lbl_target)
+            info.addWidget(lbl_countdown)
+            row_layout.addLayout(info, 1)
+
+            btn_del = QPushButton()
+            btn_del.setIcon(self._safe_icon('fa5s.trash', color='#546e7a'))
+            btn_del.setFixedWidth(90)
+            btn_del.clicked.connect(lambda _=False, s=slot: self._delete_quick_timer(s))
+            row_layout.addWidget(btn_del)
+
+            self.quick_timer_rows.append({
+                "slot": slot,
+                "thumb": thumb,
+                "lbl_minutes": lbl_minutes,
+                "lbl_target": lbl_target,
+                "lbl_countdown": lbl_countdown,
+                "btn_del": btn_del,
+            })
+            layout.addWidget(row)
+
+        layout.addStretch()
+
+        self.quick_timer_scroll.setWidget(self.quick_timer_widget)
+        tab_widget.addTab(self.quick_timer_scroll, "")
+
+        self.quick_timer_ui_timer = QTimer(self)
+        self.quick_timer_ui_timer.setInterval(1000)
+        self.quick_timer_ui_timer.timeout.connect(self.update_quick_timer_tab)
+        self.quick_timer_ui_timer.start()
+
+    def _delete_quick_timer(self, slot: int):
+        if self.core_engine:
+            self.core_engine.remove_quick_timer(int(slot))
+
+    def update_quick_timer_tab(self):
+        lm = self.locale_manager.tr
+        snap = self.core_engine.get_quick_timer_snapshot() if self.core_engine else {}
+        now = time.time()
+
+        for row in self.quick_timer_rows:
+            slot = row["slot"]
+            e = snap.get(slot)
+            if not e:
+                row["thumb"].setPixmap(QPixmap())
+                row["thumb"].setText("")
+                row["lbl_minutes"].setText(lm("quick_timer_empty"))
+                row["lbl_target"].setText("")
+                row["lbl_countdown"].setText("")
+                row["btn_del"].setText(lm("quick_timer_btn_delete"))
+                row["btn_del"].setEnabled(False)
+                continue
+
+            mins = int(e.get("minutes", 0))
+            trg = float(e.get("trigger_time", 0))
+            remain = max(0, int(trg - now))
+            hh = remain // 3600
+            mm = (remain % 3600) // 60
+            ss = remain % 60
+
+            row["lbl_minutes"].setText(lm("quick_timer_slot_label", slot, mins))
+            row["lbl_target"].setText(lm("quick_timer_target_time_label", time.strftime("%H:%M:%S", time.localtime(trg))))
+            row["lbl_countdown"].setText(lm("quick_timer_countdown_label", f"{hh:02d}:{mm:02d}:{ss:02d}"))
+            row["btn_del"].setText(lm("quick_timer_btn_delete"))
+            row["btn_del"].setEnabled(True)
+
+            # サムネ: ROI画像を100x100内に最大表示、クリック点を赤丸（簡易: ドットは中心ではなくオフセットから算出）
+            try:
+                img = e.get("template_bgr")
+                if img is not None and hasattr(img, "shape"):
+                    rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                    h, w = rgb.shape[:2]
+                    qimg = QImage(rgb.data, w, h, rgb.strides[0], QImage.Format_RGB888)
+                    pm = QPixmap.fromImage(qimg.copy()).scaled(100, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    # 赤点を描画（オフセットをスケールして描画）
+                    dx, dy = e.get("click_offset", (0, 0))
+                    tw, th = e.get("template_size", (w, h))
+                    painter = QPainter(pm)
+                    painter.setPen(QPen(QColor("#ef5350"), 2))
+                    painter.setBrush(QColor(239, 83, 80, 180))  # 塗りつぶし
+                    if tw and th:
+                        px = int((dx / tw) * pm.width())
+                        py = int((dy / th) * pm.height())
+                        painter.drawEllipse(px - 5, py - 5, 10, 10)
+                    painter.end()
+                    row["thumb"].setPixmap(pm)
+                else:
+                    row["thumb"].setPixmap(QPixmap())
+            except Exception:
+                row["thumb"].setPixmap(QPixmap())
+
+    def open_quick_timer_dialog(self, payload: object):
+        lm = self.locale_manager.tr
+        # 予約の作成自体は監視中/停止中どちらでも可能（クリック実行のみ監視ループ内）
+        if not self.core_engine:
+            QMessageBox.warning(self, lm("quick_timer_dialog_title"), lm("quick_timer_err_unexpected"))
+            return
+        try:
+            rec = payload.get("rec_area")
+            frame = payload.get("frame")
+            sx = int(payload.get("screen_x"))
+            sy = int(payload.get("screen_y"))
+            if not rec:
+                QMessageBox.warning(self, lm("quick_timer_dialog_title"), lm("quick_timer_err_no_rec_area"))
+                return
+            if frame is None:
+                QMessageBox.warning(self, lm("quick_timer_dialog_title"), lm("quick_timer_err_unexpected"))
+                return
+            rx0, ry0, rx1, ry1 = rec
+            if not (rx0 <= sx < rx1 and ry0 <= sy < ry1):
+                QMessageBox.warning(self, lm("quick_timer_dialog_title"), lm("quick_timer_err_outside_area"))
+                return
+            cx = sx - rx0
+            cy = sy - ry0
+        except Exception:
+            QMessageBox.warning(self, lm("quick_timer_dialog_title"), lm("quick_timer_err_unexpected"))
+            return
+
+        # デフォルトの右クリックON/OFFは「現在選択中の画像設定」に合わせる（未選択ならFalse）
+        default_right_click = False
+        try:
+            sel_path, _ = self.get_selected_item_path()
+            if sel_path and not Path(sel_path).is_dir():
+                s = self.config_manager.load_item_setting(Path(sel_path))
+                default_right_click = bool(s.get("right_click", False))
+        except Exception:
+            default_right_click = False
+
+        with self.core_engine.temporary_listener_pause():
+            dlg = QuickTimerCreateDialog(frame, (cx, cy), locale_manager=self.locale_manager, right_click=default_right_click, parent=self)
+            if dlg.exec() != QDialog.Accepted:
+                return
+            minutes, roi_rect, click_pt, right_click = dlg.get_result()
+
+        # エントリ作成
+        rx, ry, rw, rh = roi_rect
+        tx, ty = click_pt
+        template_bgr = frame[ry:ry+rh, rx:rx+rw].copy()
+        template_gray = cv2.cvtColor(template_bgr, cv2.COLOR_BGR2GRAY)
+        dx = int(tx - rx)
+        dy = int(ty - ry)
+        now = time.time()
+        trigger_time = now + int(minutes) * 60
+        entry = {
+            "minutes": int(minutes),
+            "trigger_time": float(trigger_time),
+            "match_start_time": float(trigger_time - 60.0),
+            "template_bgr": template_bgr,
+            "template_gray": template_gray,
+            "click_offset": (dx, dy),
+            "right_click": bool(right_click),
+        }
+
+        ok, msg = self.core_engine.add_quick_timer(entry)
+        if not ok:
+            QMessageBox.warning(self, lm("quick_timer_dialog_title"), lm(msg))
+        self.update_quick_timer_tab()
 
     def _setup_tab_rec_area(self):
         rec_area_widget = QWidget()
@@ -497,8 +708,9 @@ class UIManager(QMainWindow):
         """)
         
         layout = QGridLayout(self.item_settings_group)
-        layout.setVerticalSpacing(12)
-        layout.setHorizontalSpacing(15)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setVerticalSpacing(6)
+        layout.setHorizontalSpacing(10)
         
         self.item_threshold_label = QLabel()
         layout.addWidget(self.item_threshold_label, 0, 0)
@@ -549,6 +761,10 @@ class UIManager(QMainWindow):
         range_group_layout.addWidget(self.item_settings_widgets['random_click'])
         
         click_type_layout.addWidget(range_group_frame)
+
+        # 右クリックON（画像ごと）
+        self.item_settings_widgets['right_click'] = QCheckBox()
+        click_type_layout.addWidget(self.item_settings_widgets['right_click'])
         
         # スペーサーを入れて右に寄せる
         click_type_layout.addStretch()
@@ -655,7 +871,11 @@ class UIManager(QMainWindow):
         
         layout.addLayout(roi_layout, 4, 0, 1, 4)
         
-        parent_layout.addWidget(self.item_settings_group)
+        # クリック設定の縦幅を圧縮し、プレビューを広く見せるため、
+        # スクロールは使わず、パネル自体の高さを制限して詰める。
+        # （スクロールはユーザー要望で無効）
+        self.item_settings_group.setMaximumHeight(240)
+        parent_layout.addWidget(self.item_settings_group, 1)
 
     def changeEvent(self, event):
         if event.type() == QEvent.PaletteChange or event.type() == QEvent.ThemeChange:
@@ -692,6 +912,9 @@ class UIManager(QMainWindow):
         )
         self.item_settings_widgets['range_click'].toggled.connect(
              lambda checked, w=self.item_settings_widgets['range_click']: self.preview_mode_manager.handle_ui_toggle(w, checked)
+        )
+        self.item_settings_widgets['right_click'].toggled.connect(
+             lambda checked, w=self.item_settings_widgets['right_click']: self.preview_mode_manager.handle_ui_toggle(w, checked)
         )
         self.item_settings_widgets['random_click'].stateChanged.connect(
              lambda state, w=self.item_settings_widgets['random_click']: self.preview_mode_manager.handle_ui_toggle(w, bool(state))
@@ -794,15 +1017,26 @@ class UIManager(QMainWindow):
 
         try:
             # enabled引数とparent引数を正しく渡す
-            dialog = OCRSettingsDialog(img, config, roi, condition, enabled=is_enabled, parent=self)
+            no_click_when_disabled = bool(ocr_conf_dict.get("no_click_when_disabled", False))
+            dialog = OCRSettingsDialog(
+                img,
+                config,
+                roi,
+                condition,
+                enabled=is_enabled,
+                no_click_when_disabled=no_click_when_disabled,
+                right_click=bool(settings.get("right_click", False)),
+                parent=self
+            )
             dialog.set_parent_settings(settings) 
             
             if dialog.exec() == QDialog.Accepted:
                 # 4つの戻り値を正しくアンパック
-                new_conf, new_roi, new_condition, new_enabled = dialog.get_result()
+                new_conf, new_roi, new_condition, new_enabled, new_no_click_when_disabled, new_right_click = dialog.get_result()
                 
                 new_settings = {
                     "enabled": new_enabled,
+                    "no_click_when_disabled": bool(new_no_click_when_disabled),
                     'roi': new_roi,
                     'config': {
                         'scale': new_conf.scale,
@@ -814,6 +1048,7 @@ class UIManager(QMainWindow):
                     'condition': new_condition
                 }
                 settings['ocr_settings'] = new_settings
+                settings['right_click'] = bool(new_right_click)
                 
                 # ★ settingsに 'image_path' が含まれていない可能性があるので補完
                 if 'image_path' not in settings:
@@ -850,9 +1085,10 @@ class UIManager(QMainWindow):
                                      parent=self, 
                                      core_engine=self.core_engine)
         if dialog.exec():
-            timer_data = dialog.get_settings()
+            timer_data, right_click = dialog.get_settings()
             
             current_settings['timer_mode'] = timer_data
+            current_settings['right_click'] = bool(right_click)
             self.config_manager.save_item_setting(file_path, current_settings)
             
             self.logger.log(f"[INFO] Timer settings updated for {file_path.name}")
@@ -893,6 +1129,8 @@ class UIManager(QMainWindow):
             self.item_settings_widgets['random_click'].setChecked(settings.get('random_click', False))
             self.item_settings_widgets['backup_click'].setChecked(settings.get('backup_click', False))
             self.item_settings_widgets['roi_enabled'].setChecked(settings.get('roi_enabled', False))
+            if 'right_click' in self.item_settings_widgets:
+                self.item_settings_widgets['right_click'].setChecked(bool(settings.get('right_click', False)))
             
             roi_mode = settings.get('roi_mode', 'fixed')
             if roi_mode == 'variable':
@@ -1039,6 +1277,13 @@ class UIManager(QMainWindow):
         log_tab_index = self.preview_tabs.indexOf(self.log_text.parentWidget())
         if log_tab_index != -1: self.preview_tabs.setTabText(log_tab_index, lm("tab_log"))
 
+        # クイックタイマー
+        if hasattr(self, "quick_timer_scroll") and self.quick_timer_scroll:
+            idx_qt = self.preview_tabs.indexOf(self.quick_timer_scroll)
+            if idx_qt != -1:
+                self.preview_tabs.setTabText(idx_qt, lm("quick_timer_tab"))
+            self.update_quick_timer_tab()
+
         if self.app_settings_panel:
             if self.app_settings_panel.tab_general_scroll:
                 idx_gen = self.preview_tabs.indexOf(self.app_settings_panel.tab_general_scroll)
@@ -1074,6 +1319,9 @@ class UIManager(QMainWindow):
         self.item_settings_widgets['range_click'].setToolTip(lm("item_setting_range_click_tooltip"))
         self.item_settings_widgets['random_click'].setText(lm("item_setting_random_click"))
         self.item_settings_widgets['random_click'].setToolTip(lm("item_setting_random_click_tooltip"))
+        if 'right_click' in self.item_settings_widgets:
+            self.item_settings_widgets['right_click'].setText(lm("item_setting_right_click"))
+            self.item_settings_widgets['right_click'].setToolTip(lm("item_setting_right_click_tooltip"))
         self.item_settings_widgets['roi_enabled'].setText(lm("item_setting_roi_enable"))
         self.item_settings_widgets['roi_enabled'].setToolTip(lm("item_setting_roi_enable_tooltip"))
         self.item_settings_widgets['roi_mode_fixed'].setText(lm("item_setting_roi_mode_fixed"))

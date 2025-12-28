@@ -7,6 +7,8 @@
 import time
 import pyautogui
 from pathlib import Path
+import cv2
+import numpy as np
 
 class State:
     def __init__(self, context, parent_state=None):
@@ -34,6 +36,47 @@ class State:
 class IdleState(State):
     def handle(self, current_time, screen_data, last_match_time_map, pre_matches=None):
         context = self.context
+
+        # --- 0. クイックタイマー（Shift+右クリック予約）判定 ---
+        # 1分前からROIテンプレでマッチ監視し、見つかったら通常監視を一時停止して指定時刻でクリック
+        if hasattr(context, "quick_timers") and context.quick_timers:
+            # もっとも近い予定を優先
+            entries = list(context.quick_timers.values())
+            entries.sort(key=lambda e: float(e.get("trigger_time", 0)))
+            for e in entries:
+                trigger_time = float(e.get("trigger_time", 0))
+                match_start = float(e.get("match_start_time", trigger_time - 60.0))
+                if current_time < match_start:
+                    continue
+                # 期限切れは削除
+                if current_time > trigger_time + 5.0:
+                    try:
+                        slot = int(e.get("slot"))
+                        del context.quick_timers[slot]
+                        context.quickTimersChanged.emit()
+                    except Exception:
+                        pass
+                    continue
+
+                template_gray = e.get("template_gray", None)
+                if template_gray is None:
+                    continue
+
+                frame = getattr(context, "latest_high_res_frame", None)
+                if frame is None or frame.size == 0:
+                    continue
+
+                screen_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                if screen_gray.shape[0] < template_gray.shape[0] or screen_gray.shape[1] < template_gray.shape[1]:
+                    continue
+
+                res = cv2.matchTemplate(screen_gray, template_gray, cv2.TM_CCOEFF_NORMED)
+                _minv, maxv, _minl, maxl = cv2.minMaxLoc(res)
+                if maxv >= 0.85:
+                    context.transition_to(QuickTimerStandbyState(context, e, maxl))
+                    return
+                # マッチしていない場合も通常監視は継続（1分前から探索を続ける）
+                break
         
         # --- 1. タイマーアプローチ (ロック) 判定 ---
         if context.timer_schedule_cache:
@@ -280,7 +323,10 @@ class TimerStandbyState(State):
             from action import block_input
             
             block_input(True)
-            pyautogui.click(cx, cy)
+            # 画像ごとの設定に従う（デフォルトは左クリック）
+            settings = match_info.get('settings', {}) if isinstance(match_info, dict) else {}
+            btn = 'right' if bool(settings.get('right_click', False)) else 'left'
+            pyautogui.click(cx, cy, button=btn)
             block_input(False)
             
             context.logger.log(f"[INFO] Timer Action Executed: ID {action['id']} @ ({cx}, {cy})")
@@ -294,6 +340,81 @@ class TimerStandbyState(State):
         except Exception as e:
             context.logger.log(f"[ERROR] Timer click failed: {e}")
             action['executed'] = True
+
+
+class QuickTimerStandbyState(State):
+    """
+    クイックタイマー待機・実行ステート（1回限り）
+    - 予約ROIテンプレが見つかった位置を基準に、指定分後にクリック
+    """
+    def __init__(self, context, entry: dict, first_match_top_left: tuple, parent_state=None):
+        super().__init__(context, parent_state)
+        self.entry = entry
+        self.slot = int(entry.get("slot", 0))
+        self.trigger_time = float(entry.get("trigger_time", 0))
+        self.template_gray = entry.get("template_gray", None)
+        self.click_offset = tuple(entry.get("click_offset", (0, 0)))
+        self.last_seen_time = time.time()
+        self.last_match_top_left = tuple(first_match_top_left)  # (x, y) in capture coords (high-res)
+        self.context.logger.log(f"[INFO] QuickTimer Standby: Locked (slot={self.slot})")
+
+    def handle(self, current_time, screen_data, last_match_time_map, pre_matches=None):
+        context = self.context
+
+        # 1) 位置更新（見えなくなっても少し猶予）
+        if self.template_gray is not None:
+            frame = getattr(context, "latest_high_res_frame", None)
+            if frame is not None and frame.size != 0:
+                try:
+                    screen_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                    if screen_gray.shape[0] >= self.template_gray.shape[0] and screen_gray.shape[1] >= self.template_gray.shape[1]:
+                        res = cv2.matchTemplate(screen_gray, self.template_gray, cv2.TM_CCOEFF_NORMED)
+                        _minv, maxv, _minl, maxl = cv2.minMaxLoc(res)
+                        if maxv >= 0.85:
+                            self.last_seen_time = current_time
+                            self.last_match_top_left = tuple(maxl)
+                except Exception:
+                    pass
+
+        # 2) 実行時刻判定
+        if current_time >= self.trigger_time:
+            # 見失いが長い場合は中止（誤クリック防止）
+            if current_time - self.last_seen_time > 5.0:
+                context.logger.log(f"[WARN] QuickTimer: target lost at trigger time (slot={self.slot}). Cancelling.")
+                self._consume_and_exit()
+                return
+
+            try:
+                rx0, ry0 = int(context.recognition_area[0]), int(context.recognition_area[1])
+                mx, my = int(self.last_match_top_left[0]), int(self.last_match_top_left[1])
+                dx, dy = int(self.click_offset[0]), int(self.click_offset[1])
+                cx = rx0 + mx + dx
+                cy = ry0 + my + dy
+
+                if context.target_hwnd:
+                    context.action_manager._activate_window(context.target_hwnd)
+
+                from action import block_input
+                block_input(True)
+                # 予約ごとの設定に従う（デフォルトは左クリック）
+                btn = 'right' if bool(self.entry.get('right_click', False)) else 'left'
+                pyautogui.click(int(cx), int(cy), button=btn)
+                block_input(False)
+                context.logger.log(f"[INFO] QuickTimer Executed: slot={self.slot} @ ({int(cx)}, {int(cy)})")
+            except Exception as e:
+                context.logger.log(f"[ERROR] QuickTimer click failed: {e}")
+            finally:
+                self._consume_and_exit()
+
+    def _consume_and_exit(self):
+        # 1回限りなので消す
+        try:
+            if hasattr(self.context, "quick_timers") and self.slot in self.context.quick_timers:
+                del self.context.quick_timers[self.slot]
+                self.context.quickTimersChanged.emit()
+        except Exception:
+            pass
+        self._return_to_parent_or_idle()
 
 class PriorityState(State):
     def __init__(self, context, mode_type, folder_path, timeout_time, required_children=None, parent_state=None):
