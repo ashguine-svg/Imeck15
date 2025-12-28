@@ -198,6 +198,7 @@ class UIManager(QMainWindow):
             point_cb=self.item_settings_widgets['point_click'],
             range_cb=self.item_settings_widgets['range_click'],
             random_cb=self.item_settings_widgets['random_click'],
+            backup_click_cb=self.item_settings_widgets.get('backup_click'),
             roi_enabled_cb=self.item_settings_widgets['roi_enabled'],
             roi_mode_fixed=self.item_settings_widgets['roi_mode_fixed'],
             roi_mode_variable=self.item_settings_widgets['roi_mode_variable'],
@@ -1102,13 +1103,21 @@ class UIManager(QMainWindow):
         if not hasattr(self, 'preview_mode_manager') or not self.core_engine: return
             
         path, _ = self.get_selected_item_path()
-        if not path or Path(path).is_dir(): return
+        # ツリー選択がフォルダ/未選択になっていても、現在プレビュー中の画像があるなら保存できるようにする
+        target_path = None
+        try:
+            if self.core_engine.current_image_path and Path(self.core_engine.current_image_path).is_file():
+                target_path = self.core_engine.current_image_path
+            elif path and Path(path).is_file():
+                target_path = path
+            else:
+                return
+        except Exception:
+            return
 
         settings = self.preview_mode_manager.get_settings()
-        if self.core_engine.current_image_path:
-             settings['image_path'] = self.core_engine.current_image_path
-        else:
-             settings['image_path'] = path 
+        # Core側の on_image_settings_changed は current_image_path と一致する必要があるため、原則それを使う
+        settings['image_path'] = self.core_engine.current_image_path or target_path
 
         try:
             settings['threshold'] = self.item_settings_widgets['threshold'].value()

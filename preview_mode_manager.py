@@ -13,7 +13,7 @@ class PreviewModeManager(QObject):
     def __init__(self, preview_label,
                  roi_button, point_cb, range_cb, random_cb,
                  roi_enabled_cb, roi_mode_fixed, roi_mode_variable,
-                 locale_manager, right_click_cb=None, parent=None):
+                 locale_manager, backup_click_cb=None, right_click_cb=None, parent=None):
         super().__init__(parent)
 
         # --- UI要素への参照 ---
@@ -22,6 +22,7 @@ class PreviewModeManager(QObject):
         self.point_cb = point_cb
         self.range_cb = range_cb
         self.random_cb = random_cb
+        self.backup_click_cb = backup_click_cb
         self.roi_enabled_cb = roi_enabled_cb
         self.roi_mode_fixed = roi_mode_fixed
         self.roi_mode_variable = roi_mode_variable
@@ -32,6 +33,7 @@ class PreviewModeManager(QObject):
         # --- 内部設定状態 ---
         self.settings = {
             'point_click': True, 'range_click': False, 'random_click': False,
+            'backup_click': False,
             'click_position': None, 'click_rect': None,
             'roi_enabled': False, 'roi_mode': 'fixed',
             'roi_rect': None, 'roi_rect_variable': None,
@@ -86,6 +88,8 @@ class PreviewModeManager(QObject):
             setting_key = 'range_click'; needs_排他 = True
         elif source_widget == self.random_cb:
             setting_key = 'random_click'
+        elif self.backup_click_cb is not None and source_widget == self.backup_click_cb:
+            setting_key = 'backup_click'
         elif self.right_click_cb is not None and source_widget == self.right_click_cb:
             setting_key = 'right_click'
         elif source_widget == self.roi_enabled_cb:
@@ -114,6 +118,8 @@ class PreviewModeManager(QObject):
             # 変更があればUI同期シグナル発行
             if self.settings[setting_key] != previous_value or needs_排他:
                 self.settings_changed_externally.emit(self.settings.copy())
+                # UIトグルの変更も保存対象（次フレームのプレビュー更新で上書きされるのを防ぐ）
+                self.previewDataApplied.emit(self.settings.copy())
 
             # UI操作後にも描画モードとUI状態を同期
             self._determine_and_set_drawing_mode()
@@ -149,6 +155,8 @@ class PreviewModeManager(QObject):
                 self.roi_button, self.point_cb, self.range_cb, self.random_cb,
                 self.roi_enabled_cb, self.roi_mode_fixed, self.roi_mode_variable
             ]
+            if self.backup_click_cb is not None:
+                widgets_to_disable.append(self.backup_click_cb)
             if self.right_click_cb is not None:
                 widgets_to_disable.append(self.right_click_cb)
             self._block_all_signals(True)
@@ -166,6 +174,7 @@ class PreviewModeManager(QObject):
             self.settings['point_click'] = loaded_settings.get('point_click', True)
             self.settings['range_click'] = loaded_settings.get('range_click', False)
             self.settings['random_click'] = loaded_settings.get('random_click', False) and self.settings['range_click']
+            self.settings['backup_click'] = bool(loaded_settings.get('backup_click', False))
             self.settings['click_position'] = loaded_settings.get('click_position')
             self.settings['click_rect'] = loaded_settings.get('click_rect')
             self.settings['roi_enabled'] = loaded_settings.get('roi_enabled', False)
@@ -178,6 +187,7 @@ class PreviewModeManager(QObject):
         else:
             self.settings = { # Reset to defaults
                 'point_click': True, 'range_click': False, 'random_click': False,
+                'backup_click': False,
                 'click_position': None, 'click_rect': None,
                 'roi_enabled': False, 'roi_mode': 'fixed',
                 'roi_rect': None, 'roi_rect_variable': None,
@@ -249,6 +259,12 @@ class PreviewModeManager(QObject):
         self.point_cb.setEnabled(not is_roi_drawing_mode)
         self.range_cb.setEnabled(not is_roi_drawing_mode)
         self.random_cb.setEnabled(not is_roi_drawing_mode and is_range_click)
+        # フォルダ選択時に sync_from_external() で明示的に disabled されるため、
+        # 通常状態に戻ったときにここで確実に復帰させる
+        if self.backup_click_cb is not None:
+            self.backup_click_cb.setEnabled(not is_roi_drawing_mode)
+        if self.right_click_cb is not None:
+            self.right_click_cb.setEnabled(not is_roi_drawing_mode)
         self.roi_mode_fixed.setEnabled(not is_roi_drawing_mode and is_roi_enabled)
         self.roi_mode_variable.setEnabled(not is_roi_drawing_mode and is_roi_enabled)
         self.roi_button.setEnabled((is_roi_enabled and is_roi_variable_mode) or is_roi_drawing_mode)
@@ -263,6 +279,8 @@ class PreviewModeManager(QObject):
         self.roi_mode_variable.blockSignals(block)
         self.point_cb.blockSignals(block)
         self.range_cb.blockSignals(block)
+        if self.backup_click_cb is not None:
+            self.backup_click_cb.blockSignals(block)
         if self.right_click_cb is not None:
             self.right_click_cb.blockSignals(block)
 

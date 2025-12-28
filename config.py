@@ -260,7 +260,9 @@ class ConfigManager:
                     'backup_click': False,
                     'backup_time': 300.0,
                     'threshold': 0.8,
-                    'debounce_time': 0.0
+                    'debounce_time': 0.0,
+                    # 画像ごとのクリック種別（左/右）
+                    'right_click': False
                 }
             
             if not setting_path.exists():
