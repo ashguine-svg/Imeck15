@@ -179,29 +179,57 @@ graph TD
         
         %% UI Dependencies
         B_Tree -- "Uses" --> B1[image_tree_widget.py]
+        B_Tree -- "Opens Dialogs" --> B_Item_Dlg[ui_item_dialogs.py]
         B_Tree -- "Configures" --> B_OCR_UI[ocr_settings_dialog.py]
+        B_Tree -- "Configures" --> B_Timer_UI[timer_ui.py]
         B -- "Uses" --> B2[preview_mode_manager.py]
         B -- "Uses" --> B3[floating_window.py]
         B -- "Uses" --> B4[dialogs.py]
         B -- "Uses" --> B5[monitor.py]
+        B -- "Uses" --> B_Custom[custom_widgets.py]
+        B -- "Uses" --> B_Input_Dlg[custom_input_dialog.py]
 
         %% Quick Timer UI
         B -- "Opens Dialog" --> B_QT_DLG[quick_timer_dialog.py]
+        B -- "Quick Timer Tab" --> B_QT_Tab[ui_quick_timer_tab.py]
+        
+        %% UI Helper Modules (Refactored)
+        B -- "Layout Building" --> B_Layout[ui_layout_builders.py]
+        B -- "Preview Update" --> B_Preview_Upd[ui_preview_update.py]
+        B -- "Preview Sync" --> B_Preview_Sync[ui_preview_sync.py]
+        B -- "Info Labels" --> B_Info_Labels[ui_info_labels.py]
+        B -- "Wayland Guidance" --> B_Wayland[ui_wayland_guidance.py]
+        
+        %% Settings Model
+        B_Preview_Sync -- "Normalizes" --> B_Settings_Model[settings_model.py]
+        B_Item_Dlg -- "Normalizes" --> B_Settings_Model
     end
 
     subgraph CoreLogicLayer [Core Logic Layer]
-        C[core.py] -- "Delegates Loop" --> C_Mon[core_monitoring.py]
+        C[core.py] -- "Delegates Monitoring" --> C_Mon[core_monitoring.py]
         C -- "Delegates Selection" --> C_Sel[core_selection.py]
+        C -- "Delegates Cache Build" --> C_Cache[cache_builder.py]
+        C -- "Delegates Monitoring Control" --> C_Mon_Ctrl[monitoring_controller.py]
+        C -- "Delegates Quick Timer" --> C_QT_Mgr[quick_timer_manager.py]
+        C -- "Delegates Lifecycle" --> C_Lifecycle[lifecycle_manager.py]
         
         C_Mon -.-> C1[monitoring_states.py]
-        C -- "Builds Cache" --> D[template_manager.py]
+        C_Cache -- "Builds Cache" --> D[template_manager.py]
+        C_Cache -- "Builds Schedule" --> C_Timer_Sched[timer_schedule.py]
         C_Mon -- "Matching Task" --> E[matcher.py]
         C_Mon -- "Text Recognition" --> E_OCR[ocr_runtime.py]
-        C -- "Action Request" --> F(action.py)
+        C -- "Action Request" --> F[action.py]
+        C -- "Input Gestures" --> C_Input_Gest[input_gestures.py]
 
-        %% Quick Timer Core (CoreEngine / Monitoring States)
-        C_Mon -.-> C_QT[Quick Timer: core.py + monitoring_states.py]
-        C -- "QuickTimerDialogRequested" --> B
+        %% Quick Timer Core
+        C1 -.-> C_QT_Mgr
+        C_Input_Gest -- "Triggers Dialog" --> C_QT_Mgr
+        C_QT_Mgr -- "QuickTimerDialogRequested" --> B
+        
+        %% Lifecycle Management
+        C_Sel -- "Session Context" --> C_Lifecycle
+        C_Lifecycle -- "Window Scale" --> C_Cache
+        C_Lifecycle -- "Process Recovery" --> F
         
         E_OCR -.-> E_OCR_M[ocr_manager.py]
     end
@@ -211,6 +239,7 @@ graph TD
         F -- "Activate Window + Click/Type" --> H[Mouse/Keyboard]
         G -- "Grab Frame" --> I[Screen]
         E_OCR_M -- "OCR Engine" --> T[Tesseract Binary]
+        C_Input_Gest -- "Global Mouse Listener" --> H
     end
 
     subgraph DataConfiguration [Data & Config]
@@ -221,15 +250,21 @@ graph TD
 
         D -.-> J
         C -.-> J
+        C_Cache -.-> J
+        C_Lifecycle -.-> J
         B -.-> L
+        B_QT_DLG -.-> L
         J <--> K
         C_Sel -.-> M
+        C -.-> M
+        C_Lifecycle -.-> M
     end
 
     %% Cross-Layer Connections
     B <--> |"Signals / Slots"| C
     C_Mon -- "Request Capture" --> G
     C_Sel -- "Request Capture" --> G
+    C_QT_Mgr -- "Request Capture" --> G
 ```
 
 ## Module Descriptions
@@ -239,17 +274,37 @@ graph TD
 | **UI Layer** | **`main.py`** | **Launcher.** Starts the application, ensures single-instance locking, and initializes the `UIManager`. |
 |  | **`ui.py` (UIManager)** | **Main Controller.** Acts as the central coordinator for the UI. Manages the main window layout and delegates logic to sub-panels. |
 |  | **`ui_tree_panel.py`** | **Tree Panel Logic.** Manages the image tree and opens settings dialogs (Folder/Timer/OCR). |
-|  | **`quick_timer_dialog.py`** | **Quick Timer UI.** Creates Quick Timer reservations by selecting ROI + click point and setting “click after N minutes” (supports left/right click and language switching). |
+|  | **`ui_item_dialogs.py`** | **Item Settings Dialogs.** Encapsulates the logic for opening OCR and Timer settings dialogs with proper monitoring pause handling. |
+|  | **`ui_quick_timer_tab.py`** | **Quick Timer Tab.** Manages the Quick Timer tab's UI setup, updates, and dialog opening logic. |
+|  | **`ui_layout_builders.py`** | **Layout Builders.** Handles creation and placement of UI components (e.g., OCR/Timer info labels). |
+|  | **`ui_preview_update.py`** | **Preview Update Logic.** Handles the update logic for the main image preview and related UI elements. |
+|  | **`ui_preview_sync.py`** | **Preview Synchronization.** Handles synchronization between the UI's preview manager and core settings. |
+|  | **`ui_info_labels.py`** | **Info Labels Update.** Updates OCR and Timer information labels (badge-style display) based on current settings. |
+|  | **`ui_wayland_guidance.py`** | **Wayland Guidance.** Detects Wayland sessions and displays a guidance message with "Don't show again" option. |
+|  | **`quick_timer_dialog.py`** | **Quick Timer UI.** Creates Quick Timer reservations by selecting ROI + click point and setting "click after N minutes" (supports left/right click and language switching). |
 |  | **`ocr_settings_dialog.py`** | **OCR UI.** Provides the interface to set recognition areas (ROI), threshold, and conditions for text detection. |
+|  | **`timer_ui.py`** | **Timer Settings UI.** Provides the interface to configure timer-based clicks (interval/daily/once modes). |
 |  | **`ui_app_settings.py`** | **Settings Panel Logic.** Manages the "App Settings" and "Auto Scale" tabs. |
-| **Core Logic** | **`core.py`** | **Signal Hub.** The central communication hub. Manages thread pools and connects UI signals to logic. Also holds Quick Timer reservations/state. |
-|  | **`core_monitoring.py`** | **Monitoring Loop.** Runs the infinite monitoring thread. Handles frame capture, matching, **OCR checks**, Quick Timer checks, and actions. |
+|  | **`preview_mode_manager.py`** | **Preview Manager.** Manages preview drawing and state for click/ROI settings. |
+|  | **`settings_model.py`** | **Settings Data Model.** Defines structured data models (dataclasses) for application settings and provides normalization functions. |
+|  | **`custom_input_dialog.py`** | **Custom Input Dialog.** Provides cross-platform string input dialog (uses `zenity` on Linux, Qt on Windows/Mac). |
+| **Core Logic** | **`core.py`** | **Signal Hub.** The central communication hub. Manages thread pools and connects UI signals to logic. Delegates specialized tasks to dedicated modules. |
+|  | **`core_monitoring.py`** | **Monitoring Loop.** Runs the infinite monitoring thread. Handles frame capture, matching, OCR checks, Quick Timer checks, and actions. |
+|  | **`monitoring_controller.py`** | **Monitoring Control.** Manages monitoring start/stop, state transitions, and state-related utilities. |
 |  | **`monitoring_states.py`** | **State Machine.** Controls monitoring behavior (idle/priority/timer/quick-timer standby, etc.). |
+|  | **`cache_builder.py`** | **Cache Builder.** Manages template cache construction, rebuild requests, and completion callbacks. Handles thread pool coordination and UI tree state. |
+|  | **`timer_schedule.py`** | **Timer Schedule Builder.** Builds timer schedule cache from template cache, handling invalid timer configurations safely. |
+|  | **`quick_timer_manager.py`** | **Quick Timer Manager.** Manages Quick Timer reservations (add/remove/snapshot), triggers dialog opening, and coordinates with monitoring states. |
+|  | **`input_gestures.py`** | **Input Gesture Handler.** Processes global mouse events and detects gestures (middle click for quick capture, right-click double/triple for monitoring start/stop, left+right chord hold for quick timer). |
+|  | **`core_selection.py`** | **Selection Logic.** Manages the logic for recognition area and image capture selection. |
+|  | **`lifecycle_manager.py`** | **Lifecycle Manager.** Handles session context attachment, window scale calculation, process/window finding, capture re-locking, and session recovery (Extended Lifecycle Hooks). |
+|  | **`template_manager.py`** | **Template Manager.** Builds and manages template cache from image files and settings. Includes file existence checks to prevent crashes during folder deletion. |
 |  | **`ocr_runtime.py`** | **OCR Evaluator.** Performs real-time text recognition and evaluates conditions (e.g., number comparison) during the loop. |
 |  | **`ocr_manager.py`** | **OCR Utility.** Manages Tesseract configuration and language data downloads. |
 |  | **`matcher.py`** | **Vision Algorithm.** Performs Template Matching (Normal/Strict Color) and calculates confidence scores. |
 |  | **`action.py`** | **Executor.** Handles window activation (Windows + Linux/X11 best-effort) and sends physical mouse clicks. |
 | **Hardware** | **`capture.py`** | **Screen Grabber.** Captures screen frames using `dxcam` (Windows/NVIDIA) or `mss` (Cross-platform). |
-| **Data** | **`config.py`** | **File I/O.** Manages reading/writing of `app_config.json` and per-image settings files. |
+| **Data** | **`config.py`** | **File I/O.** Manages reading/writing of `app_config.json` and per-image settings files. Includes file existence checks to prevent crashes during folder deletion. |
 |  | **`locale_manager.py`** | **Localization.** Loads `locales/*.json` and provides `tr()` translations with language change notifications. |
 |  | **`environment_tracker.py`** | **Environment Tracking.** Tracks app/window context and screen/DPI info for logs/settings. |
+
