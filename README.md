@@ -167,7 +167,6 @@ Refer to the **User Manual** (included in the app) for detailed usage instructio
 
 ## ⚙️ Architecture Diagram
 
-
 ```mermaid
 graph TD
     subgraph UILayer [UI Layer]
@@ -212,19 +211,35 @@ graph TD
         C -- "Delegates Monitoring Control" --> C_Mon_Ctrl[monitoring_controller.py]
         C -- "Delegates Quick Timer" --> C_QT_Mgr[quick_timer_manager.py]
         C -- "Delegates Lifecycle" --> C_Lifecycle[lifecycle_manager.py]
+        C -- "Input Gestures" --> C_Input_Gest[input_gestures.py]
         
-        C_Mon -.-> C1[monitoring_states.py]
+        %% Monitoring States (Refactored into directory)
+        C_Mon_Ctrl -- "State Machine" --> MS_Base[monitoring_states/base.py]
+        MS_Base --> MS_Idle[monitoring_states/idle_state.py]
+        MS_Base --> MS_Timer[monitoring_states/timer_standby_state.py]
+        MS_Base --> MS_QT[monitoring_states/quick_timer_standby_state.py]
+        MS_Base --> MS_Priority[monitoring_states/priority_state.py]
+        MS_Base --> MS_Seq[monitoring_states/sequence_priority_state.py]
+        MS_Base --> MS_Countdown[monitoring_states/countdown_state.py]
+        
+        C_Mon -- "Uses States" --> MS_Base
+        C_Mon_Ctrl -- "Transitions" --> MS_Idle
+        C_Mon_Ctrl -- "Transitions" --> MS_Timer
+        C_Mon_Ctrl -- "Transitions" --> MS_QT
+        C_Mon_Ctrl -- "Transitions" --> MS_Priority
+        C_Mon_Ctrl -- "Transitions" --> MS_Seq
+        C_Mon_Ctrl -- "Transitions" --> MS_Countdown
+        
         C_Cache -- "Builds Cache" --> D[template_manager.py]
         C_Cache -- "Builds Schedule" --> C_Timer_Sched[timer_schedule.py]
         C_Mon -- "Matching Task" --> E[matcher.py]
         C_Mon -- "Text Recognition" --> E_OCR[ocr_runtime.py]
         C -- "Action Request" --> F[action.py]
-        C -- "Input Gestures" --> C_Input_Gest[input_gestures.py]
 
         %% Quick Timer Core
-        C1 -.-> C_QT_Mgr
-        C_Input_Gest -- "Triggers Dialog" --> C_QT_Mgr
         C_QT_Mgr -- "QuickTimerDialogRequested" --> B
+        C_Input_Gest -- "Triggers Dialog" --> C_QT_Mgr
+        MS_QT -- "Quick Timer Check" --> C_QT_Mgr
         
         %% Lifecycle Management
         C_Sel -- "Session Context" --> C_Lifecycle
@@ -288,10 +303,21 @@ graph TD
 |  | **`preview_mode_manager.py`** | **Preview Manager.** Manages preview drawing and state for click/ROI settings. |
 |  | **`settings_model.py`** | **Settings Data Model.** Defines structured data models (dataclasses) for application settings and provides normalization functions. |
 |  | **`custom_input_dialog.py`** | **Custom Input Dialog.** Provides cross-platform string input dialog (uses `zenity` on Linux, Qt on Windows/Mac). |
+|  | **`image_tree_widget.py`** | **Draggable Tree Widget.** Custom QTreeWidget with drag-and-drop support for reordering and moving items between folders. |
+|  | **`floating_window.py`** | **Floating Window.** Provides a floating window for recognition area selection. |
+|  | **`dialogs.py`** | **Dialog Utilities.** Provides various dialog implementations including recognition area selection dialog. |
+|  | **`monitor.py`** | **Monitor Utilities.** Provides monitoring-related UI utilities. |
+|  | **`custom_widgets.py`** | **Custom Widgets.** Provides custom Qt widgets including scaled pixmap label and interactive preview label. |
 | **Core Logic** | **`core.py`** | **Signal Hub.** The central communication hub. Manages thread pools and connects UI signals to logic. Delegates specialized tasks to dedicated modules. |
 |  | **`core_monitoring.py`** | **Monitoring Loop.** Runs the infinite monitoring thread. Handles frame capture, matching, OCR checks, Quick Timer checks, and actions. |
 |  | **`monitoring_controller.py`** | **Monitoring Control.** Manages monitoring start/stop, state transitions, and state-related utilities. |
-|  | **`monitoring_states.py`** | **State Machine.** Controls monitoring behavior (idle/priority/timer/quick-timer standby, etc.). |
+|  | **`monitoring_states/base.py`** | **State Base Class.** Abstract base class for all monitoring states, defining the state machine interface. |
+|  | **`monitoring_states/idle_state.py`** | **Idle State.** Default state when monitoring is active but no specific conditions are met. |
+|  | **`monitoring_states/timer_standby_state.py`** | **Timer Standby State.** State for waiting for timer-based click conditions (interval/daily/once). |
+|  | **`monitoring_states/quick_timer_standby_state.py`** | **Quick Timer Standby State.** State for waiting for Quick Timer reservations to trigger. |
+|  | **`monitoring_states/priority_state.py`** | **Priority State.** State for handling priority folder/image matching with timeout. |
+|  | **`monitoring_states/sequence_priority_state.py`** | **Sequence Priority State.** State for handling sequential priority image matching. |
+|  | **`monitoring_states/countdown_state.py`** | **Countdown State.** State for handling backup click countdown after successful match. |
 |  | **`cache_builder.py`** | **Cache Builder.** Manages template cache construction, rebuild requests, and completion callbacks. Handles thread pool coordination and UI tree state. |
 |  | **`timer_schedule.py`** | **Timer Schedule Builder.** Builds timer schedule cache from template cache, handling invalid timer configurations safely. |
 |  | **`quick_timer_manager.py`** | **Quick Timer Manager.** Manages Quick Timer reservations (add/remove/snapshot), triggers dialog opening, and coordinates with monitoring states. |
@@ -307,4 +333,31 @@ graph TD
 | **Data** | **`config.py`** | **File I/O.** Manages reading/writing of `app_config.json` and per-image settings files. Includes file existence checks to prevent crashes during folder deletion. |
 |  | **`locale_manager.py`** | **Localization.** Loads `locales/*.json` and provides `tr()` translations with language change notifications. |
 |  | **`environment_tracker.py`** | **Environment Tracking.** Tracks app/window context and screen/DPI info for logs/settings. |
+
+## Module Relationships Summary
+
+### UI Layer Structure
+- **`main.py`** launches **`ui.py`** which coordinates all UI components
+- **`ui.py`** composes **`ui_tree_panel.py`** (left) and **`ui_app_settings.py`** (right)
+- UI helper modules (`ui_*`) handle specific UI responsibilities (refactored from `ui.py`)
+- Settings dialogs (`ocr_settings_dialog.py`, `timer_ui.py`, `quick_timer_dialog.py`) are opened by UI components
+
+### Core Logic Layer Structure
+- **`core.py`** acts as the central hub, delegating to specialized modules:
+  - **`monitoring_controller.py`**: Monitoring start/stop and state transitions
+  - **`core_monitoring.py`**: Main monitoring loop execution
+  - **`cache_builder.py`**: Template cache construction management
+  - **`quick_timer_manager.py`**: Quick Timer reservation management
+  - **`lifecycle_manager.py`**: Session and window lifecycle management
+  - **`input_gestures.py`**: Global mouse gesture detection
+- **Monitoring States** (refactored into `monitoring_states/` directory):
+  - Base class defines the interface
+  - Individual state classes handle specific monitoring behaviors
+  - State transitions are managed by `monitoring_controller.py`
+
+### Data Flow
+- **Config Layer**: `config.py` manages file I/O, `locale_manager.py` handles translations, `environment_tracker.py` tracks context
+- **Hardware Layer**: `capture.py` grabs frames, `action.py` performs clicks
+- **Cross-layer**: Signals/Slots connect UI and Core, with thread-safe communication
+
 
