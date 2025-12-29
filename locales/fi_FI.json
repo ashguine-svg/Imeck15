@@ -191,7 +191,7 @@
     "log_backup_click_failed_not_found": "Varmuuskopioklikkaus epäonnistui: '%s' ei löytynyt.",
     "log_best_scale_found": "Optimaalinen skaala löytynyt: %s @ %sx (Luottamus: %s)",
     "log_rec_area_set_rect": "Tunnistusalue asetettu suorakulmioksi. Skaalausta ei lasketa.",
-    "log_rec_area_set_window": "Valitse ikkuna... (ESC peruuttaaksesi)",
+    "log_rec_area_set_window": "Valitse ikkuna... (Peruuta hiiren oikealla painikkeella)",
     "log_selection_cancelled": "Aluevalinta peruutettu.",
     "log_selection_cancelled_key": "Ikkunan valinta peruutettu näppäimistöllä.",
     "log_window_invalid_rect": "Ikkunan alueen laskentatulokset ovat virheellisiä: (%s,%s,%s,%s).",
@@ -561,5 +561,8 @@
     "quick_timer_err_slots_full": "Voit tallentaa enintään 9 varausta.",
     "quick_timer_err_unexpected": "Odottamaton virhe.",
     "quick_timer_usage_hint": "[Ohje]\n- Valvonnan aikana: lähes yhtäaikainen oikea klikkaus + vasen klikkaus kohdesovelluksessa luo pika-ajastimen.\n- This feature becomes available after setting the recognition area.\n- Valitse ROI, jossa kuva ei muutu (muuttuvat alueet voivat epäonnistua 1 minuutin esihakussa).\n- 1 minuutti ennen suoritusta alkaa kuvamätsäys; osumalla normaali valvonta keskeytyy ja odottaa.\n- Aikaan se klikkaa kerran, poistaa varauksen ja palaa normaaliin valvontaan.",
-    "preview_zoom_hint": "Rulla zoomia"
+    "preview_zoom_hint": "Rulla zoomia",
+    "wayland_guide_title": "Wayland havaittu",
+    "wayland_guide_text": "Wayland-istunto havaittu.\n\nWaylandissa muiden ikkunoiden aktivointi tai globaalin syötteen injektointi voi olla rajoitettua.\nVakaita klikkauksia varten suosittelemme Xorg/X11-istuntoa.\n\nJos käytät Waylandia, pidä kohdesovellus etualalla valvonnan aikana.",
+    "wayland_guide_dont_show_again": "Älä näytä uudelleen"
 }

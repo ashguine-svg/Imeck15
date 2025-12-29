@@ -191,7 +191,7 @@
     "log_backup_click_failed_not_found": "Backup-klikk mislyktes: '%s' ikke funnet.",
     "log_best_scale_found": "Optimal skala funnet: %s @ %sx (Tillit: %s)",
     "log_rec_area_set_rect": "Gjenkjenningsområde satt til rektangel. Skala vil ikke bli beregnet.",
-    "log_rec_area_set_window": "Vennligst velg et vindu... (ESC for å avbryte)",
+    "log_rec_area_set_window": "Vennligst velg et vindu... (Høyreklikk for å avbryte)",
     "log_selection_cancelled": "Områdevalg avbrutt.",
     "log_selection_cancelled_key": "Vindusvalg avbrutt av tastatur.",
     "log_window_invalid_rect": "Vindusområdeberegningsresultater er ugyldige: (%s,%s,%s,%s).",
@@ -561,5 +561,8 @@
     "quick_timer_err_slots_full": "Du kan lagre opptil 9 reservasjoner.",
     "quick_timer_err_unexpected": "Uventet feil.",
     "quick_timer_usage_hint": "[Slik gjør du]\n- Under overvåking: nesten samtidig høyreklikk + venstreklikk i målappen for å registrere en hurtigtimer.\n- This feature becomes available after setting the recognition area.\n- Velg en ROI der bildet ikke endrer seg (områder som endrer seg kan feile ved 1-minutts forhåndssøk).\n- 1 minutt før utførelse starter bildematching; ved treff pauses normal overvåking og venter.\n- Ved planlagt tidspunkt klikker den én gang, sletter reservasjonen og går tilbake til normal overvåking.",
-    "preview_zoom_hint": "Hjul for zoom"
+    "preview_zoom_hint": "Hjul for zoom",
+    "wayland_guide_title": "Wayland oppdaget",
+    "wayland_guide_text": "Wayland-økt oppdaget.\n\nPå Wayland er det ofte begrenset å aktivere andre vinduer eller injisere global input pålitelig.\nFor stabile klikk anbefaler vi en Xorg/X11-økt.\n\nHvis du blir på Wayland, hold målappen i forgrunnen under overvåking.",
+    "wayland_guide_dont_show_again": "Ikke vis igjen"
 }

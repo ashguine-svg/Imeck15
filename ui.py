@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 import time
 from pathlib import Path
+from contextlib import nullcontext
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QLabel,
@@ -37,19 +38,33 @@ from custom_widgets import ScaledPixmapLabel, InteractivePreviewLabel
 from preview_mode_manager import PreviewModeManager
 from timer_ui import TimerSettingsDialog
 from quick_timer_dialog import QuickTimerCreateDialog
+from settings_model import normalize_image_item_settings
+from ui_item_dialogs import open_ocr_settings_dialog, open_timer_settings_dialog, OCR_AVAILABLE
+from ui_quick_timer_tab import (
+    setup_quick_timer_tab,
+    update_quick_timer_tab as _update_quick_timer_tab,
+    open_quick_timer_dialog as _open_quick_timer_dialog,
+)
+from ui_wayland_guidance import (
+    is_wayland_session as _is_wayland_session,
+    maybe_show_wayland_guidance as _maybe_show_wayland_guidance,
+)
+from ui_preview_sync import (
+    emit_settings_for_save as _emit_settings_for_save_impl,
+    update_ui_from_preview_manager as _update_ui_from_preview_manager_impl,
+)
+from ui_preview_update import (
+    set_settings_from_data as _set_settings_from_data_impl,
+    update_image_preview as _update_image_preview_impl,
+    on_capture_failed as _on_capture_failed_impl,
+    on_captured_image_ready_for_preview as _on_captured_image_ready_for_preview_impl,
+)
+from ui_info_labels import update_info_labels as _update_info_labels_impl
+from ui_layout_builders import add_ocr_info_label, add_timer_info_label
 
 from custom_input_dialog import ask_string_custom
 
-# --- OCR Integration Imports ---
-OCR_AVAILABLE = False
-try:
-    from ocr_manager import OCRConfig
-    from ocr_settings_dialog import OCRSettingsDialog
-    OCR_AVAILABLE = True
-except ImportError as e:
-    print(f"[WARN] OCR modules not found: {e}")
-    OCR_AVAILABLE = False
-# -------------------------------
+# OCR設定ダイアログ処理は ui_item_dialogs.py に分離（第3段階B）
 
 try:
     OPENCL_AVAILABLE = cv2.ocl.haveOpenCL()
@@ -211,6 +226,14 @@ class UIManager(QMainWindow):
         QTimer.singleShot(100, self.adjust_initial_size)
         QTimer.singleShot(0, lambda: self.update_image_preview(None, None))
         QTimer.singleShot(0, self._update_capture_button_state)
+        # Wayland環境なら、フォーカス制御制限のガイダンスを一度だけ表示
+        QTimer.singleShot(700, self._maybe_show_wayland_guidance)
+
+    def _is_wayland_session(self) -> bool:
+        return _is_wayland_session()
+
+    def _maybe_show_wayland_guidance(self):
+        _maybe_show_wayland_guidance(self)
 
     def _safe_icon(self, icon_name, color=None, size=None):
         try:
@@ -413,209 +436,17 @@ class UIManager(QMainWindow):
         tab_widget.addTab(self.main_preview_widget, "")
 
     def _setup_tab_quick_timer(self, tab_widget):
-        # スクロール可能なコンテナ（9枠を表示すると縦に長くなるため）
-        self.quick_timer_scroll = QScrollArea()
-        self.quick_timer_scroll.setWidgetResizable(True)
-        self.quick_timer_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.quick_timer_scroll.setStyleSheet("QScrollArea { border: none; }")
-
-        self.quick_timer_widget = QWidget()  # scroll内の実体
-        layout = QVBoxLayout(self.quick_timer_widget)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(8)
-
-        # 使い方（翻訳キーで表示）: 言語切替ですぐ反映できるよう self に保持
-        self.quick_timer_usage_label = QLabel(self.locale_manager.tr("quick_timer_usage_hint"))
-        self.quick_timer_usage_label.setWordWrap(True)
-        self.quick_timer_usage_label.setStyleSheet("color:#37474f; background-color:#ffffff; border:1px solid #cfd8dc; border-radius:6px; padding:8px;")
-        layout.addWidget(self.quick_timer_usage_label)
-
-        self.quick_timer_rows = []  # list of dict widgets
-        for slot in range(1, 10):
-            row = QFrame()
-            row.setStyleSheet("background-color:#fafafa; border:1px solid #cfd8dc; border-radius:6px;")
-            row_layout = QHBoxLayout(row)
-            row_layout.setContentsMargins(8, 8, 8, 8)
-            row_layout.setSpacing(10)
-
-            lbl_slot = QLabel(f"{slot}")
-            lbl_slot.setFixedWidth(22)
-            lbl_slot.setStyleSheet("font-weight:bold; color:#37474f;")
-            row_layout.addWidget(lbl_slot)
-
-            thumb = QLabel()
-            thumb.setFixedSize(100, 100)
-            thumb.setStyleSheet("background-color:#263238; border:1px solid #546e7a;")
-            thumb.setAlignment(Qt.AlignCenter)
-            row_layout.addWidget(thumb)
-
-            info = QVBoxLayout()
-            lbl_minutes = QLabel("")
-            lbl_target = QLabel("")
-            lbl_countdown = QLabel("")
-            for l in (lbl_minutes, lbl_target, lbl_countdown):
-                l.setStyleSheet("color:#37474f;")
-            info.addWidget(lbl_minutes)
-            info.addWidget(lbl_target)
-            info.addWidget(lbl_countdown)
-            row_layout.addLayout(info, 1)
-
-            btn_del = QPushButton()
-            btn_del.setIcon(self._safe_icon('fa5s.trash', color='#546e7a'))
-            btn_del.setFixedWidth(90)
-            btn_del.clicked.connect(lambda _=False, s=slot: self._delete_quick_timer(s))
-            row_layout.addWidget(btn_del)
-
-            self.quick_timer_rows.append({
-                "slot": slot,
-                "thumb": thumb,
-                "lbl_minutes": lbl_minutes,
-                "lbl_target": lbl_target,
-                "lbl_countdown": lbl_countdown,
-                "btn_del": btn_del,
-            })
-            layout.addWidget(row)
-
-        layout.addStretch()
-
-        self.quick_timer_scroll.setWidget(self.quick_timer_widget)
-        tab_widget.addTab(self.quick_timer_scroll, "")
-
-        self.quick_timer_ui_timer = QTimer(self)
-        self.quick_timer_ui_timer.setInterval(1000)
-        self.quick_timer_ui_timer.timeout.connect(self.update_quick_timer_tab)
-        self.quick_timer_ui_timer.start()
+        setup_quick_timer_tab(self, tab_widget)
 
     def _delete_quick_timer(self, slot: int):
         if self.core_engine:
             self.core_engine.remove_quick_timer(int(slot))
 
     def update_quick_timer_tab(self):
-        lm = self.locale_manager.tr
-        # 言語切替が retranslate_ui のタイミングに依存して取りこぼさないよう、
-        # ここでも毎回「使い方」を最新言語で更新する（1秒周期で必ず反映される）
-        if hasattr(self, "quick_timer_usage_label") and self.quick_timer_usage_label:
-            self.quick_timer_usage_label.setText(lm("quick_timer_usage_hint"))
-        snap = self.core_engine.get_quick_timer_snapshot() if self.core_engine else {}
-        now = time.time()
-
-        for row in self.quick_timer_rows:
-            slot = row["slot"]
-            e = snap.get(slot)
-            if not e:
-                row["thumb"].setPixmap(QPixmap())
-                row["thumb"].setText("")
-                row["lbl_minutes"].setText(lm("quick_timer_empty"))
-                row["lbl_target"].setText("")
-                row["lbl_countdown"].setText("")
-                row["btn_del"].setText(lm("quick_timer_btn_delete"))
-                row["btn_del"].setEnabled(False)
-                continue
-
-            mins = int(e.get("minutes", 0))
-            trg = float(e.get("trigger_time", 0))
-            remain = max(0, int(trg - now))
-            hh = remain // 3600
-            mm = (remain % 3600) // 60
-            ss = remain % 60
-
-            row["lbl_minutes"].setText(lm("quick_timer_slot_label", slot, mins))
-            row["lbl_target"].setText(lm("quick_timer_target_time_label", time.strftime("%H:%M:%S", time.localtime(trg))))
-            row["lbl_countdown"].setText(lm("quick_timer_countdown_label", f"{hh:02d}:{mm:02d}:{ss:02d}"))
-            row["btn_del"].setText(lm("quick_timer_btn_delete"))
-            row["btn_del"].setEnabled(True)
-
-            # サムネ: ROI画像を100x100内に最大表示、クリック点を赤丸（簡易: ドットは中心ではなくオフセットから算出）
-            try:
-                img = e.get("template_bgr")
-                if img is not None and hasattr(img, "shape"):
-                    rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                    h, w = rgb.shape[:2]
-                    qimg = QImage(rgb.data, w, h, rgb.strides[0], QImage.Format_RGB888)
-                    pm = QPixmap.fromImage(qimg.copy()).scaled(100, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                    # 赤点を描画（オフセットをスケールして描画）
-                    dx, dy = e.get("click_offset", (0, 0))
-                    tw, th = e.get("template_size", (w, h))
-                    painter = QPainter(pm)
-                    painter.setPen(QPen(QColor("#ef5350"), 2))
-                    painter.setBrush(QColor(239, 83, 80, 180))  # 塗りつぶし
-                    if tw and th:
-                        px = int((dx / tw) * pm.width())
-                        py = int((dy / th) * pm.height())
-                        painter.drawEllipse(px - 5, py - 5, 10, 10)
-                    painter.end()
-                    row["thumb"].setPixmap(pm)
-                else:
-                    row["thumb"].setPixmap(QPixmap())
-            except Exception:
-                row["thumb"].setPixmap(QPixmap())
+        _update_quick_timer_tab(self)
 
     def open_quick_timer_dialog(self, payload: object):
-        lm = self.locale_manager.tr
-        # 予約の作成自体は監視中/停止中どちらでも可能（クリック実行のみ監視ループ内）
-        if not self.core_engine:
-            QMessageBox.warning(self, lm("quick_timer_dialog_title"), lm("quick_timer_err_unexpected"))
-            return
-        try:
-            rec = payload.get("rec_area")
-            frame = payload.get("frame")
-            sx = int(payload.get("screen_x"))
-            sy = int(payload.get("screen_y"))
-            if not rec:
-                QMessageBox.warning(self, lm("quick_timer_dialog_title"), lm("quick_timer_err_no_rec_area"))
-                return
-            if frame is None:
-                QMessageBox.warning(self, lm("quick_timer_dialog_title"), lm("quick_timer_err_unexpected"))
-                return
-            rx0, ry0, rx1, ry1 = rec
-            if not (rx0 <= sx < rx1 and ry0 <= sy < ry1):
-                QMessageBox.warning(self, lm("quick_timer_dialog_title"), lm("quick_timer_err_outside_area"))
-                return
-            cx = sx - rx0
-            cy = sy - ry0
-        except Exception:
-            QMessageBox.warning(self, lm("quick_timer_dialog_title"), lm("quick_timer_err_unexpected"))
-            return
-
-        # デフォルトの右クリックON/OFFは「現在選択中の画像設定」に合わせる（未選択ならFalse）
-        default_right_click = False
-        try:
-            sel_path, _ = self.get_selected_item_path()
-            if sel_path and not Path(sel_path).is_dir():
-                s = self.config_manager.load_item_setting(Path(sel_path))
-                default_right_click = bool(s.get("right_click", False))
-        except Exception:
-            default_right_click = False
-
-        with self.core_engine.temporary_listener_pause():
-            dlg = QuickTimerCreateDialog(frame, (cx, cy), locale_manager=self.locale_manager, right_click=default_right_click, parent=self)
-            if dlg.exec() != QDialog.Accepted:
-                return
-            minutes, roi_rect, click_pt, right_click = dlg.get_result()
-
-        # エントリ作成
-        rx, ry, rw, rh = roi_rect
-        tx, ty = click_pt
-        template_bgr = frame[ry:ry+rh, rx:rx+rw].copy()
-        template_gray = cv2.cvtColor(template_bgr, cv2.COLOR_BGR2GRAY)
-        dx = int(tx - rx)
-        dy = int(ty - ry)
-        now = time.time()
-        trigger_time = now + int(minutes) * 60
-        entry = {
-            "minutes": int(minutes),
-            "trigger_time": float(trigger_time),
-            "match_start_time": float(trigger_time - 60.0),
-            "template_bgr": template_bgr,
-            "template_gray": template_gray,
-            "click_offset": (dx, dy),
-            "right_click": bool(right_click),
-        }
-
-        ok, msg = self.core_engine.add_quick_timer(entry)
-        if not ok:
-            QMessageBox.warning(self, lm("quick_timer_dialog_title"), lm(msg))
-        self.update_quick_timer_tab()
+        _open_quick_timer_dialog(self, payload)
 
     def _setup_tab_rec_area(self):
         rec_area_widget = QWidget()
@@ -774,11 +605,8 @@ class UIManager(QMainWindow):
         # スペーサーを入れて右に寄せる
         click_type_layout.addStretch()
         
-        # --- ★★★ 修正: OCR情報ラベルを追加 ★★★ ---
-        self.ocr_info_label = QLabel("----")
-        self.ocr_info_label.setStyleSheet("color: #bdbdbd; font-weight: bold; margin-right: 5px;")
-        click_type_layout.addWidget(self.ocr_info_label)
-        # ------------------------------------------------
+        # OCR情報ラベル（生成・配置は外出し）
+        add_ocr_info_label(self, click_type_layout)
 
         # --- OCR設定ボタンを指定位置（デバウンスの下）に配置 ---
         if OCR_AVAILABLE:
@@ -855,11 +683,8 @@ class UIManager(QMainWindow):
         # スペーサーを入れて右に寄せる
         roi_layout.addStretch()
         
-        # --- ★★★ 修正: タイマー情報ラベルを追加 ★★★ ---
-        self.timer_info_label = QLabel("--:--:--")
-        self.timer_info_label.setStyleSheet("color: #bdbdbd; font-weight: bold; margin-right: 5px;")
-        roi_layout.addWidget(self.timer_info_label)
-        # ----------------------------------------------------
+        # タイマー情報ラベル（生成・配置は外出し）
+        add_timer_info_label(self, roi_layout)
 
         # --- 追加: タイマー設定ボタン ---
         self.timer_settings_btn_main = QPushButton()
@@ -913,10 +738,12 @@ class UIManager(QMainWindow):
             lambda state, w=self.item_settings_widgets['backup_click']: self.preview_mode_manager.handle_ui_toggle(w, bool(state))
         )
         self.item_settings_widgets['point_click'].toggled.connect(
-             lambda checked, w=self.item_settings_widgets['point_click']: self.preview_mode_manager.handle_ui_toggle(w, checked)
+             lambda checked, w=self.item_settings_widgets['point_click']: (self._stop_monitoring_for_settings() if checked else None,
+                                                                          self.preview_mode_manager.handle_ui_toggle(w, checked))
         )
         self.item_settings_widgets['range_click'].toggled.connect(
-             lambda checked, w=self.item_settings_widgets['range_click']: self.preview_mode_manager.handle_ui_toggle(w, checked)
+             lambda checked, w=self.item_settings_widgets['range_click']: (self._stop_monitoring_for_settings() if checked else None,
+                                                                          self.preview_mode_manager.handle_ui_toggle(w, checked))
         )
         self.item_settings_widgets['right_click'].toggled.connect(
              lambda checked, w=self.item_settings_widgets['right_click']: self.preview_mode_manager.handle_ui_toggle(w, checked)
@@ -925,16 +752,19 @@ class UIManager(QMainWindow):
              lambda state, w=self.item_settings_widgets['random_click']: self.preview_mode_manager.handle_ui_toggle(w, bool(state))
         )
         self.item_settings_widgets['roi_enabled'].stateChanged.connect(
-             lambda state, w=self.item_settings_widgets['roi_enabled']: self.preview_mode_manager.handle_ui_toggle(w, bool(state))
+             lambda state, w=self.item_settings_widgets['roi_enabled']: (self._stop_monitoring_for_settings() if bool(state) else None,
+                                                                         self.preview_mode_manager.handle_ui_toggle(w, bool(state)))
         )
         self.item_settings_widgets['roi_mode_fixed'].toggled.connect(
              lambda checked, w=self.item_settings_widgets['roi_mode_fixed']: self.preview_mode_manager.handle_ui_toggle(w, checked)
         )
         self.item_settings_widgets['roi_mode_variable'].toggled.connect(
-             lambda checked, w=self.item_settings_widgets['roi_mode_variable']: self.preview_mode_manager.handle_ui_toggle(w, checked)
+             lambda checked, w=self.item_settings_widgets['roi_mode_variable']: (self._stop_monitoring_for_settings() if checked else None,
+                                                                                self.preview_mode_manager.handle_ui_toggle(w, checked))
         )
         self.item_settings_widgets['set_roi_variable_button'].toggled.connect(
-            self.preview_mode_manager._drawing_mode_button_toggled
+            lambda checked: (self._stop_monitoring_for_settings() if checked else None,
+                             self.preview_mode_manager._drawing_mode_button_toggled(checked))
         )
         
         # OCRボタンへのシグナル接続
@@ -958,202 +788,30 @@ class UIManager(QMainWindow):
 
         self._signals_connected = True
 
-    # --- OCR設定ボタンハンドラ (修正版) ---
-    def _on_ocr_settings_button_clicked(self):
-        lm = self.locale_manager.tr 
-
-        if not OCR_AVAILABLE:
-            QMessageBox.warning(self, lm("ocr_msg_missing_title"), lm("ocr_msg_missing_text"))
-            return
-
-        path, _ = self.get_selected_item_path()
-        if not path or Path(path).is_dir():
-            QMessageBox.information(self, lm("ocr_dialog_title"), lm("ocr_info_select_item"))
-            return
-
-        file_path = Path(path)
-        if not file_path.exists():
-            return
-
+    def _stop_monitoring_for_settings(self):
+        """
+        設定操作中の誤クリック事故を防ぐため、設定UI操作の起点で監視を停止する。
+        （プレビュー更新など“プログラム側”の変更では signals を block しているため、基本的にユーザー操作時のみ発火）
+        """
         try:
-            with open(file_path, 'rb') as f:
-                file_bytes = np.fromfile(f, np.uint8)
-            img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
-            if img is None:
-                raise ValueError("Decode failed")
-        except Exception as e:
-            QMessageBox.warning(self, lm("ocr_error_load_title"), lm("ocr_error_load_text", str(e)))
-            return
-
-        # ★★★ 修正: ファイルからではなく、現在のUI設定をベースにする ★★★
-        # 1. PreviewModeManagerから現在の状態を取得
-        current_ui_settings = self.preview_mode_manager.get_settings()
-        
-        # 2. 右パネルのウィジェットの値も念のため取得して統合
-        try:
-            current_ui_settings['threshold'] = self.item_settings_widgets['threshold'].value()
-            current_ui_settings['interval_time'] = self.item_settings_widgets['interval_time'].value()
-            current_ui_settings['backup_time'] = self.item_settings_widgets['backup_time'].value()
-            current_ui_settings['debounce_time'] = self.item_settings_widgets['debounce_time'].value()
+            if self.core_engine and getattr(self.core_engine, "is_monitoring", False):
+                self.core_engine.stopMonitoringRequested.emit()
         except Exception:
             pass
 
-        settings = current_ui_settings
-        # --------------------------------------------------------------
-        
-        ocr_conf_dict = settings.get('ocr_settings')
-        if ocr_conf_dict is None:
-            ocr_conf_dict = {}
-
-        config = OCRConfig()
-        if "config" in ocr_conf_dict:
-            cfg_data = ocr_conf_dict["config"]
-            config.scale = cfg_data.get("scale", 2.0)
-            config.threshold = cfg_data.get("threshold", 128)
-            config.invert = cfg_data.get("invert", False)
-            config.numeric_mode = cfg_data.get("numeric_mode", False)
-            config.lang = cfg_data.get("lang", "eng")
-        
-        roi = ocr_conf_dict.get('roi', None)
-        condition = ocr_conf_dict.get('condition', None)
-        
-        # 保存された有効状態を取得 (デフォルトはTrue)
-        is_enabled = ocr_conf_dict.get('enabled', True)
-
-        try:
-            # enabled引数とparent引数を正しく渡す
-            no_click_when_disabled = bool(ocr_conf_dict.get("no_click_when_disabled", False))
-            dialog = OCRSettingsDialog(
-                img,
-                config,
-                roi,
-                condition,
-                enabled=is_enabled,
-                no_click_when_disabled=no_click_when_disabled,
-                right_click=bool(settings.get("right_click", False)),
-                parent=self
-            )
-            dialog.set_parent_settings(settings) 
-            
-            if dialog.exec() == QDialog.Accepted:
-                # 4つの戻り値を正しくアンパック
-                new_conf, new_roi, new_condition, new_enabled, new_no_click_when_disabled, new_right_click = dialog.get_result()
-                
-                new_settings = {
-                    "enabled": new_enabled,
-                    "no_click_when_disabled": bool(new_no_click_when_disabled),
-                    'roi': new_roi,
-                    'config': {
-                        'scale': new_conf.scale,
-                        'threshold': new_conf.threshold,
-                        'invert': new_conf.invert,
-                        'lang': new_conf.lang,
-                        'numeric_mode': new_conf.numeric_mode
-                    },
-                    'condition': new_condition
-                }
-                settings['ocr_settings'] = new_settings
-                settings['right_click'] = bool(new_right_click)
-                
-                # ★ settingsに 'image_path' が含まれていない可能性があるので補完
-                if 'image_path' not in settings:
-                    settings['image_path'] = str(file_path)
-
-                self.config_manager.save_item_setting(file_path, settings)
-                
-                self.imageSettingsChanged.emit(settings)
-                
-                # アイコンの色更新のためにツリーを再描画
-                self.update_image_tree()
-                
-                self.logger.log(f"[INFO] OCR settings updated for {file_path.name}")
-                
-                # ★★★ 追加: 設定変更後にラベルを即時更新 ★★★
-                self.update_info_labels(settings)
-                
-        except Exception as e:
-            self.logger.log(f"[ERROR] Failed to open OCR dialog: {e}")
-            import traceback
-            traceback.print_exc()
+    # --- OCR設定ボタンハンドラ (修正版) ---
+    def _on_ocr_settings_button_clicked(self):
+        open_ocr_settings_dialog(self)
 
     # --- タイマー設定ボタンハンドラ ---
     def _on_timer_settings_button_clicked(self):
-        path, _ = self.get_selected_item_path()
-        if not path or Path(path).is_dir():
-            QMessageBox.information(self, "Timer Settings", "Please select an image item first from the list.")
-            return
-
-        file_path = Path(path)
-        current_settings = self.config_manager.load_item_setting(file_path)
-        
-        dialog = TimerSettingsDialog(file_path, file_path.name, current_settings, self.locale_manager, 
-                                     parent=self, 
-                                     core_engine=self.core_engine)
-        if dialog.exec():
-            timer_data, right_click = dialog.get_settings()
-            
-            current_settings['timer_mode'] = timer_data
-            current_settings['right_click'] = bool(right_click)
-            self.config_manager.save_item_setting(file_path, current_settings)
-            
-            self.logger.log(f"[INFO] Timer settings updated for {file_path.name}")
-            # 設定変更を通知して再読み込みなどをトリガー
-            self.imageSettingsChanged.emit(current_settings)
-            
-            # ★★★ 追加: 設定変更後にラベルを即時更新 ★★★
-            self.update_info_labels(current_settings)
+        open_timer_settings_dialog(self)
 
     def _emit_settings_for_save(self, *args):
-        if not hasattr(self, 'preview_mode_manager') or not self.core_engine: return
-            
-        path, _ = self.get_selected_item_path()
-        # ツリー選択がフォルダ/未選択になっていても、現在プレビュー中の画像があるなら保存できるようにする
-        target_path = None
-        try:
-            if self.core_engine.current_image_path and Path(self.core_engine.current_image_path).is_file():
-                target_path = self.core_engine.current_image_path
-            elif path and Path(path).is_file():
-                target_path = path
-            else:
-                return
-        except Exception:
-            return
-
-        settings = self.preview_mode_manager.get_settings()
-        # Core側の on_image_settings_changed は current_image_path と一致する必要があるため、原則それを使う
-        settings['image_path'] = self.core_engine.current_image_path or target_path
-
-        try:
-            settings['threshold'] = self.item_settings_widgets['threshold'].value()
-            settings['interval_time'] = self.item_settings_widgets['interval_time'].value()
-            settings['backup_time'] = self.item_settings_widgets['backup_time'].value()
-            settings['debounce_time'] = self.item_settings_widgets['debounce_time'].value()
-        except KeyError: return
-        except Exception: return
- 
-        self.imageSettingsChanged.emit(settings)
+        _emit_settings_for_save_impl(self)
                
     def _update_ui_from_preview_manager(self, settings: dict):
-        if hasattr(self, 'preview_mode_manager'):
-            self.preview_mode_manager._block_all_signals(True)
-        try:
-            self.item_settings_widgets['point_click'].setChecked(settings.get('point_click', True))
-            self.item_settings_widgets['range_click'].setChecked(settings.get('range_click', False))
-            self.item_settings_widgets['random_click'].setChecked(settings.get('random_click', False))
-            self.item_settings_widgets['backup_click'].setChecked(settings.get('backup_click', False))
-            self.item_settings_widgets['roi_enabled'].setChecked(settings.get('roi_enabled', False))
-            if 'right_click' in self.item_settings_widgets:
-                self.item_settings_widgets['right_click'].setChecked(bool(settings.get('right_click', False)))
-            
-            roi_mode = settings.get('roi_mode', 'fixed')
-            if roi_mode == 'variable':
-                self.item_settings_widgets['roi_mode_variable'].setChecked(True)
-            else:
-                self.item_settings_widgets['roi_mode_fixed'].setChecked(True)
-            
-        finally:
-            if hasattr(self, 'preview_mode_manager'):
-                self.preview_mode_manager._block_all_signals(False)
+        _update_ui_from_preview_manager_impl(self, settings)
 
     def update_rec_area_preview(self, cv_image: np.ndarray):
         if cv_image is None or cv_image.size == 0: self.rec_area_preview_label.set_pixmap(None); self.rec_area_preview_label.setText(self.locale_manager.tr("rec_area_preview_text")); return
@@ -1392,7 +1050,7 @@ class UIManager(QMainWindow):
         self.update_image_tree()
         if self.core_engine and self.core_engine.thread_pool:
              self.set_tree_enabled(False)
-             self.core_engine.thread_pool.submit(self.core_engine._build_template_cache).add_done_callback(self.core_engine._on_cache_build_done)
+             self.core_engine.thread_pool.submit(self.core_engine._build_template_cache).add_done_callback(self.core_engine._cache_builder.on_cache_build_done)
 
     def is_dark_mode(self):
         palette = self.palette()
@@ -1419,21 +1077,7 @@ class UIManager(QMainWindow):
         return {}
 
     def set_settings_from_data(self, settings_data):
-        self.item_settings_widgets['threshold'].blockSignals(True)
-        self.item_settings_widgets['interval_time'].blockSignals(True)
-        self.item_settings_widgets['backup_time'].blockSignals(True)
-        self.item_settings_widgets['debounce_time'].blockSignals(True)
-
-        try:
-            self.item_settings_widgets['threshold'].setValue(settings_data.get('threshold', 0.8) if settings_data else 0.8)
-            self.item_settings_widgets['interval_time'].setValue(settings_data.get('interval_time', 1.5) if settings_data else 1.5)
-            self.item_settings_widgets['backup_time'].setValue(settings_data.get('backup_time', 300.0) if settings_data else 300.0)
-            self.item_settings_widgets['debounce_time'].setValue(settings_data.get('debounce_time', 0.0) if settings_data else 0.0)
-        finally:
-            self.item_settings_widgets['threshold'].blockSignals(False)
-            self.item_settings_widgets['interval_time'].blockSignals(False)
-            self.item_settings_widgets['backup_time'].blockSignals(False)
-            self.item_settings_widgets['debounce_time'].blockSignals(False)
+        _set_settings_from_data_impl(self, settings_data)
   
     def on_app_settings_changed(self):
         if self.app_settings_panel:
@@ -1580,127 +1224,10 @@ class UIManager(QMainWindow):
         if self.core_engine: self.core_engine.process_apply_scale_prompt_response(apply_scale)
 
     def update_image_preview(self, cv_image: np.ndarray, settings_data: dict = None, reset_zoom: bool = True):
-        self.set_settings_from_data(settings_data)
-
-        image_or_splash_to_pass = cv_image
-        is_folder_or_no_data = (settings_data is None and (cv_image is None or cv_image.size == 0))
-
-        if is_folder_or_no_data:
-            if self.splash_pixmap:
-                image_or_splash_to_pass = self.splash_pixmap
-        
-        self.preview_mode_manager.update_preview(image_or_splash_to_pass, settings_data, reset_zoom)
-
-        if is_folder_or_no_data:
-            self.preview_mode_manager.sync_from_external(is_folder_or_no_data)
-
-        self.item_settings_group.setEnabled(not is_folder_or_no_data)
-        
-        # --- OCRボタンのスタイル・有効状態を切り替え ---
-        if self.ocr_settings_btn_main:
-            if is_folder_or_no_data:
-                self.ocr_settings_btn_main.setStyleSheet(self.STYLE_OCR_BTN_DISABLED)
-                self.ocr_settings_btn_main.setEnabled(False)
-                # アイコン色もグレーに
-                self.ocr_settings_btn_main.setIcon(self._safe_icon('fa5s.font', color='#9e9e9e'))
-            else:
-                self.ocr_settings_btn_main.setStyleSheet(self.STYLE_OCR_BTN_ENABLED)
-                self.ocr_settings_btn_main.setEnabled(True)
-                # アイコン色を白に
-                self.ocr_settings_btn_main.setIcon(self._safe_icon('fa5s.font', color='#ffffff'))
-        # ----------------------------------------------------
-
-        # --- タイマーボタンのスタイル・有効状態を切り替え ---
-        if self.timer_settings_btn_main:
-            if is_folder_or_no_data:
-                self.timer_settings_btn_main.setStyleSheet(self.STYLE_TIMER_BTN_DISABLED)
-                self.timer_settings_btn_main.setEnabled(False)
-                # アイコン色もグレーに
-                self.timer_settings_btn_main.setIcon(self._safe_icon('fa5s.clock', color='#9e9e9e'))
-            else:
-                self.timer_settings_btn_main.setStyleSheet(self.STYLE_TIMER_BTN_ENABLED)
-                self.timer_settings_btn_main.setEnabled(True)
-                # アイコン色を白に
-                self.timer_settings_btn_main.setIcon(self._safe_icon('fa5s.clock', color='#ffffff'))
-        # ----------------------------------------------------
-        
-        # ★★★ 追加: 情報ラベルの更新 ★★★
-        self.update_info_labels(settings_data)
+        _update_image_preview_impl(self, cv_image, settings_data=settings_data, reset_zoom=reset_zoom)
 
     def update_info_labels(self, settings):
-        """OCR情報ラベルとタイマー情報ラベルを更新する（バッジスタイル）"""
-        
-        # 共通のベーススタイル (角丸、パディング、フォント)
-        base_style = """
-            border-radius: 4px;
-            padding: 2px 8px;
-            margin-right: 8px;
-            font-weight: bold;
-            font-family: Consolas, monospace;
-        """
-        
-        # 無効時のスタイル (グレー背景)
-        disabled_style = base_style + """
-            background-color: #f5f5f5;
-            color: #bdbdbd;
-            border: 1px solid #e0e0e0;
-        """
-        
-        # OCR有効時のスタイル (薄い紫背景)
-        ocr_enabled_style = base_style + """
-            background-color: #f3e5f5;
-            color: #7b1fa2;
-            border: 1px solid #e1bee7;
-        """
-        
-        # タイマー有効時のスタイル (薄いオレンジ背景)
-        timer_enabled_style = base_style + """
-            background-color: #fff3e0;
-            color: #f57c00;
-            border: 1px solid #ffe0b2;
-        """
-        
-        # --- OCR Label ---
-        ocr_text = "----"
-        ocr_style = disabled_style
-        
-        if settings:
-            ocr_conf = settings.get('ocr_settings', {})
-            # OCRが有効、かつコンフィグが存在する場合
-            if ocr_conf and ocr_conf.get('enabled', False):
-                cond = ocr_conf.get('condition', {})
-                op = cond.get('operator', '')
-                val = str(cond.get('value', ''))
-                
-                # 表示用に短縮
-                if op == "Contains": op = "Cont."
-                elif op == "Equals": op = "Eq."
-                elif op == "Regex": op = "Reg."
-                
-                ocr_text = f"{op} {val}"
-                ocr_style = ocr_enabled_style
-        
-        if self.ocr_info_label:
-            self.ocr_info_label.setText(ocr_text)
-            self.ocr_info_label.setStyleSheet(ocr_style)
-
-        # --- Timer Label ---
-        timer_text = "--:--:--"
-        timer_style = disabled_style
-        
-        if settings:
-            timer_conf = settings.get('timer_mode', {})
-            if timer_conf and timer_conf.get('enabled', False):
-                actions = timer_conf.get('actions', [])
-                # ID1を探す
-                id1_action = next((a for a in actions if a.get('id') == 1), None)
-                if id1_action:
-                    timer_text = id1_action.get('display_time', "--:--:--")
-                    timer_style = timer_enabled_style
-        
-        if self.timer_info_label:
-            self.timer_info_label.setText(timer_text)
-            self.timer_info_label.setStyleSheet(timer_style)
+        _update_info_labels_impl(self, settings)
    
     def on_selection_process_started(self):
         if self.is_minimal_mode and self.floating_window: 
@@ -1733,20 +1260,11 @@ class UIManager(QMainWindow):
     
     @Slot()
     def on_capture_failed(self):
-        lm = self.locale_manager.tr
-        QMessageBox.warning(self, lm("warn_title_capture_failed"), lm("warn_message_capture_failed"))
+        _on_capture_failed_impl(self)
     
     @Slot(np.ndarray)
     def on_captured_image_ready_for_preview(self, captured_image):
-        self.pending_captured_image = captured_image
-        self.showNormal()
-        self.raise_()
-        self.activateWindow()
-        
-        self.switch_to_preview_tab()
-        self.update_image_preview(captured_image, settings_data=None)
-        QApplication.processEvents()
-        QTimer.singleShot(100, self._prompt_for_save_filename)
+        _on_captured_image_ready_for_preview_impl(self, captured_image)
     
     def _prompt_for_save_filename(self):
         if self.pending_captured_image is None:
@@ -1756,6 +1274,12 @@ class UIManager(QMainWindow):
 
         captured_image = self.pending_captured_image
         self.pending_captured_image = None
+        
+        # ダイアログ表示前にメインウィンドウを前面に表示
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+        QApplication.processEvents()
         
         try:
             file_name, ok = self._get_filename_from_user()

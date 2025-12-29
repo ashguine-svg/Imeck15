@@ -386,7 +386,9 @@ class TimerSettingsDialog(QDialog):
         
         self.item_path = item_path
         self.item_name = item_name
-        self.settings = current_settings.get('timer_mode', {})
+        # timer_mode が None の場合は空の辞書を使用
+        timer_mode = current_settings.get('timer_mode')
+        self.settings = timer_mode if isinstance(timer_mode, dict) else {}
         self._right_click = bool(current_settings.get('right_click', False))
         self.locale_manager = locale_manager
         self.core_engine = core_engine

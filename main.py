@@ -318,7 +318,8 @@ def main():
     ui_manager.set_tree_enabled(False)
     capture_manager.prime_mss()
     future = core_engine.thread_pool.submit(core_engine._build_template_cache)
-    future.add_done_callback(core_engine._on_cache_build_done)
+    # キャッシュ構築完了時の処理は CacheBuilder に集約（core.py のラッパは廃止済み）
+    future.add_done_callback(core_engine._cache_builder.on_cache_build_done)
     
     ui_manager.show()
 

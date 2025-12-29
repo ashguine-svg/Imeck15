@@ -191,7 +191,7 @@
     "log_backup_click_failed_not_found": "Backup click failed: '%s' not found.",
     "log_best_scale_found": "Optimal scale found: %s @ %sx (Confidence: %s)",
     "log_rec_area_set_rect": "Recognition area set to rectangle. Scale will not be calculated.",
-    "log_rec_area_set_window": "Please select a window... (ESC to cancel)",
+    "log_rec_area_set_window": "Please select a window... (Right-click to cancel)",
     "log_selection_cancelled": "Area selection cancelled.",
     "log_selection_cancelled_key": "Window selection cancelled by keyboard.",
     "log_window_invalid_rect": "Window area calculation results are invalid: (%s,%s,%s,%s).",
@@ -561,5 +561,8 @@
     "quick_timer_err_slots_full": "You can store up to 9 reservations.",
     "quick_timer_err_unexpected": "Unexpected error.",
     "quick_timer_usage_hint": "[How to]\n- While monitoring, do a near-simultaneous Right-click + Left-click on the target app to register a Quick Timer.\n- This feature becomes available after setting the recognition area.\n- Choose an ROI where the image does NOT change (changing areas may fail to match during the 1-minute pre-search).\n- Starting 1 minute before execution, it begins image matching; once matched, normal monitoring is temporarily paused and it waits.\n- At the scheduled time it clicks once, deletes the reservation, then returns to normal monitoring.",
-    "preview_zoom_hint": "Wheel to zoom"
+    "preview_zoom_hint": "Wheel to zoom",
+    "wayland_guide_title": "Wayland Detected",
+    "wayland_guide_text": "Wayland session detected.\n\nOn Wayland, apps are often not allowed to activate other windows or inject global input reliably.\nFor stable clicking, we recommend using an Xorg/X11 session.\n\nIf you stay on Wayland, please keep the target app in the foreground during monitoring.",
+    "wayland_guide_dont_show_again": "Don't show again"
 }

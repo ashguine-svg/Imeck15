@@ -191,7 +191,7 @@
     "log_backup_click_failed_not_found": "Kliknięcie zapasowe nie powiodło się: nie znaleziono '%s'.",
     "log_best_scale_found": "Znaleziono optymalną skalę: %s @ %sx (Pewność: %s)",
     "log_rec_area_set_rect": "Obszar rozpoznawania ustawiony na prostokąt. Skala nie zostanie obliczona.",
-    "log_rec_area_set_window": "Proszę wybrać okno... (ESC, aby anulować)",
+    "log_rec_area_set_window": "Proszę wybrać okno... (Prawy przycisk myszy, aby anulować)",
     "log_selection_cancelled": "Anulowano wybór obszaru.",
     "log_selection_cancelled_key": "Wybór okna anulowany przez klawiaturę.",
     "log_window_invalid_rect": "Wyniki obliczeń obszaru okna są nieprawidłowe: (%s,%s,%s,%s).",
@@ -561,5 +561,8 @@
     "quick_timer_err_slots_full": "Możesz zapisać maksymalnie 9 rezerwacji.",
     "quick_timer_err_unexpected": "Nieoczekiwany błąd.",
     "quick_timer_usage_hint": "[Jak używać]\n- Podczas monitorowania: prawie jednocześnie kliknij PPM + LPM w aplikacji docelowej, aby dodać szybki timer.\n- This feature becomes available after setting the recognition area.\n- Wybierz ROI bez zmian obrazu (zmienne obszary mogą nie dopasować się podczas wyszukiwania 1 minutę wcześniej).\n- 1 minutę przed wykonaniem zaczyna się dopasowanie; po dopasowaniu normalny monitoring jest wstrzymany i czeka.\n- O wyznaczonej godzinie następuje jedno kliknięcie, wpis jest usuwany i wraca normalny monitoring.",
-    "preview_zoom_hint": "Kółko do powiększania"
+    "preview_zoom_hint": "Kółko do powiększania",
+    "wayland_guide_title": "Wykryto Wayland",
+    "wayland_guide_text": "Wykryto sesję Wayland.\n\nW Wayland często nie można niezawodnie aktywować innych okien ani wstrzykiwać globalnego wejścia.\nDla stabilnych kliknięć zalecamy sesję Xorg/X11.\n\nJeśli pozostajesz na Wayland, trzymaj aplikację docelową na pierwszym planie podczas monitorowania.",
+    "wayland_guide_dont_show_again": "Nie pokazuj ponownie"
 }

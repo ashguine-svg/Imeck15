@@ -10,6 +10,7 @@ import random
 import psutil
 import subprocess
 import os
+import shutil
 from pathlib import Path
 
 # Windows API用のインポート (プラットフォーム依存)
@@ -64,6 +65,35 @@ class ActionManager:
         Returns:
             bool: アクティブ化に成功したかどうか。
         """
+        # --- Linux(X11) 対応: xdotool/wmctrl で対象ウィンドウを前面化 ---
+        # Wayland は原則フォーカス制御が制限されるため、ここではベストエフォートで諦める。
+        if sys.platform.startswith('linux'):
+            if not target_hwnd:
+                return True
+            if os.environ.get("WAYLAND_DISPLAY") or os.environ.get("XDG_SESSION_TYPE") == "wayland":
+                # Wayland では多くの環境で外部からの前面化がブロックされる
+                self.logger.log("[WARN] Wayland session detected. Cannot reliably activate target window on Linux.")
+                return False
+            try:
+                # xdotool があれば windowactivate/windowraise を優先
+                if shutil.which("xdotool"):
+                    subprocess.run(["xdotool", "windowactivate", "--sync", str(int(target_hwnd))],
+                                   check=False, timeout=1.5, capture_output=True, text=True)
+                    subprocess.run(["xdotool", "windowraise", str(int(target_hwnd))],
+                                   check=False, timeout=1.5, capture_output=True, text=True)
+                    return True
+                # wmctrl があれば -ia (window id) を試す（idは 0xHEX を要求することが多い）
+                if shutil.which("wmctrl"):
+                    wid_hex = hex(int(target_hwnd))
+                    subprocess.run(["wmctrl", "-ia", wid_hex],
+                                   check=False, timeout=1.5, capture_output=True, text=True)
+                    return True
+            except Exception as e:
+                self.logger.log(f"[WARN] Failed to activate target window on Linux: {e}")
+                return False
+            # ツールが無い場合は成功扱いにしてクリック自体は続行（座標クリックが通るケースもある）
+            return True
+
         if not (sys.platform == 'win32' and target_hwnd):
             # Windows以外、または対象HWNDなし(矩形選択など)はそのまま成功扱い
             return True

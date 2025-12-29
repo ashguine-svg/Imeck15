@@ -537,10 +537,17 @@ class MonitoringProcessor:
             path = target_match['path']
             settings = target_match.get('settings', {})
             ocr_settings = settings.get('ocr_settings')
-            ocr_required = OCR_AVAILABLE and ocr_settings and ocr_settings.get('enabled', False)
+            # NOTE: `and` チェーンだと None / {} がそのまま返り、ログが `ocr_required=None` 等になって誤解を招く。
+            # ここは「OCRが必須かどうか」を明確に bool で扱う。
+            ocr_required = bool(OCR_AVAILABLE and isinstance(ocr_settings, dict) and ocr_settings.get('enabled', False))
 
-            # デバッグ: 評価対象の状態を出力（トグルで制御）
-            if ENABLE_OCR_TRACE_LOG:
+            # デバッグ: OCRに関与する場合のみ状態を出力（トグルで制御）
+            # - OCR不要の画像まで `[OCR TRACE]` が出ると誤解を招くため、OCR必須/結果待ち/結果ありの場合に限定する
+            if ENABLE_OCR_TRACE_LOG and (
+                ocr_required
+                or (path in self.core.ocr_results)
+                or (path in self.core.ocr_futures)
+            ):
                 try:
                     has_result = path in self.core.ocr_results
                     has_future = path in self.core.ocr_futures
@@ -648,7 +655,7 @@ class MonitoringProcessor:
         try:
             settings = target_match.get('settings', {})
             ocr_settings = settings.get('ocr_settings')
-            ocr_required = OCR_AVAILABLE and ocr_settings and ocr_settings.get('enabled', False)
+            ocr_required = bool(OCR_AVAILABLE and isinstance(ocr_settings, dict) and ocr_settings.get('enabled', False))
             if ocr_required and not target_match.get('ocr_success', False):
                 self.logger.log(f"[OCR GUARD SKIP] path={Path(target_match.get('path',''))} required={ocr_required} success_flag={target_match.get('ocr_success', False)}")
                 return

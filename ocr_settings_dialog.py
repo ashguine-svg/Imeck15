@@ -394,7 +394,7 @@ class ProcessedImageLabel(QLabel):
         painter.drawPixmap(x, y, scaled)
 
 class OCRSettingsDialog(QDialog):
-    def __init__(self, parent_image, current_config: OCRConfig, current_roi=None, current_condition=None, enabled=True, no_click_when_disabled: bool = False, right_click: bool = False, parent=None):
+    def __init__(self, parent_image, current_config: OCRConfig, current_roi=None, current_condition=None, enabled=True, no_click_when_disabled: bool = False, parent=None):
         super().__init__(parent)
         
         self._last_input_click_time = 0
@@ -416,7 +416,6 @@ class OCRSettingsDialog(QDialog):
         self.condition = current_condition if current_condition else {"operator": ">=", "value": 0}
         self.enabled = enabled
         self.no_click_when_disabled = bool(no_click_when_disabled)
-        self.right_click = bool(right_click)
         
         self.ocr_manager = OCRManager()
         self.parent_item_settings = {}
@@ -658,11 +657,6 @@ class OCRSettingsDialog(QDialog):
         self.chk_no_click_when_disabled = QCheckBox(self.tr("ocr_chk_no_click_when_disabled"))
         self.chk_no_click_when_disabled.setChecked(self.no_click_when_disabled)
         bottom_bar_layout.addWidget(self.chk_no_click_when_disabled)
-
-        # 右クリックON（画像ごと）
-        self.chk_right_click = QCheckBox(self.tr("item_setting_right_click"))
-        self.chk_right_click.setChecked(self.right_click)
-        bottom_bar_layout.addWidget(self.chk_right_click)
 
         self.btn_help = QPushButton("?")
         self.btn_help.setFixedWidth(30)
@@ -992,7 +986,7 @@ class OCRSettingsDialog(QDialog):
                     operator_value = "Contains"  # デフォルト値
         
         condition_data = {"operator": operator_value, "value": final_target_val}
-        return self.config, self.roi, condition_data, self.chk_enable.isChecked(), self.chk_no_click_when_disabled.isChecked(), self.chk_right_click.isChecked()
+        return self.config, self.roi, condition_data, self.chk_enable.isChecked(), self.chk_no_click_when_disabled.isChecked()
 
     @Slot()
     def show_tesseract_guide(self):

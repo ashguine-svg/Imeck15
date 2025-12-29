@@ -496,12 +496,31 @@ class LeftPanel(QObject):
 
     def _open_timer_settings(self, path):
         current_settings = self.config_manager.load_item_setting(path)
+        # 設定操作前に監視停止（誤クリック事故防止）
+        try:
+            if self.core_engine and getattr(self.core_engine, "is_monitoring", False):
+                self.core_engine.stopMonitoringRequested.emit()
+        except Exception:
+            pass
         
-        dialog = TimerSettingsDialog(path, path.name, current_settings, self.locale_manager, 
-                                     parent=self.ui_manager, 
-                                     core_engine=self.core_engine)
-        if dialog.exec():
-            timer_data, right_click = dialog.get_settings()
+        cm = self.core_engine.temporary_listener_pause() if self.core_engine else None
+        if cm:
+            with cm:
+                dialog = TimerSettingsDialog(path, path.name, current_settings, self.locale_manager, 
+                                             parent=self.ui_manager, 
+                                             core_engine=self.core_engine)
+                if dialog.exec():
+                    timer_data, right_click = dialog.get_settings()
+                else:
+                    return
+        else:
+            dialog = TimerSettingsDialog(path, path.name, current_settings, self.locale_manager, 
+                                         parent=self.ui_manager, 
+                                         core_engine=self.core_engine)
+            if dialog.exec():
+                timer_data, right_click = dialog.get_settings()
+            else:
+                return
             
             current_settings['timer_mode'] = timer_data
             current_settings['right_click'] = bool(right_click)
@@ -513,6 +532,13 @@ class LeftPanel(QObject):
     def _open_ocr_settings(self, path):
         """OCR設定ダイアログを開く"""
         template_image = None
+
+        # 設定操作前に監視停止（誤クリック事故防止）
+        try:
+            if self.core_engine and getattr(self.core_engine, "is_monitoring", False):
+                self.core_engine.stopMonitoringRequested.emit()
+        except Exception:
+            pass
         
         if self.core_engine and self.core_engine.current_image_path == str(path):
             template_image = self.core_engine.current_image_mat
@@ -551,40 +577,68 @@ class LeftPanel(QObject):
         # 追加: OCR OFF時にクリックしない（誤クリック防止）
         no_click_when_disabled = bool(saved_ocr_settings.get("no_click_when_disabled", False))
         right_click = bool(current_settings.get("right_click", False))
-        dialog = OCRSettingsDialog(
-            template_image,
-            config,
-            current_roi,
-            current_condition,
-            enabled=is_enabled,
-            no_click_when_disabled=no_click_when_disabled,
-            right_click=right_click,
-            parent=self.ui_manager
-        )
+        cm = self.core_engine.temporary_listener_pause() if self.core_engine else None
+        if cm:
+            with cm:
+                dialog = OCRSettingsDialog(
+                    template_image,
+                    config,
+                    current_roi,
+                    current_condition,
+                    enabled=is_enabled,
+                    no_click_when_disabled=no_click_when_disabled,
+                    parent=self.ui_manager
+                )
+                
+                if dialog.exec():
+                    new_config, new_roi, new_condition, new_enabled, new_no_click_when_disabled = dialog.get_result()
+                else:
+                    return
+        else:
+            dialog = OCRSettingsDialog(
+                template_image,
+                config,
+                current_roi,
+                current_condition,
+                enabled=is_enabled,
+                no_click_when_disabled=no_click_when_disabled,
+                parent=self.ui_manager
+            )
+            
+            if dialog.exec():
+                new_config, new_roi, new_condition, new_enabled, new_no_click_when_disabled = dialog.get_result()
+            else:
+                return
         
-        if dialog.exec():
-            new_config, new_roi, new_condition, new_enabled, new_no_click_when_disabled, new_right_click = dialog.get_result()
-            
-            ocr_data = {
-                "enabled": new_enabled,
-                "no_click_when_disabled": bool(new_no_click_when_disabled),
-                "roi": new_roi,
-                "config": {
-                    "scale": new_config.scale,
-                    "threshold": new_config.threshold,
-                    "invert": new_config.invert,
-                    "numeric_mode": new_config.numeric_mode,
-                    "lang": new_config.lang
-                },
-                "condition": new_condition
-            }
-            
-            current_settings['ocr_settings'] = ocr_data
-            current_settings['right_click'] = bool(new_right_click)
-            self.config_manager.save_item_setting(path, current_settings)
-            
-            self.logger.log(f"[INFO] OCR settings saved for {path.name}")
-            self.update_image_tree()
+        # 設定保存処理（with cm: ブロックの外でも実行されるように統一）
+        ocr_data = {
+            "enabled": new_enabled,
+            "no_click_when_disabled": bool(new_no_click_when_disabled),
+            "roi": new_roi,
+            "config": {
+                "scale": new_config.scale,
+                "threshold": new_config.threshold,
+                "invert": new_config.invert,
+                "numeric_mode": new_config.numeric_mode,
+                "lang": new_config.lang
+            },
+            "condition": new_condition
+        }
+        
+        current_settings['ocr_settings'] = ocr_data
+        # 右クリック設定は「画像クリック設定」側で管理（OCR設定とは分離）
+        self.config_manager.save_item_setting(path, current_settings)
+        
+        # 設定変更を通知
+        if 'image_path' not in current_settings:
+            current_settings['image_path'] = str(path)
+        self.ui_manager.imageSettingsChanged.emit(current_settings)
+        
+        # アイコンの色更新のためにツリーを再描画
+        self.update_image_tree()
+        
+        self.logger.log(f"[INFO] OCR settings saved for {path.name}")
+        self.ui_manager.update_info_labels(current_settings)
 
     def load_images_dialog(self):
         lm = self.locale_manager.tr

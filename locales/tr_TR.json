@@ -191,7 +191,7 @@
     "log_backup_click_failed_not_found": "Yedek tıklama başarısız: '%s' bulunamadı.",
     "log_best_scale_found": "En uygun ölçek bulundu: %s @ %sx (Güven: %s)",
     "log_rec_area_set_rect": "Tanıma alanı dikdörtgen olarak ayarlandı. Ölçek hesaplanmayacak.",
-    "log_rec_area_set_window": "Lütfen bir pencere seçin... (İptal etmek için ESC)",
+    "log_rec_area_set_window": "Lütfen bir pencere seçin... (İptal etmek için sağ tıklayın)",
     "log_selection_cancelled": "Alan seçimi iptal edildi.",
     "log_selection_cancelled_key": "Pencere seçimi klavye ile iptal edildi.",
     "log_window_invalid_rect": "Pencere alanı hesaplama sonuçları geçersiz: (%s,%s,%s,%s).",
@@ -561,5 +561,8 @@
     "quick_timer_err_slots_full": "En fazla 9 rezervasyon saklayabilirsiniz.",
     "quick_timer_err_unexpected": "Beklenmeyen hata.",
     "quick_timer_usage_hint": "[Kullanım]\n- İzleme sırasında: hedef uygulama üzerinde neredeyse aynı anda sağ tık + sol tık yaparak Hızlı Zamanlayıcı kaydı oluşturun.\n- This feature becomes available after setting the recognition area.\n- Görüntünün değişmediği bir ROI seçin (değişen alanlar 1 dakika önceki aramada eşleşmeyebilir).\n- Çalıştırmadan 1 dakika önce görüntü eşleştirme başlar; eşleşince normal izleme geçici olarak durur ve bekler.\n- Planlanan zamanda bir kez tıklar, kaydı siler ve normal izlemeye döner.",
-    "preview_zoom_hint": "Yakınlaştırmak için tekerlek"
+    "preview_zoom_hint": "Yakınlaştırmak için tekerlek",
+    "wayland_guide_title": "Wayland algılandı",
+    "wayland_guide_text": "Wayland oturumu algılandı.\n\nWayland üzerinde diğer pencereleri etkinleştirmek veya küresel girişi güvenilir şekilde enjekte etmek çoğu zaman kısıtlıdır.\nKararlı tıklama için Xorg/X11 oturumu önerilir.\n\nWayland kullanmaya devam ederseniz, izleme sırasında hedef uygulamayı önde tutun.",
+    "wayland_guide_dont_show_again": "Bir daha gösterme"
 }

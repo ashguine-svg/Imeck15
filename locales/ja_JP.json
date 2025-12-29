@@ -190,7 +190,7 @@
     "log_backup_click_failed_not_found": "バックアップクリック失敗: '%s' が見つかりませんでした。",
     "log_best_scale_found": "最適スケール発見: %s @ %s倍 (信頼度: %s)",
     "log_rec_area_set_rect": "認識範囲を四角指定に設定しました。スケールは計算されません。",
-    "log_rec_area_set_window": "ウィンドウを選択してください... (ESCキーでキャンセル)",
+    "log_rec_area_set_window": "ウィンドウを選択してください... (右クリックでキャンセル)",
     "log_selection_cancelled": "範囲選択がキャンセルされました。",
     "log_selection_cancelled_key": "キーボードによりウィンドウ選択がキャンセルされました。",
     "log_window_invalid_rect": "ウィンドウ領域の計算結果が無効です: (%s,%s,%s,%s)。",
@@ -559,5 +559,8 @@
     "quick_timer_err_slots_full": "クイックタイマーは最大9件までです。",
     "quick_timer_err_unexpected": "予期せぬエラーが発生しました。",
     "quick_timer_usage_hint": "【使い方】\n・監視中に、対象アプリ上で「右クリック＋左クリック（ほぼ同時）」するとクイックタイマーを登録できます。\n・この機能は認識範囲設定後に有効になります。\n・ROIは「画面が変化しない場所」を選んでください（変化する場所だと1分前の画像検索でマッチしにくくなります）。\n・実行の1分前からROIの画像検索を開始し、マッチすると通常の画像認識を一時停止して待機します。\n・指定時刻にクリック実行後、予約は自動で削除され、通常の監視ループに戻ります。",
-    "preview_zoom_hint": "ホイールで拡大/縮小"
+    "preview_zoom_hint": "ホイールで拡大/縮小",
+    "wayland_guide_title": "Waylandが検出されました",
+    "wayland_guide_text": "Waylandセッションが検出されました。\n\nWaylandでは、他アプリのウィンドウを前面化したり、グローバル入力を注入したりすることが制限される場合があります。\n安定したクリックのため、可能であればXorg/X11セッションでの使用を推奨します。\n\nWaylandのまま使用する場合は、監視中は対象アプリを最前面にしてください。",
+    "wayland_guide_dont_show_again": "今後表示しない"
 }

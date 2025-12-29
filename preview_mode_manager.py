@@ -124,6 +124,9 @@ class PreviewModeManager(QObject):
             # UI操作後にも描画モードとUI状態を同期
             self._determine_and_set_drawing_mode()
             self._update_enabled_state()
+            
+            # プレビューラベルの描画データを更新（前の矩形や赤点を消すため）
+            self.preview_label.set_drawing_data(self.settings)
 
 
     def handle_preview_data(self, data: dict):

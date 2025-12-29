@@ -364,6 +364,21 @@ class DraggableTreeWidget(QTreeWidget):
             if not src_path_str: continue
             
             src_path = Path(src_path_str)
+            
+            # 削除されたアイテムが存在しないかチェック
+            if not src_path.exists():
+                # 削除されたアイテムを移動しようとしている場合はエラー
+                lm = self.config_manager.logger.locale_manager
+                err_title = lm.tr("error_title_move_item_failed")
+                if err_title == "error_title_move_item_failed": err_title = "Move Error"
+                
+                err_msg = lm.tr("log_move_item_error_not_exists")
+                if err_msg == "log_move_item_error_not_exists": err_msg = f"Item '{src_path.name}' has been deleted."
+                
+                QMessageBox.warning(self, err_title, err_msg)
+                event.ignore()
+                return
+            
             target_path = dest_dir_path / src_path.name
             
             if target_path.exists():
@@ -447,47 +462,117 @@ class DraggableTreeWidget(QTreeWidget):
             moved_item = items_moved_list[0]  # 最初の移動アイテムを基準にする
             
             # アイテムの位置を取得（少し待ってから取得するため、QTimerで遅延実行）
-            QTimer.singleShot(50, lambda: self._scroll_to_moved_item(moved_item))
+            # アイテムが削除されていないかチェックするため、パスを保存して後で検索
+            moved_item_path = moved_item.data(0, Qt.UserRole) if moved_item else None
+            if moved_item_path:
+                QTimer.singleShot(50, lambda: self._scroll_to_moved_item_by_path(moved_item_path))
         
         event.accept()
+    
+    def _scroll_to_moved_item_by_path(self, item_path):
+        """パスから移動したアイテムを検索してスクロールします。"""
+        if not item_path:
+            return
+        
+        # パスからアイテムを検索
+        item = self._find_item_by_path(item_path)
+        if not item:
+            return
+        
+        self._scroll_to_moved_item(item)
+    
+    def _find_item_by_path(self, path_str):
+        """パス文字列からツリーアイテムを検索します。"""
+        def search_item(parent_item):
+            if parent_item is None:
+                # トップレベルアイテムを検索
+                for i in range(self.topLevelItemCount()):
+                    item = self.topLevelItem(i)
+                    if item and item.data(0, Qt.UserRole) == path_str:
+                        return item
+                    # 子アイテムも再帰的に検索
+                    if item:
+                        result = search_item(item)
+                        if result:
+                            return result
+            else:
+                # 子アイテムを検索
+                for i in range(parent_item.childCount()):
+                    item = parent_item.child(i)
+                    if item and item.data(0, Qt.UserRole) == path_str:
+                        return item
+                    # 孫アイテムも再帰的に検索
+                    if item:
+                        result = search_item(item)
+                        if result:
+                            return result
+            return None
+        
+        return search_item(None)
     
     def _scroll_to_moved_item(self, item):
         """移動したアイテムを適切な位置にスクロールします。"""
         if not item:
             return
         
-        # アイテムの位置を取得
-        item_rect = self.visualItemRect(item)
-        if not item_rect.isValid():
-            # アイテムが見えない場合は単純にスクロール
-            self.scrollToItem(item, QAbstractItemView.PositionAtCenter)
-            return
-        
-        # ビューポートの位置とサイズを取得
-        viewport_rect = self.viewport().rect()
-        viewport_top = viewport_rect.top()
-        viewport_bottom = viewport_rect.bottom()
-        viewport_height = viewport_rect.height()
-        viewport_center_y = viewport_top + viewport_height // 2
-        
-        # アイテムの中心位置
-        item_center_y = item_rect.center().y()
-        
-        # ビューポート内でのアイテムの相対位置を計算
-        item_top_relative = item_rect.top() - viewport_top
-        item_bottom_relative = item_rect.bottom() - viewport_top
-        
-        # 中心部分の範囲（ビューポートの30%〜70%の範囲）
-        center_top_threshold = viewport_height * 0.3
-        center_bottom_threshold = viewport_height * 0.7
-        
-        # アイテムが中心部分にあるかチェック
-        if item_top_relative >= center_top_threshold and item_bottom_relative <= center_bottom_threshold:
-            # 中心部分にある場合：中心にスクロール
-            self.scrollToItem(item, QAbstractItemView.PositionAtCenter)
-        elif item_top_relative < center_top_threshold:
-            # 上部分にある場合：スクロールバーが上に来るように（アイテムを上端に）
-            self.scrollToItem(item, QAbstractItemView.PositionAtTop)
-        else:
-            # 下部分にある場合：スクロールバーが下に来るように（アイテムを下端に）
-            self.scrollToItem(item, QAbstractItemView.PositionAtBottom)
+        try:
+            # アイテムが有効かチェック（C++オブジェクトが削除されていないか）
+            # visualItemRect を呼び出す前に、アイテムがツリーに存在するか確認
+            parent = item.parent()
+            if parent:
+                # 親アイテムの子リストに存在するか確認
+                found = False
+                for i in range(parent.childCount()):
+                    if parent.child(i) == item:
+                        found = True
+                        break
+                if not found:
+                    return
+            else:
+                # トップレベルアイテムか確認
+                found = False
+                for i in range(self.topLevelItemCount()):
+                    if self.topLevelItem(i) == item:
+                        found = True
+                        break
+                if not found:
+                    return
+            
+            # アイテムの位置を取得
+            item_rect = self.visualItemRect(item)
+            if not item_rect.isValid():
+                # アイテムが見えない場合は単純にスクロール
+                self.scrollToItem(item, QAbstractItemView.PositionAtCenter)
+                return
+            
+            # ビューポートの位置とサイズを取得
+            viewport_rect = self.viewport().rect()
+            viewport_top = viewport_rect.top()
+            viewport_bottom = viewport_rect.bottom()
+            viewport_height = viewport_rect.height()
+            viewport_center_y = viewport_top + viewport_height // 2
+            
+            # アイテムの中心位置
+            item_center_y = item_rect.center().y()
+            
+            # ビューポート内でのアイテムの相対位置を計算
+            item_top_relative = item_rect.top() - viewport_top
+            item_bottom_relative = item_rect.bottom() - viewport_top
+            
+            # 中心部分の範囲（ビューポートの30%〜70%の範囲）
+            center_top_threshold = viewport_height * 0.3
+            center_bottom_threshold = viewport_height * 0.7
+            
+            # アイテムが中心部分にあるかチェック
+            if item_top_relative >= center_top_threshold and item_bottom_relative <= center_bottom_threshold:
+                # 中心部分にある場合：中心にスクロール
+                self.scrollToItem(item, QAbstractItemView.PositionAtCenter)
+            elif item_top_relative < center_top_threshold:
+                # 上部分にある場合：スクロールバーが上に来るように（アイテムを上端に）
+                self.scrollToItem(item, QAbstractItemView.PositionAtTop)
+            else:
+                # 下部分にある場合：スクロールバーが下に来るように（アイテムを下端に）
+                self.scrollToItem(item, QAbstractItemView.PositionAtBottom)
+        except RuntimeError:
+            # C++オブジェクトが既に削除されている場合は無視
+            pass

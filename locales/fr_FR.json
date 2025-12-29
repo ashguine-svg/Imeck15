@@ -191,7 +191,7 @@
     "log_backup_click_failed_not_found": "Échec du clic de secours : '%s' non trouvé.",
     "log_best_scale_found": "Échelle optimale trouvée : %s @ %sx (Confiance : %s)",
     "log_rec_area_set_rect": "Zone de reconnaissance définie sur rectangle. L'échelle ne sera pas calculée.",
-    "log_rec_area_set_window": "Veuillez sélectionner une fenêtre... (Échap pour annuler)",
+    "log_rec_area_set_window": "Veuillez sélectionner une fenêtre... (Clic droit pour annuler)",
     "log_selection_cancelled": "Sélection de zone annulée.",
     "log_selection_cancelled_key": "Sélection de fenêtre annulée par le clavier.",
     "log_window_invalid_rect": "Les résultats du calcul de la zone de la fenêtre sont invalides : (%s,%s,%s,%s).",
@@ -561,5 +561,8 @@
     "quick_timer_err_slots_full": "Vous pouvez enregistrer jusqu'à 9 réservations.",
     "quick_timer_err_unexpected": "Erreur inattendue.",
     "quick_timer_usage_hint": "[Mode d'emploi]\n- Pendant la surveillance : clic droit + clic gauche quasi simultanés sur l'application cible pour enregistrer un minuteur rapide.\n- This feature becomes available after setting the recognition area.\n- Choisissez un ROI où l'image ne change pas (les zones changeantes peuvent échouer lors de la recherche 1 minute avant).\n- 1 minute avant l'exécution, la recherche d'image démarre ; si ça match, la surveillance normale est mise en pause et attend.\n- À l'heure prévue, il clique une fois, supprime la réservation puis reprend la surveillance normale.",
-    "preview_zoom_hint": "Roulette pour zoomer"
+    "preview_zoom_hint": "Roulette pour zoomer",
+    "wayland_guide_title": "Wayland détecté",
+    "wayland_guide_text": "Session Wayland détectée.\n\nSous Wayland, il est souvent impossible d’activer au premier plan d’autres fenêtres ou d’injecter des entrées globales de manière fiable.\nPour des clics stables, nous recommandons une session Xorg/X11.\n\nSi vous restez sur Wayland, gardez l’application cible au premier plan pendant la surveillance.",
+    "wayland_guide_dont_show_again": "Ne plus afficher"
 }

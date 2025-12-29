@@ -561,5 +561,8 @@
     "quick_timer_err_slots_full": "Du kan gemme op til 9 reservationer.",
     "quick_timer_err_unexpected": "Uventet fejl.",
     "quick_timer_usage_hint": "[Sådan]\n- Under overvågning: næsten samtidig højreklik + venstreklik i målappen for at registrere en hurtig-timer.\n- This feature becomes available after setting the recognition area.\n- Vælg en ROI hvor billedet ikke ændrer sig (områder der ændrer sig kan fejle i 1-minuts for-søg).\n- 1 minut før udførsel starter billedmatchning; ved match pauses normal overvågning og venter.\n- På planlagt tidspunkt klikkes der én gang, reservationen slettes, og normal overvågning fortsætter.",
-    "preview_zoom_hint": "Hjul til zoom"
+    "preview_zoom_hint": "Hjul til zoom",
+    "wayland_guide_title": "Wayland registreret",
+    "wayland_guide_text": "Wayland-session registreret.\n\nPå Wayland er det ofte ikke tilladt at aktivere andre vinduer eller injicere global input pålideligt.\nFor stabilt klik anbefaler vi en Xorg/X11-session.\n\nHvis du bliver på Wayland, så hold mål-appen i forgrunden under overvågning.",
+    "wayland_guide_dont_show_again": "Vis ikke igen"
 }

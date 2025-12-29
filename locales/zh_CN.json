@@ -560,5 +560,8 @@
     "quick_timer_err_slots_full": "最多可保存 9 条预约。",
     "quick_timer_err_unexpected": "发生未知错误。",
     "quick_timer_usage_hint": "[使用方法]\n- 监控中在目标应用上几乎同时右键点击 + 左键点击即可添加快捷计时器。\n- This feature becomes available after setting the recognition area.\n- 请选择图像不会变化的ROI（变化区域可能在提前1分钟搜索时难以匹配）。\n- 执行前1分钟开始图像匹配；一旦匹配成功，会暂时暂停普通监控并等待。\n- 到达预定时间点击一次后自动删除预约，并返回普通监控。",
-    "preview_zoom_hint": "滚轮缩放"
+    "preview_zoom_hint": "滚轮缩放",
+    "wayland_guide_title": "检测到 Wayland",
+    "wayland_guide_text": "检测到 Wayland 会话。\n\n在 Wayland 下，通常会限制将其他窗口置前或可靠地注入全局输入。\n为获得稳定点击，建议使用 Xorg/X11 会话。\n\n如果继续使用 Wayland，请在监控期间保持目标应用位于前台。",
+    "wayland_guide_dont_show_again": "不再提示"
 }

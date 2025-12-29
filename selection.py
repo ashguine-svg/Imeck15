@@ -108,8 +108,25 @@ class SelectionOverlay(QWidget):
 
 
 class WindowSelectionListener(mouse.Listener):
-    def __init__(self, callback):
+    """
+    ウィンドウ選択用のグローバルマウスリスナー。
+    Linuxではグローバルキーボードフックが環境依存で動かないケースがあるため、
+    右クリックでキャンセルできるようにする。
+    """
+    def __init__(self, callback, cancel_callback=None):
         super().__init__(on_click=self.on_click)
         self.callback = callback
+        self.cancel_callback = cancel_callback
+
     def on_click(self, x, y, button, pressed):
-        if pressed and button == mouse.Button.left: self.callback(x, y); return False
+        if not pressed:
+            return
+        if button == mouse.Button.left:
+            self.callback(x, y)
+            return False
+        # 中クリックはクイックキャプチャ等に割り当てられていることが多いため、キャンセルは右クリックのみに限定
+        if self.cancel_callback and button == mouse.Button.right:
+            try:
+                self.cancel_callback()
+            finally:
+                return False

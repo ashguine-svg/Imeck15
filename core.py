@@ -32,6 +32,13 @@ from core_monitoring import MonitoringProcessor
 from core_selection import SelectionHandler
 
 from custom_input_dialog import ask_string_custom
+from input_gestures import GlobalMouseGestureHandler
+from settings_model import normalize_image_item_settings
+from timer_schedule import build_timer_schedule_cache
+from monitoring_controller import MonitoringController
+from cache_builder import CacheBuilder
+from quick_timer_manager import QuickTimerManager
+from lifecycle_manager import LifecycleManager
 
 if sys.platform == 'win32':
     try:
@@ -63,7 +70,10 @@ class CoreEngine(QObject):
     selectionProcessFinished = Signal()
     _areaSelectedForProcessing = Signal(tuple)
     fpsUpdated = Signal(float)
-    cacheBuildFinished = Signal(bool) 
+    cacheBuildFinished = Signal(bool)
+    _rebuildCacheAfterDeleteRequested = Signal()  # 削除後のキャッシュ再構築リクエスト
+    _deleteRebuildCompleteRequested = Signal(object)  # 削除時のキャッシュ再構築完了リクエスト（futureを渡す）
+    _moveCompleteRequested = Signal(object)  # ファイル移動完了リクエスト（futureを渡す）
     startMonitoringRequested = Signal()
     stopMonitoringRequested = Signal()
     bestScaleFound = Signal(str, float)
@@ -97,6 +107,17 @@ class CoreEngine(QObject):
         self.action_manager = ActionManager(self.logger)
         self.template_manager = TemplateManager(self.config_manager, self.logger)
         self.environment_tracker = EnvironmentTracker(self, self.config_manager, self.logger)
+        # キャッシュ構築フローを外出し（リファクタ: B）
+        self._cache_builder = CacheBuilder(self)
+        # ライフサイクル管理を外出し（リファクタ: D）
+        self._lifecycle_manager = LifecycleManager(self)
+        
+        # ★★★ 削除後のキャッシュ再構築シグナル接続（メインスレッドで確実に実行） ★★★
+        self._rebuildCacheAfterDeleteRequested.connect(self._rebuild_cache_after_delete)
+        # ★★★ 削除時のキャッシュ再構築完了シグナル接続（メインスレッドで確実に実行） ★★★
+        self._deleteRebuildCompleteRequested.connect(self._on_delete_rebuild_complete)
+        # ★★★ ファイル移動完了シグナル接続（メインスレッドで確実に実行） ★★★
+        self._moveCompleteRequested.connect(self._on_move_complete)
         
         cpu_cores = os.cpu_count() or 8
         max_thread_limit = 4 
@@ -130,13 +151,26 @@ class CoreEngine(QObject):
         self.normal_template_cache = {}
         self.backup_template_cache = {}
         
-        self.timer_session_active = False 
+        self.timer_session_active = False
+        
+        # 順序変更処理の重複実行防止フラグ
+        self._order_change_processing = False
+        
+        # キャッシュ再構築が必要かどうかのフラグ（監視開始時にまとめて再構築）
+        self._cache_rebuild_pending = False
+        
+        # ファイル移動エラーメッセージ（メインスレッドで表示するため、スレッドセーフなロック付き）
+        self._move_error_message = None
+        self._move_error_lock = threading.Lock()
+        
         self.timer_schedule_cache = {}
         
         self.folder_cooldowns = {}
 
         self.state = None
         self.state_lock = threading.RLock()
+        # 監視開始/停止 + state遷移を外出し（リファクタ）
+        self._monitoring_controller = MonitoringController(self)
 
         self._last_clicked_path = None
 
@@ -158,23 +192,21 @@ class CoreEngine(QObject):
         # OCR処理開始時刻記録用（処理時間計測用）
         self.ocr_start_times = {}
         
-        self.click_timer = None
-        self.last_right_click_time = 0
-        self.right_click_count = 0
+        # 右クリック連打判定（GlobalMouseGestureHandlerが使用）
         self.CLICK_INTERVAL = 0.3
 
         self.mouse_listener = None
-        # クイックタイマー起動用（左右同時クリック判定）
-        self._qt_last_left_down = None   # (t, x, y)
-        self._qt_last_right_down = None  # (t, x, y)
+        # グローバルマウス入力 → ジェスチャ判定を分離（リファクタ第1段階）
+        self._mouse_gestures = GlobalMouseGestureHandler(self)
         self._start_global_mouse_listener()
 
         self._showUiSignal.connect(self._show_ui_safe)
         
         self._areaSelectedForProcessing.connect(self.selection_handler.handle_area_selection)
         
-        self.startMonitoringRequested.connect(self.start_monitoring)
-        self.stopMonitoringRequested.connect(self.stop_monitoring)
+        # 監視開始/停止の入口を controller に集約（A-1: 停止忘れ/入口分散を防ぐ）
+        self.startMonitoringRequested.connect(self._monitoring_controller.start_monitoring)
+        self.stopMonitoringRequested.connect(self._monitoring_controller.stop_monitoring)
 
         self.quickCaptureRequested.connect(self._perform_quick_capture)
         
@@ -198,8 +230,9 @@ class CoreEngine(QObject):
         self.screen_stability_hashes = deque(maxlen=3)
 
         # クイックタイマー予約（最大9件）
-        # slot(int:1-9) -> entry(dict)
-        self.quick_timers = {}
+        self._quick_timer_manager = QuickTimerManager(self)
+        # 互換性維持: monitoring_states 等が dict 参照しているため残す（中身は manager が所有）
+        self.quick_timers = self._quick_timer_manager.timers
         self.latest_frame_for_hash = None
 
         self.last_successful_click_time = 0
@@ -292,10 +325,7 @@ class CoreEngine(QObject):
         self.monitoring_processor.execute_click(*args)
 
     def transition_to(self, new_state):
-        with self.state_lock:
-            self.state = new_state
-        self._last_clicked_path = None
-        self.match_detected_at.clear()
+        self._monitoring_controller.transition_to(new_state)
         
     def transition_to_sequence_priority(self, ordered_paths, interval_sec):
         new_state = SequencePriorityState(self, ordered_paths, interval_sec)
@@ -319,10 +349,7 @@ class CoreEngine(QObject):
         self.transition_to(new_state)
 
     def get_backup_click_countdown(self) -> float:
-        with self.state_lock:
-            if isinstance(self.state, CountdownState): 
-                return self.state.get_remaining_time()
-        return -1.0
+        return self._monitoring_controller.get_backup_click_countdown()
 
     def _log(self, message: str, *args, force: bool = False):
         current_time = time.time()
@@ -345,7 +372,7 @@ class CoreEngine(QObject):
                 self.logger.log("log_opencl_set", status)
                 if self.is_monitoring:
                     self.logger.log("log_opencl_rebuild")
-                    self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
+                    self._cache_builder.request_rebuild(disable_tree=False)
             except Exception as e:
                 self.logger.log("log_opencl_error", str(e))
 
@@ -407,149 +434,29 @@ class CoreEngine(QObject):
                 except Exception as e: 
                     self.logger.log("log_warn_listener_stop", str(e))
             self.mouse_listener = None
+        # 停止時にジェスチャ状態もリセット（タイマーが残らないように）
+        try:
+            if hasattr(self, "_mouse_gestures") and self._mouse_gestures:
+                self._mouse_gestures.reset()
+        except Exception:
+            pass
 
     def _on_global_click(self, x, y, button, pressed):
-        if pressed and button == mouse.Button.middle:
-            if self.recognition_area is not None:
-                self.quickCaptureRequested.emit()
-            return
-
-        # クイックタイマー: 右+左の近接クリック（同時押し）で起動（監視中のみ）
-        # Linuxでキーボードフックが不安定な環境があるため、マウスのみで完結させる。
-        # ※「監視中のみ」はUI側（open_quick_timer_dialog）で警告表示するため、
-        #   ここでは監視状態でフィルタせず、入力自体は拾う（ユーザーが原因を把握しやすい）。
-        if pressed and self.recognition_area is not None:
-            QT_CHORD_SEC = 0.8
-            QT_CHORD_MAX_DIST = 200  # px（環境差を吸収するため少し緩め）
-
-            if button == mouse.Button.left:
-                self._qt_last_left_down = (time.time(), int(x), int(y))
-                other = self._qt_last_right_down
-                if other:
-                    ot, ox, oy = other
-                    if (self._qt_last_left_down[0] - ot) <= QT_CHORD_SEC and (abs(int(x) - ox) + abs(int(y) - oy)) <= QT_CHORD_MAX_DIST:
-                        self._trigger_quick_timer_dialog(int(x), int(y))
-                        # 監視開始/停止の右クリック連打判定を汚染しない
-                        if self.click_timer:
-                            self.click_timer.cancel()
-                            self.click_timer = None
-                        self.right_click_count = 0
-                        return
-
-            if button == mouse.Button.right:
-                self._qt_last_right_down = (time.time(), int(x), int(y))
-                other = self._qt_last_left_down
-                if other:
-                    ot, ox, oy = other
-                    if (self._qt_last_right_down[0] - ot) <= QT_CHORD_SEC and (abs(int(x) - ox) + abs(int(y) - oy)) <= QT_CHORD_MAX_DIST:
-                        self._trigger_quick_timer_dialog(int(x), int(y))
-                        if self.click_timer:
-                            self.click_timer.cancel()
-                            self.click_timer = None
-                        self.right_click_count = 0
-                        return
-
-        if button == mouse.Button.right and pressed:
-
-            current_time = time.time()
-            if self.click_timer: self.click_timer.cancel(); self.click_timer = None
-            if current_time - self.last_right_click_time > self.CLICK_INTERVAL: self.right_click_count = 1
-            else: self.right_click_count += 1
-            self.last_right_click_time = current_time
-            if self.right_click_count == 3:
-                self.logger.log("log_right_click_triple"); self.startMonitoringRequested.emit(); self.right_click_count = 0
-            else: self.click_timer = Timer(self.CLICK_INTERVAL, self._handle_click_timer); self.click_timer.start()
-
-    def _trigger_quick_timer_dialog(self, screen_x: int, screen_y: int):
+        # ジェスチャ判定は別モジュールへ移設（機能不変）
         try:
-            rec = self.recognition_area
-            if not rec:
-                return
-
-            # クイックタイマー設定中は誤クリックを避けるため監視を停止する
-            try:
-                if self.is_monitoring:
-                    self.stopMonitoringRequested.emit()
-            except Exception:
-                pass
-
-            # 停止中は latest_high_res_frame が更新されないため、その場で1枚キャプチャする
-            frame = getattr(self, "latest_high_res_frame", None)
-            if frame is None:
-                try:
-                    x0, y0, x1, y1 = rec
-                    frame = self.capture_manager.capture_frame((int(x0), int(y0), int(x1), int(y1)))
-                except Exception:
-                    frame = None
-
-            if frame is not None:
-                payload = {
-                    "screen_x": int(screen_x),
-                    "screen_y": int(screen_y),
-                    "rec_area": tuple(rec),
-                    "frame": frame.copy(),
-                    "time": time.time(),
-                }
-                self.quickTimerDialogRequested.emit(payload)
+            self._mouse_gestures.on_click(x, y, button, pressed)
         except Exception:
             pass
 
     def add_quick_timer(self, entry: dict) -> tuple[bool, str]:
-        """
-        entry: {
-          'minutes': int,
-          'trigger_time': float,
-          'match_start_time': float,
-          'template_bgr': np.ndarray,
-          'template_gray': np.ndarray,
-          'click_offset': (dx, dy),
-          'right_click': bool,
-        }
-        """
-        try:
-            # 空きスロットを割り当て
-            for slot in range(1, 10):
-                if slot not in self.quick_timers:
-                    entry = dict(entry)
-                    entry["slot"] = slot
-                    self.quick_timers[slot] = entry
-                    self.quickTimersChanged.emit()
-                    return True, str(slot)
-            return False, "quick_timer_err_slots_full"
-        except Exception:
-            return False, "quick_timer_err_unexpected"
+        return self._quick_timer_manager.add(entry)
 
     def remove_quick_timer(self, slot: int):
-        try:
-            if slot in self.quick_timers:
-                del self.quick_timers[slot]
-                self.quickTimersChanged.emit()
-        except Exception:
-            pass
+        self._quick_timer_manager.remove(slot)
 
     def get_quick_timer_snapshot(self) -> dict:
-        """
-        UI表示用のスナップショット（Qtスレッド安全性のため shallow コピー）。
-        """
-        try:
-            snap = {}
-            for slot, e in self.quick_timers.items():
-                snap[slot] = {
-                    "slot": slot,
-                    "trigger_time": float(e.get("trigger_time", 0)),
-                    "match_start_time": float(e.get("match_start_time", 0)),
-                    "minutes": int(e.get("minutes", 0)),
-                    "click_offset": tuple(e.get("click_offset", (0, 0))),
-                    "right_click": bool(e.get("right_click", False)),
-                    "template_bgr": e.get("template_bgr"),
-                    "template_size": (int(e.get("template_gray").shape[1]), int(e.get("template_gray").shape[0])) if e.get("template_gray") is not None else (0, 0),
-                }
-            return snap
-        except Exception:
-            return {}
-    def _handle_click_timer(self):
-        if self.right_click_count == 2: self.logger.log("log_right_click_double"); self.stopMonitoringRequested.emit()
-        self.right_click_count = 0; self.click_timer = None
+        return self._quick_timer_manager.snapshot()
+    # NOTE: 右クリック連打のタイムアウト処理は GlobalMouseGestureHandler 側へ移設済み
 
     @Slot()
     def _perform_quick_capture(self):
@@ -630,9 +537,6 @@ class CoreEngine(QObject):
                     self.logger.log(f"[WARN] Failed to crop from pre-capture: {crop_e}")
                     # フォールバック: 直接キャプチャ
                     captured_image = self.capture_manager.capture_frame(region=capture_region)
-                # クロップに失敗してcaptured_imageがNoneのままの場合のフォールバック
-                if captured_image is None:
-                    captured_image = self.capture_manager.capture_frame(region=capture_region)
             else:
                 # 領域が指定されていない場合は全画面を使用
                 captured_image = pre_captured_image
@@ -656,15 +560,41 @@ class CoreEngine(QObject):
                 self._log(message)
                 # 画像ツリーを更新（新しく保存した画像を表示するため）
                 self.ui_manager.update_image_tree()
-                if self.thread_pool: 
-                    self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
+                # アイテム作成時は即座にキャッシュ再構築を実行（最新の状態にするため）
+                self.ui_manager.set_tree_enabled(False)
+                if self.thread_pool:
+                    future = self.thread_pool.submit(self._build_template_cache)
+                    future.add_done_callback(lambda f: self._on_save_rebuild_complete(f))
+                else:
+                    try:
+                        self._build_template_cache()
+                        self._cache_builder.on_cache_build_done(None, enable_tree=True)
+                    finally:
+                        # on_cache_build_done で既に有効化されるが、エラー時のフォールバックとして残す
+                        self.ui_manager.set_tree_enabled(True)
+                        self.selection_handler._is_saving_image = False
+                        self.selection_handler._reset_cursor_and_resume_listener()
             
             self.saveImageCompleted.emit(success, message)
         
         except Exception as e: 
             self.saveImageCompleted.emit(False, f"Error processing save result: {e}")
-        
+            self.ui_manager.set_tree_enabled(True)
+            self.selection_handler._is_saving_image = False
+            self.selection_handler._reset_cursor_and_resume_listener()
+    
+    def _on_save_rebuild_complete(self, future):
+        """画像保存時のキャッシュ再構築完了コールバック"""
+        try:
+            if future:
+                future.result()
+            # enable_tree=True でツリーを有効化（デフォルト）
+            self._cache_builder.on_cache_build_done(future, enable_tree=True)
+        except Exception as e:
+            self.logger.log(f"[ERROR] Cache rebuild after save failed: {e}")
+            self._cache_builder.on_cache_build_done(future, enable_tree=True)
         finally:
+            # on_cache_build_done で既に有効化されるが、エラー時のフォールバックとして残す
             self.ui_manager.set_tree_enabled(True)
             self.selection_handler._is_saving_image = False
             self.selection_handler._reset_cursor_and_resume_listener()
@@ -678,121 +608,27 @@ class CoreEngine(QObject):
         if self.capture_manager: self.capture_manager.cleanup()
         if hasattr(self, 'thread_pool') and self.thread_pool: self.thread_pool.shutdown(wait=False)
 
-    def _on_cache_build_done(self, future):
-        try:
-            if future: future.result()
-            
-            # 監視中、または設定変更時などにスケジュールを再構築する
-            self._build_timer_schedule()
-            
-            self.cacheBuildFinished.emit(True)
-        except Exception as e:
-            self.logger.log("log_cache_build_error", str(e))
-            self.cacheBuildFinished.emit(False)
-
     def on_folder_settings_changed(self):
         self.logger.log("log_folder_settings_changed")
-        self.ui_manager.set_tree_enabled(False)
-        
-        # ★★★ 修正: スレッドプールがシャットダウン済みの場合のエラーを回避 ★★★
-        if self.thread_pool: 
-            try:
-                self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
-            except RuntimeError:
-                # アプリ終了時などに発生しやすいので無視するかログ出すだけにする
-                self.logger.log("[WARN] Thread pool is shutting down. Skipping cache rebuild.")
-                self.ui_manager.set_tree_enabled(True)
-        else: 
-            self.ui_manager.set_tree_enabled(True)
+        # キャッシュ再構築は監視開始時にまとめて実行（UI操作時は監視停止されているため）
+        self._cache_rebuild_pending = True
 
     def _build_template_cache(self):
-        with self.cache_lock:
-            current_app_name = self.environment_tracker.recognition_area_app_title
-            (self.normal_template_cache, self.backup_template_cache, self.priority_timers, self.folder_children_map) = \
-                self.template_manager.build_cache(self.app_config, self.current_window_scale, self.effective_capture_scale, self.is_monitoring, self.priority_timers, current_app_name)
+        self._cache_builder.build_template_cache()
 
     def _build_timer_schedule(self):
-        self.timer_schedule_cache = {}
         with self.cache_lock:
-            all_caches = list(self.normal_template_cache.items()) + list(self.backup_template_cache.items())
-            now = datetime.now()
-            for path, data in all_caches:
-                settings = data.get('settings', {})
-                timer_conf = settings.get('timer_mode', {})
-                if timer_conf.get('enabled', False):
-                    actions = []
-                    saved_actions = timer_conf.get('actions', [])
-                    for act in saved_actions:
-                        if not act.get('enabled', False):
-                            continue
-                        time_str = act.get('display_time', "20:00:00")
-                        try:
-                            t_time = datetime.strptime(time_str, "%H:%M:%S").time()
-                            target_dt = datetime.combine(now.date(), t_time)
-                            if target_dt < now:
-                                target_dt += timedelta(days=1)
-                            act_copy = act.copy()
-                            act_copy['target_time'] = target_dt.timestamp()
-                            act_copy['executed'] = False
-                            actions.append(act_copy)
-                        except ValueError:
-                            self.logger.log(f"[WARN] Invalid time format for {Path(path).name}: {time_str}")
-                            continue
-                    actions.sort(key=lambda x: x['target_time'])
-                    if actions:
-                        self.timer_schedule_cache[path] = {
-                            "approach_time": timer_conf.get('approach_time', 5) * 60, 
-                            "sequence_interval": timer_conf.get('sequence_interval', 1.0),
-                            "actions": actions
-                        }
-            if self.timer_schedule_cache:
-                self.logger.log(f"[INFO] Timer schedule built for {len(self.timer_schedule_cache)} items.")
+            self.timer_schedule_cache = build_timer_schedule_cache(
+                normal_template_cache=self.normal_template_cache,
+                backup_template_cache=self.backup_template_cache,
+                logger=self.logger,
+            )
 
     def start_monitoring(self):
-        if not self.recognition_area: QMessageBox.warning(self.ui_manager, self.locale_manager.tr("warn_rec_area_not_set_title"), self.locale_manager.tr("warn_rec_area_not_set_text")); return
-        
-        if self._is_reinitializing_display:
-            try:
-                self.logger.log("log_lazy_reinitialize_capture_backend")
-                self._reinitialize_capture_backend()
-            except Exception as e:
-                self.logger.log("log_error_reinitialize_capture", str(e))
-            finally:
-                self._is_reinitializing_display = False
-
-        if not self.is_monitoring:
-            self.consecutive_capture_failures = 0 
-            self.is_monitoring = True; self.transition_to(IdleState(self)); self._click_count = 0; self._cooldown_until = 0; self._last_clicked_path = None; self.screen_stability_hashes.clear(); self.last_successful_click_time = 0; self.is_eco_cooldown_active = False; self._last_eco_check_time = time.time(); self.match_detected_at.clear()
-            
-            self._session_context['consecutive_clicks'] = 0
-            self.timer_session_active = True
-            
-            self.ui_manager.set_tree_enabled(False)
-            self.folder_cooldowns.clear()
-            
-            if self.thread_pool:
-                self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
-                self._monitor_thread = threading.Thread(target=self.monitoring_processor.monitoring_loop, daemon=True)
-                self._monitor_thread.start(); self.updateStatus.emit("monitoring", "blue"); self.logger.log("log_monitoring_started")
-            else: self.logger.log("Error: Thread pool not available to start monitoring."); self.is_monitoring = False; self.ui_manager.set_tree_enabled(True)
+        self._monitoring_controller.start_monitoring()
 
     def stop_monitoring(self):
-        if self.is_monitoring:
-            self.is_monitoring = False
-            with self.state_lock: self.state = None
-            
-            self.logger.log("log_monitoring_stopped"); self.ui_manager.set_tree_enabled(True)
-            if self._monitor_thread and self._monitor_thread.is_alive(): self._monitor_thread.join(timeout=1.0)
-            with self.cache_lock:
-                for cache in [self.normal_template_cache, self.backup_template_cache]:
-                    for item in cache.values(): item['best_scale'] = None
-            self.match_detected_at.clear()
-            self.priority_timers.clear()
-            self.folder_cooldowns.clear() 
-            self.ocr_futures.clear()
-            self.ocr_results.clear()
-            self.ocr_start_times.clear()
-            self.updateStatus.emit("idle", "green")
+        self._monitoring_controller.stop_monitoring()
 
     def delete_selected_items(self, paths_to_delete: list):
         if not paths_to_delete: return
@@ -803,14 +639,60 @@ class CoreEngine(QObject):
                 except Exception as e: last_error = str(e); self.logger.log("log_item_delete_failed", Path(path_str).name, last_error); failed_count += 1
             if failed_count > 0: QMessageBox.critical(self.ui_manager, self.locale_manager.tr("error_title_delete_failed"), self.locale_manager.tr("error_message_delete_failed", failed_count) + f"\n{last_error}")
         finally:
-            if self.thread_pool: self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
-            else: self.ui_manager.set_tree_enabled(True)
-
-    def on_folder_settings_changed(self):
-        self.logger.log("log_folder_settings_changed")
-        self.ui_manager.set_tree_enabled(False)
-        if self.thread_pool: self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
-        else: self.ui_manager.set_tree_enabled(True)
+            # 削除時は即座にキャッシュ再構築を実行（削除されたアイテムを移動しようとするとクラッシュするため）
+            # 削除処理が完了してからキャッシュ再構築を開始（競合を防ぐため）
+            if deleted_count > 0:
+                # ★★★ 修正: 順序ファイルの更新を確実にするため、少し待ってからツリーを更新 ★★★
+                # 削除処理で順序ファイルが更新されるのを待つ
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(50, lambda: self._update_tree_after_delete())
+                # ★★★ 修正: シグナル経由でメインスレッドに確実に実行させる（セグフォルト対策） ★★★
+                QTimer.singleShot(100, lambda: self._rebuildCacheAfterDeleteRequested.emit())
+            else:
+                self.ui_manager.set_tree_enabled(True)
+    
+    def _update_tree_after_delete(self):
+        """削除後のツリー更新（メインスレッドで実行）"""
+        try:
+            self.ui_manager.update_image_tree()
+        except Exception as e:
+            self.logger.log(f"[ERROR] Failed to update image tree after delete: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _rebuild_cache_after_delete(self):
+        """削除後のキャッシュ再構築（遅延実行、メインスレッドで実行されることを想定）"""
+        try:
+            if self.thread_pool:
+                future = self.thread_pool.submit(self._build_template_cache)
+                # ★★★ 修正: シグナル経由でメインスレッドに確実に実行させる（セグフォルト対策） ★★★
+                future.add_done_callback(lambda f: self._deleteRebuildCompleteRequested.emit(f))
+            else:
+                try:
+                    self._build_template_cache()
+                    self._cache_builder.on_cache_build_done(None, enable_tree=True)
+                finally:
+                    # on_cache_build_done で既に有効化されるが、エラー時のフォールバックとして残す
+                    self.ui_manager.set_tree_enabled(True)
+        except Exception as e:
+            self.logger.log(f"[ERROR] _rebuild_cache_after_delete failed: {e}")
+            import traceback
+            traceback.print_exc()
+            self.ui_manager.set_tree_enabled(True)
+    
+    def _on_delete_rebuild_complete(self, future):
+        """削除時のキャッシュ再構築完了コールバック"""
+        try:
+            if future:
+                future.result()
+            # enable_tree=True でツリーを有効化（デフォルト）
+            self._cache_builder.on_cache_build_done(future, enable_tree=True)
+        except Exception as e:
+            self.logger.log(f"[ERROR] Cache rebuild after delete failed: {e}")
+            self._cache_builder.on_cache_build_done(future, enable_tree=True)
+        finally:
+            # on_cache_build_done で既に有効化されるが、エラー時のフォールバックとして残す
+            self.ui_manager.set_tree_enabled(True)
 
     def create_folder(self):
         lm = self.locale_manager.tr
@@ -827,9 +709,34 @@ class CoreEngine(QObject):
             success, message_key_or_text = self.config_manager.create_folder(folder_name)
             if success:
                 self.logger.log(message_key_or_text); self.ui_manager.update_image_tree()
-                if self.thread_pool: self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
-                else: self.ui_manager.set_tree_enabled(True)
-            else: QMessageBox.warning(self.ui_manager, self.locale_manager.tr("error_title_create_folder"), self.locale_manager.tr(message_key_or_text))
+                # フォルダ作成時は即座にキャッシュ再構築を実行（ツリー操作を安全にするため）
+                self.ui_manager.set_tree_enabled(False)
+                if self.thread_pool:
+                    future = self.thread_pool.submit(self._build_template_cache)
+                    future.add_done_callback(lambda f: self._on_create_rebuild_complete(f))
+                else:
+                    try:
+                        self._build_template_cache()
+                        self._cache_builder.on_cache_build_done(None, enable_tree=True)
+                    finally:
+                        # on_cache_build_done で既に有効化されるが、エラー時のフォールバックとして残す
+                        self.ui_manager.set_tree_enabled(True)
+            else:
+                QMessageBox.warning(self.ui_manager, self.locale_manager.tr("error_title_create_folder"), self.locale_manager.tr(message_key_or_text))
+    
+    def _on_create_rebuild_complete(self, future):
+        """フォルダ作成時のキャッシュ再構築完了コールバック"""
+        try:
+            if future:
+                future.result()
+            # enable_tree=True でツリーを有効化（デフォルト）
+            self._cache_builder.on_cache_build_done(future, enable_tree=True)
+        except Exception as e:
+            self.logger.log(f"[ERROR] Cache rebuild after create failed: {e}")
+            self._cache_builder.on_cache_build_done(future, enable_tree=True)
+        finally:
+            # on_cache_build_done で既に有効化されるが、エラー時のフォールバックとして残す
+            self.ui_manager.set_tree_enabled(True)
 
     def move_item_into_folder(self):
         from PySide6.QtWidgets import QInputDialog
@@ -855,15 +762,60 @@ class CoreEngine(QObject):
 
         self.ui_manager.set_tree_enabled(False)
         if self.thread_pool:
-            self.thread_pool.submit(self._move_items_and_rebuild_async, source_paths, dest_folder_path_str).add_done_callback(self._on_cache_build_done)
+            future = self.thread_pool.submit(self._move_items_and_rebuild_async, source_paths, dest_folder_path_str)
+            # ★★★ 修正: シグナル経由でメインスレッドに確実に実行させる（セグフォルト対策） ★★★
+            future.add_done_callback(lambda f: self._moveCompleteRequested.emit(f))
         else:
-            self.logger.log("[WARN] Thread pool not available. Moving items and rebuilding cache synchronously.")
+            self.logger.log("[WARN] Thread pool not available. Moving items synchronously.")
             try:
                 self._move_items_and_rebuild_async(source_paths, dest_folder_path_str)
             finally:
-                self._on_cache_build_done(None) 
+                self._moveCompleteRequested.emit(None)
+    
+    def _on_move_complete(self, future):
+        """ファイル移動完了コールバック（メインスレッドで実行、キャッシュ再構築は監視開始時に実行）"""
+        try:
+            if future:
+                future.result()  # 例外があればここで再発生させる
+                
+                # エラーダイアログを表示（メインスレッドで実行、スレッドセーフに）
+                error_msg = None
+                with self._move_error_lock:
+                    if hasattr(self, '_move_error_message') and self._move_error_message:
+                        error_msg = self._move_error_message
+                        self._move_error_message = None
+                
+                if error_msg:
+                    from PySide6.QtWidgets import QMessageBox
+                    QMessageBox.warning(
+                        self.ui_manager,
+                        self.locale_manager.tr("error_title_move_item_failed"),
+                        self.locale_manager.tr("log_move_item_failed", error_msg)
+                    )
+                
+                # 順序保存を実行（メインスレッドで実行）
+                try:
+                    if hasattr(self.ui_manager, 'save_tree_order'):
+                        data_to_save = self.ui_manager.save_tree_order()
+                        if data_to_save:
+                            self.config_manager.save_tree_order_data(data_to_save)
+                except Exception as e:
+                    self.logger.log("[ERROR] Failed to save order after move: %s", str(e))
+        except Exception as e:
+            self.logger.log(f"[ERROR] Move operation failed: {e}")
+        finally:
+            # ツリーを更新してから有効化（メインスレッドで実行）
+            try:
+                self.ui_manager.update_image_tree()
+            except Exception as e:
+                self.logger.log(f"[ERROR] Failed to update image tree after move: {e}")
+            self.ui_manager.set_tree_enabled(True) 
     
     def _move_items_and_rebuild_async(self, source_paths: list, dest_folder_path_str: str):
+        """
+        ファイル移動処理（ワーカースレッドで実行）。
+        Qtオブジェクト操作は行わず、ファイル操作のみを実行。
+        """
         moved_count = 0; failed_count = 0; final_message = ""
         try:
             for source_path_str in source_paths:
@@ -875,34 +827,23 @@ class CoreEngine(QObject):
             
             if failed_count > 0: 
                 self.logger.log("[ERROR] _move_items_and_rebuild_async failed count: %s, LastError: %s", failed_count, final_message)
-                # ファイル移動が失敗した場合、ツリーを再構築してファイルシステムの状態と一致させる
-                self.ui_manager.update_image_tree()
-                # エラーダイアログを表示
-                from PySide6.QtWidgets import QMessageBox
-                QMessageBox.warning(
-                    self.ui_manager,
-                    self.locale_manager.tr("error_title_move_item_failed"),
-                    self.locale_manager.tr("log_move_item_failed", final_message)
-                )
+                # エラー情報を保存（メインスレッドでダイアログ表示するため、スレッドセーフに）
+                with self._move_error_lock:
+                    self._move_error_message = final_message
 
         except Exception as e:
             self.logger.log("[ERROR] _move_items_and_rebuild_async: %s", str(e))
-            # 例外が発生した場合も、ツリーを再構築
-            self.ui_manager.update_image_tree()
             raise 
         
-        self._build_template_cache()
-        
-        # ファイル移動が完了した後、順序保存を実行
-        # これにより、移動先のフォルダが存在する状態で順序保存が実行される
+        # キャッシュ再構築は監視開始時にまとめて実行（D&D操作中のIO割り込みを防ぐため）
         if moved_count > 0:
-            try:
-                if hasattr(self.ui_manager, 'save_tree_order'):
-                    data_to_save = self.ui_manager.save_tree_order()
-                    if data_to_save:
-                        self.config_manager.save_tree_order_data(data_to_save)
-            except Exception as e:
-                self.logger.log("[ERROR] Failed to save order after move: %s", str(e))
+            self._cache_rebuild_pending = True
+        
+        # 順序保存はメインスレッドで実行するため、ここではフラグを立てるだけ
+        # （_on_move_complete で実行）
+        
+        # 結果を返す（メインスレッドで処理するため）
+        return moved_count, failed_count, final_message
 
     def move_item_out_of_folder(self):
         source_path_str, name = self.ui_manager.get_selected_item_path(); lm = self.locale_manager.tr
@@ -913,8 +854,9 @@ class CoreEngine(QObject):
         success, message_or_key = self.config_manager.move_item(source_path_str, dest_folder_path_str)
         if success:
             self.logger.log(message_or_key); self.ui_manager.update_image_tree()
-            if self.thread_pool: self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
-            else: self.ui_manager.set_tree_enabled(True)
+            ok = self._cache_builder.request_rebuild(disable_tree=False)
+            if not ok:
+                self.ui_manager.set_tree_enabled(True)
         else: QMessageBox.critical(self.ui_manager, lm("error_title_move_out_failed"), self.locale_manager.tr(message_or_key))
     
     def rename_item(self, old_path_str: str, new_name: str):
@@ -929,12 +871,11 @@ class CoreEngine(QObject):
             
             if success:
                 self.logger.log(message_or_key)
-                if self.thread_pool:
-                    self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
-                else:
-                    self.logger.log("[ERROR] Thread pool not available for rename rebuild.")
-                    self._build_template_cache()
-                    self._on_cache_build_done(None) 
+                ok = self._cache_builder.request_rebuild(disable_tree=False)
+                if not ok:
+                    self.logger.log("[WARN] Rebuild requested but not scheduled; running synchronously.")
+                    self._cache_builder.build_template_cache()
+                    self._cache_builder.on_cache_build_done(None, enable_tree=True)
             else:
                 self.logger.log("log_rename_error_general", f"Rename failed for {Path(old_path_str).name}: {self.locale_manager.tr(message_or_key)}")
                 QMessageBox.warning(self.ui_manager, 
@@ -977,6 +918,12 @@ class CoreEngine(QObject):
             self.updatePreview.emit(None, None, True)  # 画像ツリーのアイテムクリック時はリセット
     
     def on_image_settings_changed(self, settings: dict):
+        # UIから来る設定の型ゆれを吸収（第2段階リファクタ）
+        try:
+            settings = normalize_image_item_settings(settings, default_image_path=str(settings.get("image_path", "")))
+        except Exception:
+            pass
+
         image_path_from_ui = settings.get('image_path')
 
         if self.current_image_settings and image_path_from_ui == self.current_image_path:
@@ -988,10 +935,11 @@ class CoreEngine(QObject):
         if self.is_monitoring:
             self._recalculate_and_update()
             self.save_current_settings()
-            if self.thread_pool:
-                self.logger.log("log_item_setting_changed_rebuild")
-                self.ui_manager.set_tree_enabled(False)
-                self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
+            self.logger.log("log_item_setting_changed_rebuild")
+            self.ui_manager.set_tree_enabled(False)
+            ok = self._cache_builder.request_rebuild(disable_tree=False)
+            if not ok:
+                self.ui_manager.set_tree_enabled(True)
         else:
             self._recalculate_and_update()
 
@@ -1025,12 +973,40 @@ class CoreEngine(QObject):
             except Exception as e: self.logger.log("Error adding item %s: %s", Path(fp).name, str(e))
         if added_count > 0:
             self._log("log_images_added", added_count)
-            if self.thread_pool: self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
-            else: self.ui_manager.set_tree_enabled(True)
+            ok = self._cache_builder.request_rebuild(disable_tree=False)
+            if not ok:
+                self.ui_manager.set_tree_enabled(True)
         else: self.ui_manager.set_tree_enabled(True)
 
     def on_order_changed(self):
+        """
+        順序変更時の処理。デバウンス処理により、短時間に複数の変更が発生した場合、
+        最後の1回だけ処理を実行する。
+        """
+        # 既存のタイマーを停止
+        if hasattr(self, '_order_change_timer') and self._order_change_timer:
+            self._order_change_timer.stop()
+        
+        # 新しいタイマーを作成（初回のみ）
+        if not hasattr(self, '_order_change_timer'):
+            from PySide6.QtCore import QTimer
+            self._order_change_timer = QTimer(self)
+            self._order_change_timer.setSingleShot(True)
+            self._order_change_timer.timeout.connect(self._process_order_changed)
+        
+        # 500ms後に処理を実行（デバウンス）- 連続操作時のクラッシュを防ぐため延長
+        self._order_change_timer.start(500)
+    
+    def _process_order_changed(self):
+        """順序変更の実際の処理（デバウンス後の実行）"""
+        # 既にキャッシュ再構築が実行中の場合はスキップ（重複実行防止）
+        if hasattr(self, '_order_change_processing') and self._order_change_processing:
+            self.logger.log("[DEBUG] Order change processing already in progress. Skipping duplicate request.")
+            return
+        
+        self._order_change_processing = True
         self.ui_manager.set_tree_enabled(False)
+        
         try:
             if hasattr(self.ui_manager, 'save_tree_order'):
                 data_to_save = self.ui_manager.save_tree_order() 
@@ -1040,18 +1016,40 @@ class CoreEngine(QObject):
         except Exception as e:
             self.logger.log("log_error_get_order_data", str(e))
             self.ui_manager.set_tree_enabled(True)
+            self._order_change_processing = False
             return
 
         if self.thread_pool:
-            self.thread_pool.submit(self._save_order_and_rebuild_async, data_to_save).add_done_callback(self._on_cache_build_done)
+            future = self.thread_pool.submit(self._save_order_and_rebuild_async, data_to_save)
+            future.add_done_callback(self._on_order_change_complete)
         else:
             self.logger.log("[WARN] Thread pool not available. Saving order and rebuilding cache synchronously.")
             try:
                 self._save_order_and_rebuild_async(data_to_save)
             finally:
-                self._on_cache_build_done(None) 
+                self._on_order_change_complete(None)
+    
+    def _on_order_change_complete(self, future):
+        """順序変更処理完了時のコールバック"""
+        try:
+            if future:
+                future.result()  # 例外があればここで再発生させる
+            # 順序変更時はキャッシュ再構築を行わないため、on_cache_build_done は呼ばない
+        except Exception as e:
+            self.logger.log(f"[ERROR] Order change processing failed: {e}")
+        finally:
+            self._order_change_processing = False
+            # ツリーを有効化（順序変更処理が完了したため）
+            try:
+                self.ui_manager.set_tree_enabled(True)
+            except Exception:
+                pass 
                 
     def _save_order_and_rebuild_async(self, data_to_save: dict):
+        """
+        順序ファイルの保存のみを行う（キャッシュ再構築は不要）。
+        順序変更はファイル位置の変更だけで、画像内容や設定は変わらないため。
+        """
         try:
             if hasattr(self.config_manager, 'save_tree_order_data'):
                 self.config_manager.save_tree_order_data(data_to_save)
@@ -1061,7 +1059,7 @@ class CoreEngine(QObject):
         except Exception as e: 
             self.logger.log("log_error_save_order", str(e))
             raise 
-        self._build_template_cache()
+        # 順序変更時はキャッシュ再構築は不要（画像内容や設定は変わらないため）
 
     def on_screen_geometry_changed(self, rect):
         if self.environment_tracker:
@@ -1086,322 +1084,19 @@ class CoreEngine(QObject):
          self.capture_manager.reinitialize_backend()
 
     def _attach_session_context(self, hwnd, title):
-        hooks_config = self.app_config.get('extended_lifecycle_hooks', {})
-        if not hooks_config.get('active', False):
-            return
-
-        self._lifecycle_hook_active = False
-        self._session_context = {
-            'pid': None,
-            'exec_path': None,
-            'resource_id': hooks_config.get('resource_link_id', ''),
-            'consecutive_clicks': 0,
-            # 復旧後にウィンドウ再ロックするためのヒント
-            'window_title': title or None,
-        }
-
-        target_proc_name = hooks_config.get('process_marker', '').lower()
-        target_win_name = hooks_config.get('window_context_marker', '').lower()
-
-        try:
-            pid = 0
-            proc_name = ""
-            exe_path = ""
-
-            if sys.platform == 'win32' and win32process:
-                _, pid = win32process.GetWindowThreadProcessId(hwnd)
-            
-            elif sys.platform.startswith('linux'):
-                try:
-                    res = subprocess.run(['xdotool', 'getwindowpid', str(hwnd)], capture_output=True, text=True)
-                    if res.returncode == 0:
-                        pid = int(res.stdout.strip())
-                except Exception:
-                    pass
-
-            if pid > 0 and psutil.pid_exists(pid):
-                proc = psutil.Process(pid)
-                proc_name = proc.name().lower()
-                try:
-                    exe_path = proc.exe()
-                except (psutil.AccessDenied, psutil.NoSuchProcess):
-                    exe_path = ""
-
-                match_proc = (target_proc_name and target_proc_name in proc_name)
-                match_title = (target_win_name and target_win_name in title.lower())
-
-                if match_proc or match_title:
-                    self._lifecycle_hook_active = True
-                    self._session_context['pid'] = pid
-                    self._session_context['exec_path'] = exe_path
-                    self.logger.log("[INFO] Session context attached. Lifecycle management active.")
-                else:
-                    self.logger.log("[DEBUG] Session context mismatch. Hooks inactive.")
-
-        except Exception as e:
-            self.logger.log(f"[WARN] Failed to attach session context: {e}")
+        self._lifecycle_manager.attach_session_context(hwnd, title)
 
     def _compute_and_apply_window_scale_no_prompt(self, title: str, rect: tuple):
-        """
-        復旧時用: ユーザーにプロンプトを出さずに、保存済みベースサイズがあればスケールを再計算して適用する。
-        既存の「auto_scale.use_window_scale」設定を尊重する。
-        """
-        try:
-            if not title or not rect or len(rect) != 4:
-                return
-            width = max(0, int(rect[2] - rect[0]))
-            height = max(0, int(rect[3] - rect[1]))
-            if width <= 0 or height <= 0:
-                return
-
-            scales_data = self.config_manager.load_window_scales()
-            base_dims = scales_data.get(title) if isinstance(scales_data, dict) else None
-            if not base_dims:
-                # ベース未登録: 触らない（現状の挙動に合わせる）
-                self.actual_window_scale = None
-                self.current_window_scale = None
-                self.windowScaleCalculated.emit(0.0)
-                return
-
-            base_w = float(base_dims.get('width', 0) or 0)
-            calc_scale = (float(width) / base_w) if base_w > 0 else 1.0
-            self.actual_window_scale = calc_scale
-
-            # ほぼ1.0なら補正せず 1.0 扱い
-            if 0.995 <= calc_scale <= 1.005:
-                self.current_window_scale = 1.0
-                self.windowScaleCalculated.emit(1.0)
-                return
-
-            use_window_scale = bool(self.app_config.get('auto_scale', {}).get('use_window_scale', False))
-            if use_window_scale:
-                self.current_window_scale = calc_scale
-                self.windowScaleCalculated.emit(calc_scale)
-            else:
-                # 設定がOFFなら、勝手に適用しない（選択フローと同じ思想）
-                self.current_window_scale = None
-                self.windowScaleCalculated.emit(0.0)
-        except Exception as e:
-            self.logger.log(f"[WARN] Failed to compute/apply window scale on recovery: {e}")
+        self._lifecycle_manager.compute_and_apply_window_scale_no_prompt(title, rect)
 
     def _find_window_rect_for_pid(self, pid: int, title_hint: str | None = None):
-        """
-        PIDから対象アプリのウィンドウ（ID/HWND）と矩形(rect)とタイトルを取得する（OS別）。
-        戻り値: (hwnd_or_window_id, rect(x1,y1,x2,y2), title) or (None, None, None)
-        """
-        try:
-            title_hint_l = (title_hint or "").lower().strip()
-
-            if sys.platform == 'win32' and win32gui and win32process:
-                candidates = []
-
-                def enum_cb(hwnd, _):
-                    try:
-                        if not win32gui.IsWindowVisible(hwnd):
-                            return
-                        _, wpid = win32process.GetWindowThreadProcessId(hwnd)
-                        if int(wpid) != int(pid):
-                            return
-                        title = win32gui.GetWindowText(hwnd) or ""
-                        candidates.append((hwnd, title))
-                    except Exception:
-                        return
-
-                win32gui.EnumWindows(enum_cb, None)
-                if not candidates:
-                    return None, None, None
-
-                # タイトルヒントがあれば優先
-                chosen = None
-                if title_hint_l:
-                    for hwnd, title in candidates:
-                        if title_hint_l in (title or "").lower():
-                            chosen = (hwnd, title)
-                            break
-                if not chosen:
-                    chosen = candidates[0]
-
-                hwnd, title = chosen
-                # クライアント領域 -> 画面座標
-                client_rect = win32gui.GetClientRect(hwnd)
-                left, top = win32gui.ClientToScreen(hwnd, (0, 0))
-                right = left + int(client_rect[2])
-                bottom = top + int(client_rect[3])
-                if right <= left or bottom <= top:
-                    return None, None, None
-                return hwnd, (left, top, right, bottom), title
-
-            if sys.platform.startswith('linux'):
-                # Waylandだと取得できないことが多い
-                if os.environ.get('WAYLAND_DISPLAY'):
-                    self.logger.log("[WARN] Wayland環境のため、復旧後のウィンドウ自動再ロックに失敗する可能性があります。")
-
-                # xdotool 必須
-                if not shutil.which('xdotool') or not shutil.which('xwininfo'):
-                    return None, None, None
-
-                # PIDに紐づくウィンドウID一覧を取得
-                res = subprocess.run(
-                    ['xdotool', 'search', '--pid', str(int(pid)), '--onlyvisible'],
-                    capture_output=True, text=True, timeout=2, check=False
-                )
-                if res.returncode != 0 or not res.stdout.strip():
-                    return None, None, None
-
-                win_ids = [w.strip() for w in res.stdout.strip().splitlines() if w.strip().isdigit()]
-                if not win_ids:
-                    return None, None, None
-
-                # タイトルでフィルタ（あれば）
-                chosen_id = None
-                chosen_title = None
-                if title_hint_l:
-                    for wid in win_ids:
-                        name_res = subprocess.run(
-                            ['xdotool', 'getwindowname', wid],
-                            capture_output=True, text=True, timeout=2, check=False
-                        )
-                        name = (name_res.stdout or "").strip()
-                        if title_hint_l in name.lower():
-                            chosen_id = wid
-                            chosen_title = name
-                            break
-                if not chosen_id:
-                    chosen_id = win_ids[0]
-                    name_res = subprocess.run(
-                        ['xdotool', 'getwindowname', chosen_id],
-                        capture_output=True, text=True, timeout=2, check=False
-                    )
-                    chosen_title = (name_res.stdout or "").strip()
-
-                info_res = subprocess.run(
-                    ['xwininfo', '-id', chosen_id],
-                    capture_output=True, text=True, timeout=2, check=False
-                )
-                if info_res.returncode != 0 or not info_res.stdout:
-                    return None, None, None
-
-                info = {}
-                for line in info_res.stdout.splitlines():
-                    if ':' in line:
-                        k, v = line.split(':', 1)
-                        info[k.strip()] = v.strip()
-
-                left = int(info.get('Absolute upper-left X', '0'))
-                top = int(info.get('Absolute upper-left Y', '0'))
-                width = int(info.get('Width', '0'))
-                height = int(info.get('Height', '0'))
-                if width <= 0 or height <= 0:
-                    return None, None, None
-                rect = (left, top, left + width, top + height)
-                return int(chosen_id), rect, (chosen_title or None)
-
-            return None, None, None
-        except Exception as e:
-            self.logger.log(f"[WARN] Failed to locate window by PID: {e}")
-            return None, None, None
+        return self._lifecycle_manager.find_window_rect_for_pid(pid, title_hint)
 
     def _relock_capture_after_recovery(self, new_pid: int):
-        """
-        対象アプリ再起動後に、ウィンドウID/HWND と recognition_area を再取得して再ロックする。
-        監視ループ・クイックキャプチャ・通常キャプチャに影響しないよう、UI操作/プロンプトは行わない。
-        """
-        try:
-            # 「ウィンドウ指定」の場合のみ対象（矩形/フルスクはユーザー設定なので触らない）
-            title_from_env = getattr(self.environment_tracker, 'recognition_area_app_title', None)
-            title_hint = self._session_context.get('window_title') or title_from_env
-            if not title_hint:
-                return
-
-            hooks_conf = self.app_config.get('extended_lifecycle_hooks', {})
-            marker = (hooks_conf.get('window_context_marker') or "").strip()
-            # window_context_marker があればそれを優先（部分一致）
-            match_hint = marker or title_hint
-
-            hwnd, rect, title = self._find_window_rect_for_pid(new_pid, match_hint)
-            if not hwnd or not rect:
-                self.logger.log("[WARN] Recovery succeeded but window re-lock failed (no window found).")
-                return
-
-            # 状態更新（GIL下での単純代入は原子的なので、監視スレッド側への影響を最小化）
-            self.target_hwnd = hwnd
-            self.recognition_area = rect
-
-            # DXCam の target_hwnd も更新（Windowsのみ）
-            try:
-                if sys.platform == 'win32' and hasattr(self.capture_manager, 'dxcam_sct') and self.capture_manager.dxcam_sct and hasattr(self.capture_manager.dxcam_sct, 'target_hwnd'):
-                    self.capture_manager.dxcam_sct.target_hwnd = hwnd
-            except Exception as e_dx:
-                self.logger.log(f"[WARN] Failed to set DXCam target HWND on recovery: {e_dx}")
-
-            # EnvironmentTracker/ツリー更新用のコンテキストを再設定
-            if title:
-                self.environment_tracker.on_rec_area_set("window", title)
-                self.appContextChanged.emit(title)
-                # セッションヒントも更新（次回復旧用）
-                self._session_context['window_title'] = title
-
-            # ウィンドウスケール再計算（プロンプト無し）
-            if title:
-                self._compute_and_apply_window_scale_no_prompt(title, rect)
-
-            # スケールが変わる可能性があるため、テンプレキャッシュを再構築（監視中でも安全）
-            if self.thread_pool:
-                try:
-                    self.thread_pool.submit(self._build_template_cache).add_done_callback(self._on_cache_build_done)
-                except RuntimeError:
-                    pass
-
-            self.logger.log(f"[INFO] Recovery re-locked capture window. pid={new_pid} hwnd={hwnd} rect={rect}")
-        except Exception as e:
-            self.logger.log(f"[WARN] Failed to re-lock capture after recovery: {e}")
+        self._lifecycle_manager.relock_capture_after_recovery(new_pid)
 
     def _execute_session_recovery(self):
-        if self._recovery_in_progress:
-            return
-
-        self._recovery_in_progress = True
-        self.logger.log("[INFO] Initiating session recovery... Monitoring paused temporarily.")
-
-        def _recovery_task():
-            try:
-                pid = self._session_context.get('pid')
-                if pid:
-                    self.action_manager.perform_session_cleanup(pid)
-                
-                exec_path = self._session_context.get('exec_path')
-                res_id = self._session_context.get('resource_id')
-                
-                success = self.action_manager.perform_session_reload(exec_path, res_id)
-                
-                if success:
-                    self.logger.log("[INFO] Waiting for session availability...")
-                    time.sleep(15) 
-                    
-                    new_pid = self._find_process_by_path(exec_path)
-                    if new_pid:
-                        self._session_context['pid'] = new_pid
-                        self._session_context['consecutive_clicks'] = 0
-                        self.logger.log(f"[INFO] Session re-hooked. New PID: {new_pid}")
-                        # ★ 復旧後にウィンドウ指定キャプチャを再ロック（UI映り込み/座標消失対策）
-                        self._relock_capture_after_recovery(new_pid)
-                    else:
-                        self.logger.log("[WARN] Failed to re-hook session automatically.")
-
-            except Exception as e:
-                self.logger.log(f"[ERROR] Recovery sequence failed: {e}")
-            finally:
-                self._recovery_in_progress = False
-                self.logger.log("[INFO] Recovery sequence finished. Resuming monitoring.")
-
-        threading.Thread(target=_recovery_task, daemon=True).start()
+        self._lifecycle_manager.execute_session_recovery()
 
     def _find_process_by_path(self, target_path):
-        if not target_path: return None
-        for proc in psutil.process_iter(['pid', 'exe']):
-            try:
-                if proc.info['exe'] == target_path:
-                    return proc.info['pid']
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                pass
-        return None
+        return self._lifecycle_manager.find_process_by_path(target_path)

@@ -129,10 +129,20 @@ class SelectionHandler:
             else:
                 self.logger.log("log_capture_area_set_window")
                 
-            self.window_selection_listener = WindowSelectionListener(self._handle_window_click_for_selection)
+            self.window_selection_listener = WindowSelectionListener(
+                self._handle_window_click_for_selection,
+                cancel_callback=self._on_window_selection_cancelled_by_mouse
+            )
             self.window_selection_listener.start()
-            self.keyboard_selection_listener = keyboard.Listener(on_press=self._on_key_press_for_selection)
-            self.keyboard_selection_listener.start()
+            # Linuxではグローバルキーボードフックが環境依存（Wayland等で不可/不安定）なため、
+            # ウィンドウ選択のキャンセルは右クリックでも可能にしている。
+            # WindowsではESCキャンセルも継続（ベストエフォート）。
+            if sys.platform == 'win32':
+                try:
+                    self.keyboard_selection_listener = keyboard.Listener(on_press=self._on_key_press_for_selection)
+                    self.keyboard_selection_listener.start()
+                except Exception as e:
+                    self.logger.log(f"[WARN] Failed to start keyboard listener for window selection: {e}")
 
         elif method == "fullscreen":
             if self.core._is_capturing_for_registration:
@@ -186,6 +196,13 @@ class SelectionHandler:
             if self.keyboard_selection_listener and self.keyboard_selection_listener.is_alive(): self.keyboard_selection_listener.stop(); self.keyboard_selection_listener = None
             if self.window_selection_listener and self.window_selection_listener.is_alive(): self.window_selection_listener.stop(); self.window_selection_listener = None
             self._on_selection_cancelled(); return False
+
+    def _on_window_selection_cancelled_by_mouse(self):
+        try:
+            self.logger.log("[INFO] Window selection cancelled by mouse (right/middle click).")
+        except Exception:
+            pass
+        self._on_selection_cancelled()
 
     def _handle_window_click_for_selection(self, x, y):
         if self.keyboard_selection_listener: self.keyboard_selection_listener.stop(); self.keyboard_selection_listener = None

@@ -191,7 +191,7 @@
     "log_backup_click_failed_not_found": "Back-upklik mislukt: '%s' niet gevonden.",
     "log_best_scale_found": "Optimale schaal gevonden: %s @ %sx (Vertrouwen: %s)",
     "log_rec_area_set_rect": "Herkenningsgebied ingesteld op rechthoek. Schaal wordt niet berekend.",
-    "log_rec_area_set_window": "Selecteer een venster... (ESC om te annuleren)",
+    "log_rec_area_set_window": "Selecteer een venster... (Rechtermuisklik om te annuleren)",
     "log_selection_cancelled": "Gebiedsselectie geannuleerd.",
     "log_selection_cancelled_key": "Vensterselectie geannuleerd door toetsenbord.",
     "log_window_invalid_rect": "Venstergebiedberekeningsresultaten zijn ongeldig: (%s,%s,%s,%s).",
@@ -561,5 +561,8 @@
     "quick_timer_err_slots_full": "Je kunt maximaal 9 reserveringen opslaan.",
     "quick_timer_err_unexpected": "Onverwachte fout.",
     "quick_timer_usage_hint": "[Gebruik]\n- Tijdens monitoring: bijna gelijktijdig rechtsklik + linksklik op de doel-app om een snelle timer te registreren.\n- This feature becomes available after setting the recognition area.\n- Kies een ROI waar het beeld NIET verandert (bewegende delen kunnen mislukken bij de 1‑minuut pre-zoek).\n- 1 minuut voor uitvoering start het matchen; bij match pauzeert de normale monitoring en wacht.\n- Op het geplande tijdstip klikt hij één keer, verwijdert de reservering en gaat terug naar normale monitoring.",
-    "preview_zoom_hint": "Wiel om te zoomen"
+    "preview_zoom_hint": "Wiel om te zoomen",
+    "wayland_guide_title": "Wayland gedetecteerd",
+    "wayland_guide_text": "Wayland-sessie gedetecteerd.\n\nOnder Wayland is het vaak beperkt om andere vensters te activeren of globale invoer betrouwbaar te injecteren.\nVoor stabiele klikken raden we een Xorg/X11-sessie aan.\n\nAls je op Wayland blijft, houd de doel-app op de voorgrond tijdens monitoring.",
+    "wayland_guide_dont_show_again": "Niet meer tonen"
 }

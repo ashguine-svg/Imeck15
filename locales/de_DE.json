@@ -191,7 +191,7 @@
     "log_backup_click_failed_not_found": "Backup-Klick fehlgeschlagen: '%s' nicht gefunden.",
     "log_best_scale_found": "Optimale Skalierung gefunden: %s @ %sx (Konfidenz: %s)",
     "log_rec_area_set_rect": "Erkennungsbereich auf Rechteck gesetzt. Skalierung wird nicht berechnet.",
-    "log_rec_area_set_window": "Bitte wählen Sie ein Fenster... (ESC zum Abbrechen)",
+    "log_rec_area_set_window": "Bitte wählen Sie ein Fenster... (Rechtsklick zum Abbrechen)",
     "log_selection_cancelled": "Bereichsauswahl abgebrochen.",
     "log_selection_cancelled_key": "Fensterauswahl durch Tastatur abgebrochen.",
     "log_window_invalid_rect": "Fensterbereichsberechnungsergebnisse sind ungültig: (%s,%s,%s,%s).",
@@ -558,5 +558,8 @@
     "quick_timer_err_slots_full": "Sie können bis zu 9 Reservierungen speichern.",
     "quick_timer_err_unexpected": "Unerwarteter Fehler.",
     "quick_timer_usage_hint": "[Anleitung]\n- Während der Überwachung: nahezu gleichzeitig Rechtsklick + Linksklick im Zielprogramm, um einen Schnell-Timer zu erstellen.\n- This feature becomes available after setting the recognition area.\n- Wähle ein ROI ohne Bildänderungen (bewegte Bereiche können beim 1‑Minuten‑Vorlauf schwer matchen).\n- 1 Minute vor der Ausführung startet die Bildsuche; bei Match wird die normale Überwachung pausiert und gewartet.\n- Zum Zielzeitpunkt wird einmal geklickt, die Reservierung gelöscht und die normale Überwachung fortgesetzt.",
-    "preview_zoom_hint": "Mausrad zum Zoomen"
+    "preview_zoom_hint": "Mausrad zum Zoomen",
+    "wayland_guide_title": "Wayland erkannt",
+    "wayland_guide_text": "Wayland-Sitzung erkannt.\n\nUnter Wayland ist es oft nicht erlaubt, andere Fenster zuverlässig in den Vordergrund zu holen oder globale Eingaben zu injizieren.\nFür stabiles Klicken empfehlen wir eine Xorg/X11-Sitzung.\n\nWenn Sie Wayland verwenden, halten Sie die Ziel-App während der Überwachung im Vordergrund.",
+    "wayland_guide_dont_show_again": "Nicht mehr anzeigen"
 }

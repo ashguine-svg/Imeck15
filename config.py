@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 import os
 import threading
+from settings_model import normalize_image_item_settings
 
 class ConfigManager:
     def __init__(self, logger, base_dir_name: str = "click_pic"):
@@ -149,6 +150,9 @@ class ConfigManager:
             },
             # --- ▲▲▲ 追加完了 ▲▲▲ ---
             "language": "en_US" 
+            ,
+            # Wayland検出時のガイダンス表示（ユーザーが「今後表示しない」を選ぶとtrue）
+            "wayland_guidance_suppress": False
         }
         if not self.app_config_path.exists():
             return default_config
@@ -228,16 +232,85 @@ class ConfigManager:
         return True
 
     def _get_setting_path(self, item_path: Path) -> Path:
-        if item_path.is_dir():
-            return item_path / self.folder_config_filename
+        # ★★★ 削除処理との競合対策: 存在チェック後に is_dir() を呼び出す ★★★
+        # 注意: このメソッドは load_item_setting() から呼ばれるため、
+        # 呼び出し元で既に存在チェックが行われていることを前提とする
+        try:
+            if item_path.exists() and item_path.is_dir():
+                return item_path / self.folder_config_filename
+        except (OSError, FileNotFoundError):
+            # 削除処理との競合でファイル/フォルダが削除された場合は .json を返す
+            pass
         return item_path.with_suffix('.json')
 
     def load_item_setting(self, item_path: Path) -> dict:
+        # ★★★ 削除処理との競合対策: パスが存在するか確認 ★★★
+        if not item_path.exists():
+            # 削除されたアイテムの場合はデフォルト設定を返す
+            # 拡張子で判定（削除されたフォルダの場合は拡張子がない）
+            if item_path.suffix.lower() in ('.png', '.jpg', '.jpeg', '.bmp'):
+                return {
+                    'image_path': str(item_path),
+                    'click_position': None,
+                    'click_rect': None,
+                    'roi_enabled': False,
+                    'roi_mode': 'fixed',
+                    'roi_rect': None,
+                    'roi_rect_variable': None,
+                    'point_click': True,
+                    'range_click': False,
+                    'random_click': False,
+                    'interval_time': 1.5,
+                    'backup_time': 300.0,
+                    'threshold': 0.8,
+                    'debounce_time': 0.0,
+                    'right_click': False,
+                }
+            else:
+                return {
+                    'mode': 'normal',
+                    'priority_image_timeout': 10,
+                    'priority_interval': 10,
+                    'priority_timeout': 5,
+                }
+        
+        # ★★★ 存在チェック後に is_dir() を呼び出す（削除処理との競合対策） ★★★
+        # 注意: exists() チェック後、is_dir() 呼び出し前に削除される可能性があるため、例外処理を追加
+        try:
+            is_dir = item_path.is_dir()
+        except (OSError, FileNotFoundError):
+            # 削除処理との競合でファイル/フォルダが削除された場合はデフォルト設定を返す
+            if item_path.suffix.lower() in ('.png', '.jpg', '.jpeg', '.bmp'):
+                return {
+                    'image_path': str(item_path),
+                    'click_position': None,
+                    'click_rect': None,
+                    'roi_enabled': False,
+                    'roi_mode': 'fixed',
+                    'roi_rect': None,
+                    'roi_rect_variable': None,
+                    'point_click': True,
+                    'range_click': False,
+                    'random_click': False,
+                    'interval_time': 1.5,
+                    'backup_time': 300.0,
+                    'threshold': 0.8,
+                    'debounce_time': 0.0,
+                    'right_click': False,
+                }
+            else:
+                return {
+                    'mode': 'normal',
+                    'priority_image_timeout': 10,
+                    'priority_interval': 10,
+                    'priority_timeout': 5,
+                }
+        
         setting_path = self._get_setting_path(item_path)
         file_lock = self._get_item_json_lock(setting_path)
 
         with file_lock: 
-            if item_path.is_dir():
+            if is_dir:
                 default_setting = {
                     'mode': 'normal',
                     'priority_image_timeout': 10,
@@ -266,13 +339,15 @@ class ConfigManager:
                 }
             
             if not setting_path.exists():
-                return default_setting
+                if is_dir:
+                    return default_setting
+                return normalize_image_item_settings(default_setting, default_image_path=str(item_path))
                 
             try:
                 with open(setting_path, 'r', encoding='utf-8') as f:
                     setting = json.load(f)
 
-                if item_path.is_dir() and 'is_excluded' in setting:
+                if is_dir and 'is_excluded' in setting:
                     if setting['is_excluded']:
                         setting['mode'] = 'excluded'
                     else:
@@ -285,10 +360,14 @@ class ConfigManager:
                 
                 for key, value in default_setting.items():
                     setting.setdefault(key, value)
-                return setting
+                if is_dir:
+                    return setting
+                return normalize_image_item_settings(setting, default_image_path=str(item_path))
             except (json.JSONDecodeError, Exception) as e:
                 self.logger.log("log_item_setting_load_error", str(setting_path), str(e))
-                return default_setting
+                if is_dir:
+                    return default_setting
+                return normalize_image_item_settings(default_setting, default_image_path=str(item_path))
 
     def save_item_setting(self, item_path: Path, setting: dict):
         setting_path = self._get_setting_path(item_path)
@@ -455,6 +534,10 @@ class ConfigManager:
         """
         structured_list = []
         
+        # ★★★ 削除処理との競合対策: ディレクトリが存在するか確認 ★★★
+        if not current_dir.exists() or not current_dir.is_dir():
+            return structured_list
+        
         order_file_owner = current_dir if current_dir != self.base_dir else None
         ordered_raw_names = self.load_image_order(order_file_owner)
         
@@ -463,7 +546,8 @@ class ConfigManager:
                 p for p in current_dir.iterdir() 
                 if p.is_dir() or (p.is_file() and p.suffix.lower() in ('.png', '.jpg', '.jpeg', '.bmp'))
             }
-        except FileNotFoundError:
+        except (FileNotFoundError, PermissionError, OSError):
+            # ディレクトリが削除された、またはアクセス権限がない場合は空リストを返す
             all_items_on_disk = set()
 
         all_names_on_disk = {p.name for p in all_items_on_disk}
@@ -506,7 +590,17 @@ class ConfigManager:
 
         for name in final_order_names:
             item_path = current_dir / name
-            item_settings = self.load_item_setting(item_path)
+            
+            # ★★★ 削除されたファイル/フォルダをスキップ（削除処理との競合対策） ★★★
+            if not item_path.exists():
+                continue
+            
+            # ★★★ load_item_setting 呼び出し前に再度存在チェック（削除処理との競合対策） ★★★
+            try:
+                item_settings = self.load_item_setting(item_path)
+            except (FileNotFoundError, OSError, PermissionError):
+                # 削除処理との競合でファイル/フォルダが削除された場合はスキップ
+                continue
             
             if not self._filter_item_by_app(item_settings, current_app_name):
                 continue
@@ -519,6 +613,9 @@ class ConfigManager:
                     'settings': item_settings
                 })
             elif item_path.is_dir():
+                # ★★★ 再帰呼び出し前に再度存在チェック（削除処理との競合対策） ★★★
+                if not item_path.exists() or not item_path.is_dir():
+                    continue
                 children = self._get_recursive_list(item_path, current_app_name)
                 folder_item = {
                     'type': 'folder', 

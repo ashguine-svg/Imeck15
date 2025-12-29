@@ -191,7 +191,7 @@
     "log_backup_click_failed_not_found": "Fallo en clic de respaldo: '%s' no encontrado.",
     "log_best_scale_found": "Escala óptima encontrada: %s @ %sx (Confianza: %s)",
     "log_rec_area_set_rect": "Área de reconocimiento establecida en rectángulo. La escala no se calculará.",
-    "log_rec_area_set_window": "Por favor, seleccione una ventana... (ESC para cancelar)",
+    "log_rec_area_set_window": "Por favor, seleccione una ventana... (Clic derecho para cancelar)",
     "log_selection_cancelled": "Selección de área cancelada.",
     "log_selection_cancelled_key": "Selección de ventana cancelada por teclado.",
     "log_window_invalid_rect": "Los resultados del cálculo del área de la ventana no son válidos: (%s,%s,%s,%s).",
@@ -558,5 +558,8 @@
     "quick_timer_err_slots_full": "Puedes guardar hasta 9 reservas.",
     "quick_timer_err_unexpected": "Error inesperado.",
     "quick_timer_usage_hint": "[Cómo usar]\n- Durante el monitoreo: haz un clic derecho + clic izquierdo casi simultáneos en la app objetivo para registrar un temporizador rápido.\n- This feature becomes available after setting the recognition area.\n- Elige un ROI donde la imagen NO cambie (zonas cambiantes pueden fallar al buscar 1 minuto antes).\n- 1 minuto antes de ejecutar, empieza la búsqueda; si coincide, pausa temporalmente el monitoreo normal y espera.\n- A la hora programada hace clic una vez, borra la reserva y vuelve al monitoreo normal.",
-    "preview_zoom_hint": "Rueda para zoom"
+    "preview_zoom_hint": "Rueda para zoom",
+    "wayland_guide_title": "Wayland detectado",
+    "wayland_guide_text": "Se detectó una sesión Wayland.\n\nEn Wayland suele estar restringido activar otras ventanas o inyectar entrada global de forma fiable.\nPara clics estables recomendamos una sesión Xorg/X11.\n\nSi sigues en Wayland, mantén la app objetivo en primer plano durante la supervisión.",
+    "wayland_guide_dont_show_again": "No volver a mostrar"
 }

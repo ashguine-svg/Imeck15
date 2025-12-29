@@ -191,7 +191,7 @@
     "log_backup_click_failed_not_found": "백업 클릭 실패: '%s'을(를) 찾을 수 없습니다.",
     "log_best_scale_found": "최적 스케일 발견: %s @ %s배 (신뢰도: %s)",
     "log_rec_area_set_rect": "인식 범위가 사각형으로 설정되었습니다. 스케일은 계산되지 않습니다.",
-    "log_rec_area_set_window": "창을 선택하세요... (취소하려면 ESC)",
+    "log_rec_area_set_window": "창을 선택하세요... (오른쪽 클릭으로 취소)",
     "log_selection_cancelled": "영역 선택이 취소되었습니다.",
     "log_selection_cancelled_key": "키보드에 의해 창 선택이 취소되었습니다.",
     "log_window_invalid_rect": "창 영역 계산 결과가 유효하지 않습니다: (%s,%s,%s,%s).",
@@ -560,5 +560,8 @@
     "quick_timer_err_slots_full": "예약은 최대 9개까지 저장할 수 있습니다.",
     "quick_timer_err_unexpected": "예기치 않은 오류가 발생했습니다.",
     "quick_timer_usage_hint": "[사용 방법]\n- 모니터링 중에 대상 앱에서 오른쪽 클릭 + 왼쪽 클릭을 거의 동시에 하면 퀵 타이머를 등록할 수 있습니다.\n- This feature becomes available after setting the recognition area.\n- 이미지가 변하지 않는 ROI를 선택하세요(변하는 영역은 1분 전 검색에서 매칭이 어려울 수 있습니다).\n- 실행 1분 전부터 이미지 매칭을 시작하며, 매칭되면 일반 모니터링을 일시 중지하고 대기합니다.\n- 예정 시각에 1회 클릭 후 예약을 삭제하고 일반 모니터링으로 돌아갑니다.",
-    "preview_zoom_hint": "휠로 확대/축소"
+    "preview_zoom_hint": "휠로 확대/축소",
+    "wayland_guide_title": "Wayland 감지됨",
+    "wayland_guide_text": "Wayland 세션이 감지되었습니다.\n\nWayland에서는 다른 창을 전면으로 가져오거나 전역 입력을 안정적으로 주입하는 것이 제한될 수 있습니다.\n안정적인 클릭을 위해 Xorg/X11 세션 사용을 권장합니다.\n\nWayland를 계속 사용할 경우, 모니터링 중에는 대상 앱을 항상 최전면에 두세요.",
+    "wayland_guide_dont_show_again": "다시 표시하지 않기"
 }

@@ -191,7 +191,7 @@
     "log_backup_click_failed_not_found": "Backup-klick misslyckades: '%s' hittades inte.",
     "log_best_scale_found": "Optimal skala hittad: %s @ %sx (Förtroende: %s)",
     "log_rec_area_set_rect": "Igenkänningsområde inställt på rektangel. Skala kommer inte att beräknas.",
-    "log_rec_area_set_window": "Vänligen välj ett fönster... (ESC för att avbryta)",
+    "log_rec_area_set_window": "Vänligen välj ett fönster... (Högerklick för att avbryta)",
     "log_selection_cancelled": "Områdesval avbrutet.",
     "log_selection_cancelled_key": "Fönsterval avbrutet av tangentbord.",
     "log_window_invalid_rect": "Fönsterområdesberäkningsresultat är ogiltiga: (%s,%s,%s,%s).",
@@ -561,5 +561,8 @@
     "quick_timer_err_slots_full": "Du kan spara upp till 9 bokningar.",
     "quick_timer_err_unexpected": "Oväntat fel.",
     "quick_timer_usage_hint": "[Så här]\n- Under övervakning: nästan samtidigt högerklick + vänsterklick i målappen för att registrera en snabb timer.\n- This feature becomes available after setting the recognition area.\n- Välj en ROI där bilden inte ändras (rörliga områden kan missa matchning vid 1-minuts för-sök).\n- 1 minut före körning startar bildmatchning; vid match pausas normal övervakning och väntar.\n- Vid schemalagd tid klickar den en gång, tar bort bokningen och återgår till normal övervakning.",
-    "preview_zoom_hint": "Scrollhjul för zoom"
+    "preview_zoom_hint": "Scrollhjul för zoom",
+    "wayland_guide_title": "Wayland upptäckt",
+    "wayland_guide_text": "Wayland-session upptäckt.\n\nI Wayland är det ofta begränsat att aktivera andra fönster eller injicera global inmatning på ett tillförlitligt sätt.\nFör stabila klick rekommenderar vi en Xorg/X11-session.\n\nOm du stannar på Wayland, håll målappen i förgrunden under övervakning.",
+    "wayland_guide_dont_show_again": "Visa inte igen"
 }

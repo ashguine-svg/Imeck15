@@ -206,7 +206,14 @@ class TemplateManager:
     def _process_item_for_cache(self, item_data, scales, folder_path, folder_mode, priority_trigger_path, cooldown_time, sequence_info, normal_cache, backup_cache):
         try:
             path = item_data['path']
-            settings = self.config_manager.load_item_setting(Path(path))
+            
+            # ★★★ 削除されたファイルへのアクセスを防止 ★★★
+            path_obj = Path(path)
+            if not path_obj.exists() or not path_obj.is_file():
+                self.logger.log("log_warn_image_load_failed", path_obj.name)
+                return
+            
+            settings = self.config_manager.load_item_setting(path_obj)
 
             has_point_click = settings.get('point_click') and settings.get('click_position')
             has_range_click = settings.get('range_click') and settings.get('click_rect')
