@@ -95,6 +95,9 @@ class CoreEngine(QObject):
     quickTimerDialogRequested = Signal(object)
     # クイックタイマー一覧が変わった通知（監視スレッドからも飛ぶ）
     quickTimersChanged = Signal()
+    # ★★★ 追加: キャッシュ再構築時のツリー操作をメインスレッドで実行するためのシグナル ★★★
+    _setTreeEnabledRequested = Signal(bool)  # ツリーの有効/無効を設定
+    _resetCursorAndResumeListenerRequested = Signal()  # カーソルリセットとリスナー再開をメインスレッドで実行
 
     def __init__(self, ui_manager, capture_manager, config_manager, logger, locale_manager):
         super().__init__()
@@ -212,6 +215,10 @@ class CoreEngine(QObject):
         
         # スレッドプールからメインスレッドへの移譲シグナル接続
         self._saveImageDoneProcessRequested.connect(self._process_save_image_done)
+        # ★★★ キャッシュ再構築時のツリー操作をメインスレッドで実行 ★★★
+        self._setTreeEnabledRequested.connect(self.ui_manager.set_tree_enabled)
+        # ★★★ 追加: カーソルリセットとリスナー再開をメインスレッドで実行するためのシグナル接続 ★★★
+        self._resetCursorAndResumeListenerRequested.connect(self._handle_reset_cursor_and_resume_listener)
 
         self.app_config = self.ui_manager.app_config
         self.current_window_scale = None
@@ -597,7 +604,15 @@ class CoreEngine(QObject):
             # on_cache_build_done で既に有効化されるが、エラー時のフォールバックとして残す
             self.ui_manager.set_tree_enabled(True)
             self.selection_handler._is_saving_image = False
+            # ★★★ 修正: シグナル経由でメインスレッドに移譲（QTimer警告対策） ★★★
+            self._resetCursorAndResumeListenerRequested.emit()
+    
+    def _handle_reset_cursor_and_resume_listener(self):
+        """カーソルリセットとリスナー再開をメインスレッドで実行"""
+        try:
             self.selection_handler._reset_cursor_and_resume_listener()
+        except Exception as e:
+            self.logger.log(f"[ERROR] Failed to reset cursor and resume listener: {e}")
 
     def cleanup(self):
         self.stop_monitoring()
@@ -773,7 +788,7 @@ class CoreEngine(QObject):
                 self._moveCompleteRequested.emit(None)
     
     def _on_move_complete(self, future):
-        """ファイル移動完了コールバック（メインスレッドで実行、キャッシュ再構築は監視開始時に実行）"""
+        """ファイル移動完了コールバック（メインスレッドで実行、キャッシュ再構築は認識開始時に実行）"""
         try:
             if future:
                 future.result()  # 例外があればここで再発生させる
@@ -835,7 +850,7 @@ class CoreEngine(QObject):
             self.logger.log("[ERROR] _move_items_and_rebuild_async: %s", str(e))
             raise 
         
-        # キャッシュ再構築は監視開始時にまとめて実行（D&D操作中のIO割り込みを防ぐため）
+        # ★★★ 修正: キャッシュ再構築は認識開始時にまとめて実行（D&D操作中のIO割り込みを防ぐため） ★★★
         if moved_count > 0:
             self._cache_rebuild_pending = True
         
@@ -871,11 +886,17 @@ class CoreEngine(QObject):
             
             if success:
                 self.logger.log(message_or_key)
-                ok = self._cache_builder.request_rebuild(disable_tree=False)
-                if not ok:
-                    self.logger.log("[WARN] Rebuild requested but not scheduled; running synchronously.")
-                    self._cache_builder.build_template_cache()
-                    self._cache_builder.on_cache_build_done(None, enable_tree=True)
+                # ★★★ 修正: リネーム時は即座にキャッシュ再構築を実行（削除・作成時と同様） ★★★
+                if self.thread_pool:
+                    future = self.thread_pool.submit(self._build_template_cache)
+                    future.add_done_callback(lambda f: self._on_rename_rebuild_complete(f))
+                else:
+                    try:
+                        self._build_template_cache()
+                        self._cache_builder.on_cache_build_done(None, enable_tree=True)
+                    finally:
+                        # on_cache_build_done で既に有効化されるが、エラー時のフォールバックとして残す
+                        self.ui_manager.set_tree_enabled(True)
             else:
                 self.logger.log("log_rename_error_general", f"Rename failed for {Path(old_path_str).name}: {self.locale_manager.tr(message_or_key)}")
                 QMessageBox.warning(self.ui_manager, 
@@ -886,6 +907,20 @@ class CoreEngine(QObject):
         except Exception as e:
             self.logger.log("log_rename_error_general", f"Rename exception for {Path(old_path_str).name}: {str(e)}")
             QMessageBox.critical(self.ui_manager, self.locale_manager.tr("rename_dialog_title"), str(e))
+            self.ui_manager.set_tree_enabled(True)
+    
+    def _on_rename_rebuild_complete(self, future):
+        """リネーム時のキャッシュ再構築完了コールバック"""
+        try:
+            if future:
+                future.result()
+            # enable_tree=True でツリーを有効化（デフォルト）
+            self._cache_builder.on_cache_build_done(future, enable_tree=True)
+        except Exception as e:
+            self.logger.log(f"[ERROR] Cache rebuild after rename failed: {e}")
+            self._cache_builder.on_cache_build_done(future, enable_tree=True)
+        finally:
+            # on_cache_build_done で既に有効化されるが、エラー時のフォールバックとして残す
             self.ui_manager.set_tree_enabled(True)
 
     def load_image_and_settings(self, file_path: str):

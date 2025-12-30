@@ -11,7 +11,7 @@ from pathlib import Path
 import os
 
 from matcher import _match_template_task, calculate_phash
-from monitoring_states import IdleState, CountdownState
+from monitoring_states import IdleState, CountdownState, PriorityState
 
 try:
     from ocr_runtime import OCRRuntimeEvaluator
@@ -108,7 +108,7 @@ class MonitoringProcessor:
                     continue
 
                 if pre_matches is None:
-                    if isinstance(current_state, (IdleState, CountdownState)):
+                    if isinstance(current_state, (IdleState, CountdownState, PriorityState)):
                         pre_matches = self._find_matches_for_eco_check(screen_data, current_state)
 
                 current_state.handle(current_time, screen_data, last_match_time_map, pre_matches=pre_matches)
@@ -219,6 +219,24 @@ class MonitoringProcessor:
         return screen_data, None
 
     def _find_matches_for_eco_check(self, screen_data, current_state):
+        # PriorityStateの場合は、フォルダ内の画像のみを検索
+        if isinstance(current_state, PriorityState):
+            from pathlib import Path
+            folder_path = current_state.folder_path
+            def filter_by_folder(cache):
+                return {p: d for p, d in cache.items() if d.get('folder_path') == folder_path}
+            
+            priority_normal_cache = filter_by_folder(self.core.normal_template_cache)
+            priority_backup_cache = filter_by_folder(self.core.backup_template_cache)
+            
+            normal_matches = self._find_best_match(*screen_data, priority_normal_cache)
+            backup_matches = self._find_best_match(*screen_data, priority_backup_cache)
+            if backup_matches:
+                normal_matches.extend(backup_matches)
+            
+            return normal_matches
+        
+        # IdleState/CountdownStateの場合は、通常のフィルタリング
         def filter_cache_for_eco(cache): return {p: d for p, d in cache.items() if d.get('folder_mode') not in ['excluded', 'priority_timer']}
         active_normal_cache = filter_cache_for_eco(self.core.normal_template_cache)
         normal_matches = self._find_best_match(*screen_data, active_normal_cache)

@@ -840,6 +840,12 @@ class UIManager(QMainWindow):
         QTimer.singleShot(0, lambda: self.setRecAreaMethodSelected.emit(method))
 
     def setRecAreaDialog(self):
+        # ★★★ 修正: 認識範囲設定ダイアログ表示前にメインUIを非表示にする ★★★
+        if self.is_minimal_mode and getattr(self, "floating_window", None):
+            self.floating_window.hide()
+        else:
+            self.hide()
+        
         dialog = RecAreaSelectionDialog(self.locale_manager, self)
         dialog.selectionMade.connect(self._handle_rec_area_selection)
         
@@ -867,7 +873,14 @@ class UIManager(QMainWindow):
                 final_pos = QPoint(cursor_pos.x(), cursor_pos.y() - dialog_height)
         
         dialog.move(final_pos)
-        dialog.exec()
+        result = dialog.exec()
+        
+        # ★★★ 修正: ダイアログがキャンセルされた場合、メインUIを再表示する ★★★
+        if result != QDialog.Accepted:
+            if self.is_minimal_mode and getattr(self, "floating_window", None):
+                self.floating_window.show()
+            else:
+                self.show()
 
     def adjust_initial_size(self):
         # ★★★ 修正: 初期サイズを横に拡張 (1000 -> 1150) ★★★

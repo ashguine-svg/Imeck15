@@ -73,12 +73,17 @@ class CacheBuilder:
             core.logger.log("log_cache_build_error", str(e))
             core.cacheBuildFinished.emit(False)
         finally:
-            # キャッシュ再構築完了後、ツリーを有効化（監視開始時は除く）
+            # ★★★ 修正: Qt操作はメインスレッドで実行するようにシグナルで移譲 ★★★
+            # スレッドプールのコールバックから呼ばれるため、シグナルでメインスレッドに移譲
             if enable_tree:
-                try:
-                    core.ui_manager.set_tree_enabled(True)
-                except Exception:
-                    pass
+                if hasattr(core, '_setTreeEnabledRequested'):
+                    core._setTreeEnabledRequested.emit(True)
+                else:
+                    # フォールバック: メインスレッドから呼ばれている場合は直接呼ぶ
+                    try:
+                        core.ui_manager.set_tree_enabled(True)
+                    except Exception:
+                        pass
 
     # ------------------------------------------------------------
     # Public API: request rebuild
@@ -90,11 +95,18 @@ class CacheBuilder:
         """
         core = self.core
 
+        # ★★★ 修正: Qt操作はメインスレッドで実行するようにシグナルで移譲 ★★★
+        # ワーカースレッドから呼ばれる可能性があるため、シグナルでメインスレッドに移譲
         if disable_tree:
-            try:
-                core.ui_manager.set_tree_enabled(False)
-            except Exception:
-                pass
+            # シグナルでメインスレッドに移譲
+            if hasattr(core, '_setTreeEnabledRequested'):
+                core._setTreeEnabledRequested.emit(False)
+            else:
+                # フォールバック: メインスレッドから呼ばれている場合は直接呼ぶ
+                try:
+                    core.ui_manager.set_tree_enabled(False)
+                except Exception:
+                    pass
 
         if core.thread_pool:
             try:
@@ -107,10 +119,15 @@ class CacheBuilder:
             core.logger.log("[WARN] Thread pool not available. Skipping cache rebuild.")
 
         if disable_tree:
-            try:
-                core.ui_manager.set_tree_enabled(True)
-            except Exception:
-                pass
+            # シグナルでメインスレッドに移譲
+            if hasattr(core, '_setTreeEnabledRequested'):
+                core._setTreeEnabledRequested.emit(True)
+            else:
+                # フォールバック: メインスレッドから呼ばれている場合は直接呼ぶ
+                try:
+                    core.ui_manager.set_tree_enabled(True)
+                except Exception:
+                    pass
         return False
 
 

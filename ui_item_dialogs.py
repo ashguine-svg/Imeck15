@@ -133,6 +133,22 @@ def open_ocr_settings_dialog(ui) -> None:
         ui.config_manager.save_item_setting(file_path, settings)
         ui.imageSettingsChanged.emit(settings)
 
+        # ★★★ 修正: OCR設定変更後にキャッシュを更新して即座に反映 ★★★
+        if ui.core_engine:
+            # ★★★ 修正: キャッシュ更新時にロックを使用してスレッドセーフにする ★★★
+            try:
+                updated_settings = ui.config_manager.load_item_setting(file_path)
+                with ui.core_engine.cache_lock:
+                    if str(file_path) in ui.core_engine.normal_template_cache:
+                        ui.core_engine.normal_template_cache[str(file_path)]['settings'] = updated_settings
+                    if str(file_path) in ui.core_engine.backup_template_cache:
+                        ui.core_engine.backup_template_cache[str(file_path)]['settings'] = updated_settings
+                ui.logger.log(f"[INFO] OCR cache updated for {file_path.name}")
+            except Exception as e:
+                ui.logger.log(f"[ERROR] Failed to update OCR cache: {e}")
+                import traceback
+                traceback.print_exc()
+
         # アイコンの色更新のためにツリーを再描画
         ui.update_image_tree()
 

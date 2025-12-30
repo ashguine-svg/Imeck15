@@ -398,7 +398,10 @@ class OCRSettingsDialog(QDialog):
         super().__init__(parent)
         
         self._last_input_click_time = 0
+        # ★★★ 修正: 目標値入力ダイアログ表示中フラグ ★★★
+        self._target_value_dialog_open = False
         # タイトルバーの最小化・閉じるボタンを非表示にする
+        # ★★★ 修正: タイマー設定UIと同じ表示方法にする（WindowStaysOnTopHintを削除） ★★★
         flags = self.windowFlags() | Qt.CustomizeWindowHint  # カスタムヒントを有効化（XFCE等で×が残る対策）
         flags &= ~Qt.WindowMinMaxButtonsHint                 # 最小化ボタン除去
         flags &= ~Qt.WindowCloseButtonHint                   # 閉じるボタン除去
@@ -421,7 +424,8 @@ class OCRSettingsDialog(QDialog):
         self.parent_item_settings = {}
         self.previous_lang_idx = -1
 
-        self.debounce_timer = QTimer()
+        # ★★★ 修正: QTimerに親を指定してメインスレッドで確実に動作するようにする ★★★
+        self.debounce_timer = QTimer(self)
         self.debounce_timer.setSingleShot(True)
         self.debounce_timer.setInterval(100) 
         self.debounce_timer.timeout.connect(self.update_preview_image)
@@ -707,6 +711,9 @@ class OCRSettingsDialog(QDialog):
     def eventFilter(self, source, event):
         if source == self.input_target_value and event.type() == QEvent.MouseButtonPress:
             if event.button() == Qt.LeftButton:
+                # ★★★ 修正: ダイアログ表示中はクリックを無視 ★★★
+                if self._target_value_dialog_open:
+                    return True
                 if sys.platform != 'win32':
                     current_time = time.time()
                     if current_time - self._last_input_click_time < 1.0: return True
@@ -716,15 +723,35 @@ class OCRSettingsDialog(QDialog):
         return super().eventFilter(source, event)
 
     def open_custom_input_dialog(self):
-        try: from custom_input_dialog import ask_string_custom
-        except ImportError: QMessageBox.critical(self, "Error", "custom_input_dialog.py not found."); return
-        current_val = self.input_target_value.text()
-        title = self.tr("ocr_grp_condition")
-        prompt = self.tr("ocr_placeholder_target")
-        if title == "ocr_grp_condition": title = "Condition"
-        if prompt == "ocr_placeholder_target": prompt = "Target Value"
-        new_val, ok = ask_string_custom(self, title, prompt, current_val)
-        if ok: self.input_target_value.setText(new_val)
+        # ★★★ 修正: ダイアログ表示中フラグを設定 ★★★
+        if self._target_value_dialog_open:
+            return
+        self._target_value_dialog_open = True
+        try:
+            # ★★★ 修正: 入力欄を無効化して重複クリックを防止 ★★★
+            self.input_target_value.setEnabled(False)
+            
+            # ★★★ 修正: WindowStaysOnTopHintの変更は行わない（フリーズの原因になるため） ★★★
+            # 入力ダイアログは既にparent=Noneで独立したウィンドウとして作成されているため、
+            # OCR設定ダイアログのWindowStaysOnTopHintの影響を受けない
+            
+            try: from custom_input_dialog import ask_string_custom
+            except ImportError: 
+                QMessageBox.critical(self, "Error", "custom_input_dialog.py not found.")
+                self._target_value_dialog_open = False
+                self.input_target_value.setEnabled(True)
+                return
+            current_val = self.input_target_value.text()
+            title = self.tr("ocr_grp_condition")
+            prompt = self.tr("ocr_placeholder_target")
+            if title == "ocr_grp_condition": title = "Condition"
+            if prompt == "ocr_placeholder_target": prompt = "Target Value"
+            new_val, ok = ask_string_custom(self, title, prompt, current_val)
+            if ok: self.input_target_value.setText(new_val)
+        finally:
+            # ★★★ 修正: ダイアログ閉鎖後にフラグをリセットして入力欄を再有効化 ★★★
+            self._target_value_dialog_open = False
+            self.input_target_value.setEnabled(True)
 
     def on_enable_toggled(self, checked): pass
     def load_initial_preview(self):
