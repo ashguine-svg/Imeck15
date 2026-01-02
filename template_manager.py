@@ -1,7 +1,3 @@
-# ★★★ アーキテクチャ解説: 再帰的実行モデル ★★★
-# このモジュールは、フォルダ構造を「フラット化」せず、階層構造を維持したままキャッシュします。
-# これにより、monitoring_states.py 側で「親フォルダ -> 子フォルダ(実行権委譲) -> 親フォルダ(復帰)」
-# というスタックベースの実行制御が可能になります。
 # template_manager.py
 
 import cv2
@@ -31,7 +27,6 @@ class TemplateManager:
         """
         images = []
         for child in children_list:
-            # 除外設定のフォルダ/画像はシーケンスに含めない
             settings = child.get('settings', {})
             if settings.get('mode') == 'excluded':
                 continue
@@ -39,7 +34,6 @@ class TemplateManager:
             if child['type'] == 'image':
                 images.append(child['path'])
             elif child['type'] == 'folder':
-                # 子フォルダの場合、再帰的に中身を取得してリストの後ろに結合
                 images.extend(self._collect_images_recursively(child.get('children', [])))
         return images
 
@@ -62,33 +56,27 @@ class TemplateManager:
         
         # --- マルチスケール探索の準備 ---
         search_multipliers = [1.0] 
-        
         if auto_scale_settings.get('enabled', False):
             center = auto_scale_settings.get('center', 1.0)
             rng = auto_scale_settings.get('range', 0.2)
             steps = auto_scale_settings.get('steps', 5)
-            
             min_s = center - rng
             max_s = center + rng
-            
             if steps > 1:
                 search_multipliers = np.linspace(min_s, max_s, steps)
                 self.logger.log("log_scale_search_enabled", steps, f"{center:.2f}")
             else:
                  search_multipliers = [center]
         
-        # 最終的な適用スケールリストを作成
         scales = []
         for multiplier in search_multipliers:
             final_scale = base_window_scale * multiplier * effective_capture_scale
             if final_scale > 0:
                 scales.append(final_scale)
-        
         scales = sorted(list(set(scales)))
 
         if effective_capture_scale != 1.0:
             self.logger.log("log_capture_scale_applied", f"{effective_capture_scale:.2f}")
-        
         if use_window_scale_base and current_window_scale is not None:
             self.logger.log("log_window_scale_applied", f"{current_window_scale:.3f}")
 
@@ -97,8 +85,11 @@ class TemplateManager:
         
         hierarchical_list = self.config_manager.get_hierarchical_list(current_app_name)
         
-        # --- 内部関数: 再帰的にリストを処理 ---
-        def process_list_recursive(item_list, inherited_context=None):
+        # --- 内部関数: コンテキストスタック方式（階層構造をフラットに解決） ---
+        def process_list_recursive(item_list, active_contexts=None):
+            if active_contexts is None:
+                active_contexts = []
+
             for item_data in item_list:
                 if item_data['type'] == 'folder':
                     current_path = item_data['path']
@@ -108,87 +99,105 @@ class TemplateManager:
                     if current_mode == 'excluded':
                         continue 
 
-                    # コンテキストの決定
-                    if inherited_context:
-                        # 親の設定を継承
-                        scan_group_path = inherited_context['scan_group_path']
-                        cooldown_time = inherited_context.get('cooldown_time', 0)
-                    else:
-                        # ルートフォルダ
-                        scan_group_path = current_path
-                        cooldown_time = 0
-                        if current_mode == 'cooldown':
-                            cooldown_time = settings.get('cooldown_time', 30)
+                    # フォルダマップの初期化
+                    if current_path not in folder_children_map:
+                        folder_children_map[current_path] = set()
 
-                        if current_path not in folder_children_map:
-                            folder_children_map[current_path] = set()
-
-                        if current_mode == 'priority_timer':
-                            interval_seconds = settings.get('priority_interval', 10) * 60
-                            if not is_monitoring:
-                                 priority_timers[current_path] = time.time() + interval_seconds
-                            elif current_path not in existing_priority_timers:
-                                 priority_timers[current_path] = time.time() + interval_seconds
-                            else:
-                                 priority_timers[current_path] = existing_priority_timers[current_path]
+                    # --- コンテキスト（グループ）の定義 ---
                     
-                    # ★★★ 修正箇所: 構造維持のためのリスト作成 ★★★
-                    ordered_children_paths = []
-                    for child in item_data.get('children', []):
-                         child_settings = child.get('settings', {})
-                         if child_settings.get('mode') != 'excluded':
-                            ordered_children_paths.append(child['path'])
+                    cooldown_time = 0
+                    if current_mode == 'cooldown':
+                        cooldown_time = settings.get('cooldown_time', 30)
 
-                    # 次の階層へ渡すコンテキスト
-                    next_context = {
-                        'scan_group_path': scan_group_path,
+                    # タイマー設定の登録
+                    if current_mode == 'priority_timer':
+                        interval_seconds = settings.get('priority_interval', 10) * 60
+                        if not is_monitoring:
+                             priority_timers[current_path] = time.time() + interval_seconds
+                        elif current_path not in existing_priority_timers:
+                             priority_timers[current_path] = time.time() + interval_seconds
+                        else:
+                             priority_timers[current_path] = existing_priority_timers[current_path]
+                        
+                        # ★ タイマーモード継続用フラグ（必須）
+                        folder_children_map[current_path].add("___TIMER_KEEPALIVE___")
+                    
+                    # シーケンス情報の準備
+                    sequence_info = None
+                    ordered_children_paths = []
+                    if current_mode == 'priority_sequence':
+                        for child in item_data.get('children', []):
+                            child_settings = child.get('settings', {})
+                            if child_settings.get('mode') != 'excluded':
+                                ordered_children_paths.append(child['path'])
+                        sequence_info = {
+                            'interval': settings.get('sequence_interval', 3),
+                            'ordered_paths': ordered_children_paths
+                        }
+
+                    # コンテキストオブジェクトの作成
+                    new_context = {
+                        'path': current_path,
+                        'mode': current_mode,
                         'cooldown_time': cooldown_time,
-                        'folder_mode': current_mode,
-                        'sequence_interval': settings.get('sequence_interval', 3),
-                        'ordered_children_paths': ordered_children_paths 
+                        'sequence_info': sequence_info,
+                        'trigger_path': current_path if current_mode != 'normal' else None
                     }
 
-                    process_list_recursive(item_data.get('children', []), next_context)
+                    # スタックに積んで再帰
+                    next_active_contexts = active_contexts + [new_context]
+                    process_list_recursive(item_data.get('children', []), next_active_contexts)
 
                 elif item_data['type'] == 'image':
-                    # 画像処理
-                    if inherited_context:
-                        scan_group_path = inherited_context['scan_group_path']
-                        cooldown_time = inherited_context.get('cooldown_time', 0)
-                        parent_mode = inherited_context.get('folder_mode', 'normal')
-                        
-                        if scan_group_path in folder_children_map:
-                            folder_children_map[scan_group_path].add(item_data['path'])
-                            
-                        # 親フォルダ設定
-                        parent_path = str(Path(item_data['path']).parent)
-                        
-                        priority_trigger_path = None
-                        sequence_info = None
+                    # --- 画像の処理 ---
+                    path = item_data['path']
+                    
+                    # 1. 各コンテキストへの所属登録（これがロック機能の基礎）
+                    #    画像は、現在アクティブな「すべての親フォルダ」のメンバーになります。
+                    #    しかし、親フォルダの画像は、子フォルダのメンバーにはなりません（ここが重要）。
+                    for ctx in active_contexts:
+                        group_path = ctx['path']
+                        if group_path in folder_children_map:
+                            folder_children_map[group_path].add(path)
 
-                        if parent_mode == 'priority_image':
-                            priority_trigger_path = parent_path
-                        elif parent_mode == 'priority_sequence':
-                            # トリガーパスは親フォルダ
-                            priority_trigger_path = parent_path
-                            # 順序情報は親フォルダの直下リストを使用
-                            sequence_info = {
-                                'interval': inherited_context.get('sequence_interval', 3),
-                                'ordered_paths': inherited_context.get('ordered_children_paths', [])
-                            }
+                    # 2. キャッシュエントリの作成（トリガー情報の設定）
+                    
+                    # 直近の「特別なモード」を持つ親（または自分）を探す
+                    nearest_special_ctx = None
+                    for ctx in reversed(active_contexts):
+                        if ctx['mode'] in ['priority_timer', 'priority_image', 'priority_sequence', 'cooldown']:
+                            nearest_special_ctx = ctx
+                            break
+                    
+                    # ターゲットとなるコンテキストを決定
+                    # 見つからなければ直近の親（通常フォルダ）
+                    target_ctx = nearest_special_ctx if nearest_special_ctx else (active_contexts[-1] if active_contexts else None)
 
+                    if target_ctx:
+                        scan_group_path = target_ctx['path']
+                        folder_mode = target_ctx['mode']
+                        cooldown_time = target_ctx['cooldown_time']
+                        sequence_info = target_ctx['sequence_info']
+                        priority_trigger_path = target_ctx['trigger_path']
+                        
+                        # ★★★ 修正: モードはそのまま保持する（normalに戻さない） ★★★
+                        # これにより、クリック時に正しく MonitoringProcessor が反応し、
+                        # PriorityState / SequenceState に移行します。
+                        # 移行後は folder_children_map[scan_group_path] だけを監視するため、
+                        # 親フォルダの画像は除外され、「ロック」されます。
+                        
                     else:
                         scan_group_path = None
-                        parent_mode = 'normal'
-                        priority_trigger_path = None
+                        folder_mode = 'normal'
                         cooldown_time = 0
                         sequence_info = None
+                        priority_trigger_path = None
 
                     self._process_item_for_cache(
                         item_data, 
                         scales, 
                         scan_group_path,
-                        parent_mode,
+                        folder_mode,
                         priority_trigger_path,
                         cooldown_time,
                         sequence_info,
@@ -206,15 +215,12 @@ class TemplateManager:
     def _process_item_for_cache(self, item_data, scales, folder_path, folder_mode, priority_trigger_path, cooldown_time, sequence_info, normal_cache, backup_cache):
         try:
             path = item_data['path']
-            
-            # ★★★ 削除されたファイルへのアクセスを防止 ★★★
             path_obj = Path(path)
             if not path_obj.exists() or not path_obj.is_file():
                 self.logger.log("log_warn_image_load_failed", path_obj.name)
                 return
             
             settings = self.config_manager.load_item_setting(path_obj)
-
             has_point_click = settings.get('point_click') and settings.get('click_position')
             has_range_click = settings.get('range_click') and settings.get('click_rect')
 
@@ -230,7 +236,6 @@ class TemplateManager:
                 return
 
             image_to_process = original_image
-            
             if settings.get('roi_enabled', False):
                 h, w = original_image.shape[:2]
                 roi_mode = settings.get('roi_mode', 'fixed')

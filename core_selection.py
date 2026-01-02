@@ -9,6 +9,7 @@ import subprocess
 import cv2
 import numpy as np
 import os
+import gc
 from PySide6.QtCore import QTimer, QPoint, Qt
 from PySide6.QtWidgets import QMessageBox, QApplication
 from PySide6.QtGui import QCursor
@@ -490,18 +491,17 @@ class SelectionHandler:
             self.core._saveImageDoneProcessRequested.emit(False, f"Error processing save result: {e}")
         
     def _reset_cursor_and_resume_listener(self):
-        """カーソルをリセットし、マウスリスナーを再開します。"""
+        # (省略)
         try:
-            # Windows固有: カーソルを明示的にリセット
-            if sys.platform == 'win32':
-                QApplication.restoreOverrideCursor()
-                QApplication.setOverrideCursor(QCursor(Qt.ArrowCursor))
-                QApplication.restoreOverrideCursor()
+            # ★ 1. ログの数値を書き換え（必須ではないですが分かりやすさのため）
+            self.logger.log("[DEBUG] Scheduling listener restart after selection completion (600ms delay)...")
             
-            # マウスリスナーを再開
-            QTimer.singleShot(100, self.core._start_global_mouse_listener)
+            # ★ 2. メモリ解放を追加
+            gc.collect()
             
-            # selectionProcessFinishedシグナルを発行
+            # ★ 3. 待機時間を 100 → 600 に変更
+            QTimer.singleShot(600, self.core._start_global_mouse_listener)
+            
             self.core.selectionProcessFinished.emit()
         except Exception as e:
             self.logger.log(f"[WARN] Error in _reset_cursor_and_resume_listener: {e}")

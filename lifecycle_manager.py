@@ -359,7 +359,11 @@ class LifecycleManager:
                         core._session_context['pid'] = new_pid
                         core._session_context['consecutive_clicks'] = 0
                         core.logger.log(f"[INFO] Session re-hooked. New PID: {new_pid}")
-                        # ★ 復旧後にウィンドウ指定キャプチャを再ロック（UI映り込み/座標消失対策）
+                        
+                        # ★★★ 修正: ウィンドウ描画完了待ちを追加して再ロックを復活 ★★★
+                        core.logger.log("[INFO] Waiting 10s for window stability before re-locking...")
+                        time.sleep(10)
+                        
                         self.relock_capture_after_recovery(new_pid)
                     else:
                         core.logger.log("[WARN] Failed to re-hook session automatically.")
@@ -371,4 +375,3 @@ class LifecycleManager:
                 core.logger.log("[INFO] Recovery sequence finished. Resuming monitoring.")
 
         threading.Thread(target=_recovery_task, daemon=True).start()
-

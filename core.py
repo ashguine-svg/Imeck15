@@ -153,6 +153,7 @@ class CoreEngine(QObject):
 
         self.normal_template_cache = {}
         self.backup_template_cache = {}
+        # self.timer_folders の初期化は不要になったため削除
         
         self.timer_session_active = False
         
@@ -325,8 +326,8 @@ class CoreEngine(QObject):
     def _find_best_match(self, *args):
         return self.monitoring_processor._find_best_match(*args)
 
-    def _process_matches_as_sequence(self, *args):
-        return self.monitoring_processor.process_matches_as_sequence(*args)
+    def _process_matches_as_sequence(self, *args, **kwargs):
+        return self.monitoring_processor.process_matches_as_sequence(*args, **kwargs)
 
     def _execute_click(self, *args):
         self.monitoring_processor.execute_click(*args)
@@ -346,7 +347,9 @@ class CoreEngine(QObject):
         self.transition_to(new_state)
 
     def transition_to_image_priority(self, folder_path):
-        timeout_time = time.time() + 300
+        folder_settings = self.config_manager.load_item_setting(Path(folder_path))
+        timeout_sec = folder_settings.get('priority_image_timeout', 10)
+        timeout_time = time.time() + timeout_sec
         required_children = self.folder_children_map.get(folder_path, set())
         new_state = PriorityState(self, 'image', folder_path, timeout_time, required_children)
         self.transition_to(new_state)
@@ -628,7 +631,12 @@ class CoreEngine(QObject):
         # キャッシュ再構築は監視開始時にまとめて実行（UI操作時は監視停止されているため）
         self._cache_rebuild_pending = True
 
+    # ------------------------------------------------------------------
+    # ★★★ 修正: 手動スキャンメソッドは不要になったため削除済み ★★★
+    # ------------------------------------------------------------------
+
     def _build_template_cache(self):
+        # ★★★ 修正: template_manager.py が再帰的にスキャンするため、単純な委譲に戻す ★★★
         self._cache_builder.build_template_cache()
 
     def _build_timer_schedule(self):

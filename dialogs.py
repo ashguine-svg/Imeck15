@@ -157,10 +157,11 @@ class FolderSettingsDialog(QDialog):
         self.radio_priority_timer = QRadioButton(lm("folder_dialog_radio_priority_timer"))
         self.radio_priority_sequence = QRadioButton(lm("folder_dialog_radio_priority_sequence"))
         
-        if not is_root:
-            self.radio_priority_timer.setEnabled(False)
-            if current_settings.get('mode') == 'priority_timer':
-                current_settings['mode'] = 'normal'
+        # ★★★ 修正: サブフォルダでもタイマー優先を選択可能にするため、ガード節を削除 ★★★
+        # if not is_root:
+        #     self.radio_priority_timer.setEnabled(False)
+        #     if current_settings.get('mode') == 'priority_timer':
+        #         current_settings['mode'] = 'normal'
         
         self.mode_group = QButtonGroup(self)
         self.mode_group.addButton(self.radio_normal, 0)

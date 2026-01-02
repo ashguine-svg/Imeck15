@@ -298,7 +298,7 @@ class LeftPanel(QObject):
                 
                 if mode == 'normal': icon_color = QColor("#90a4ae")
                 elif mode == 'excluded': brush = QBrush(QColor("#d32f2f")); icon_color = QColor("#d32f2f")
-                elif mode == 'cooldown': brush = QBrush(QColor("#a1887f")); icon_color = QColor("#a1887f")
+                elif mode == 'cooldown': brush = QBrush(QColor("#9c27b0")); icon_color = QColor("#9c27b0")
                 elif mode == 'priority_image': brush = QBrush(QColor("#1976d2")); icon_color = QColor("#1976d2")
                 elif mode == 'priority_timer': brush = QBrush(QColor("#388e3c")); icon_color = QColor("#388e3c")
                 elif mode == 'priority_sequence': brush = QBrush(QColor("#0097a7")); icon_color = QColor("#0097a7")
@@ -490,7 +490,11 @@ class LeftPanel(QObject):
         
         if dialog.exec():
             new_settings = dialog.get_settings()
-            self.config_manager.save_item_setting(path, new_settings)
+            # ★★★ 修正: マージ保存（既存設定に変更分だけを上書き） ★★★
+            merged_settings = current_settings.copy()
+            merged_settings.update(new_settings)  # 既存設定に変更分だけを上書き
+            self.config_manager.save_item_setting(path, merged_settings)
+            # 変更通知とツリー更新
             self.ui_manager.folderSettingsChanged.emit()
             self.update_image_tree()
 

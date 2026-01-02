@@ -311,11 +311,14 @@ class ConfigManager:
 
         with file_lock: 
             if is_dir:
+                # ★★★ 修正: dialogs.pyと完全に一致させるデフォルト設定 ★★★
                 default_setting = {
                     'mode': 'normal',
                     'priority_image_timeout': 10,
                     'priority_interval': 10,
                     'priority_timeout': 5,
+                    'sequence_interval': 3,    # dialogs.pyに合わせて修正
+                    'cooldown_time': 30,       # dialogs.pyに合わせて修正
                 }
             else:
                 default_setting = {
@@ -347,19 +350,28 @@ class ConfigManager:
                 with open(setting_path, 'r', encoding='utf-8') as f:
                     setting = json.load(f)
 
-                if is_dir and 'is_excluded' in setting:
-                    if setting['is_excluded']:
-                        setting['mode'] = 'excluded'
-                    else:
+                if is_dir:
+                    # ★★★ 修正: 旧形式のis_excludedをmodeに変換 ★★★
+                    if 'is_excluded' in setting:
+                        if setting['is_excluded']:
+                            setting['mode'] = 'excluded'
+                        else:
+                            setting['mode'] = 'normal'
+                        del setting['is_excluded']
+                    
+                    # ★★★ 修正: モードの正規化処理 ★★★
+                    valid_modes = ['normal', 'excluded', 'cooldown', 'priority_image', 'priority_timer', 'priority_sequence']
+                    if setting.get('mode') not in valid_modes:
                         setting['mode'] = 'normal'
-                    del setting['is_excluded']
+                    
+                    # ★★★ 修正: パラメータ補完（setdefaultで不足しているキーをデフォルト値で埋める） ★★★
+                    for key, value in default_setting.items():
+                        setting.setdefault(key, value)
 
                 setting.pop('template_scale_enabled', None)
                 setting.pop('template_scale_factor', None)
                 setting.pop('matching_mode', None)
                 
-                for key, value in default_setting.items():
-                    setting.setdefault(key, value)
                 if is_dir:
                     return setting
                 return normalize_image_item_settings(setting, default_image_path=str(item_path))

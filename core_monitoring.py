@@ -442,10 +442,14 @@ class MonitoringProcessor:
         )
         self.core.ocr_futures[path] = future
 
-    def process_matches_as_sequence(self, all_matches, current_time, last_match_time_map):
+    def process_matches_as_sequence(self, all_matches, current_time, last_match_time_map, folder_order_map=None):
         """
         全候補をインターバル時間に基づいて評価し、実行可能なものがあればクリックします。
         戻り値: クリックした画像の情報(dict) または なければ None
+        
+        Args:
+            folder_order_map: 画像認識型優先モード用の順序マップ {path: order_index}
+                             順序がない場合はNone（既存の動作を維持）
         """
         if not all_matches:
             current_match_paths = set()
@@ -542,11 +546,18 @@ class MonitoringProcessor:
         if not clickable_after_interval:
             return None
 
-        # ここでインターバル時間が短い方を優先的にソートします
-        sorted_candidates = sorted(
-            clickable_after_interval, 
-            key=lambda m: (m['settings'].get('interval_time', 1.5), -m['confidence'])
-        )
+        # ★★★ 修正: 画像認識型優先モードでは、フォルダ内の順序を最優先にする ★★★
+        # 優先順位: 1. フォルダ内の順序 2. インターバル時間 3. 信頼度
+        def get_sort_key(m):
+            path = m['path']
+            # フォルダ内の順序がある場合はそれを最優先、ない場合はfloat('inf')で後回し
+            order_index = folder_order_map.get(path) if folder_order_map else None
+            order_priority = order_index if order_index is not None else float('inf')
+            interval = m['settings'].get('interval_time', 1.5)
+            confidence = m.get('confidence', 0)
+            return (order_priority, interval, -confidence)
+        
+        sorted_candidates = sorted(clickable_after_interval, key=get_sort_key)
 
         # 優先順位（インターバルの短いもの）を順に評価。
         # 最優先がOCR待ちならここで止め、後続はクリックしない。
