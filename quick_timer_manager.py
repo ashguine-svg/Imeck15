@@ -122,17 +122,19 @@ class QuickTimerManager:
             try:
                 if core.is_monitoring:
                     core.stopMonitoringRequested.emit()
+                    # ★★★ 修正: 監視停止後に画面が更新されるのを待つ ★★★
+                    time.sleep(0.2)  # 画面更新を待つ
             except Exception:
                 pass
 
-            # 停止中は latest_high_res_frame が更新されないため、その場で1枚キャプチャする
-            frame = getattr(core, "latest_high_res_frame", None)
-            if frame is None:
-                try:
-                    x0, y0, x1, y1 = rec
-                    frame = core.capture_manager.capture_frame((int(x0), int(y0), int(x1), int(y1)))
-                except Exception:
-                    frame = None
+            # ★★★ 修正: 常に最新の画面をキャプチャする（latest_high_res_frameに依存しない） ★★★
+            # クイックタイマー設定時は、必ずその時点での最新画面を取得する必要がある
+            frame = None
+            try:
+                x0, y0, x1, y1 = rec
+                frame = core.capture_manager.capture_frame((int(x0), int(y0), int(x1), int(y1)))
+            except Exception:
+                frame = None
 
             if frame is not None:
                 payload = {
